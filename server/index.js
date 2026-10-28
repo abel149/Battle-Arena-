@@ -9,7 +9,7 @@ import { Server } from 'socket.io';
 import crypto from 'crypto';
 
 import { ENGINES, DECKS, dailyDeckId } from './games/index.js';
-import { recordMatch, getLedger } from './chain.js';
+import { recordMatch, getLedger, isOnchain } from './chain-onchain.js';
 import * as store from './store.js';
 
 const PORT = process.env.PORT || 3001;
@@ -31,11 +31,21 @@ const liveListeners = new Set();  // socketIds in the lobby (for rooms:live push
 
 // ---- REST ----
 app.get('/api/leaderboard', (_req, res) => res.json(store.leaderboard()));
-app.get('/api/matches', (_req, res) => res.json(getLedger()));
-app.get('/api/player/:address', (req, res) => res.json(store.getPlayer(req.params.address)));
-app.get('/api/verify/:matchId', (req, res) => {
-  const entry = getLedger().find(e => e.matchId === req.params.matchId);
-  entry ? res.json({ valid: true, entry }) : res.status(404).json({ valid: false });
+app.get('/api/matches', async (_req, res) => {
+  try {
+    res.json(await getLedger());
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to load match ledger', detail: err.message });
+  }
+});
+app.get('/api/verify/:matchId', async (req, res) => {
+  try {
+    const ledger = await getLedger();
+    const entry = ledger.find(e => e.matchId === req.params.matchId);
+    entry ? res.json({ valid: true, entry }) : res.status(404).json({ valid: false });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to load match', detail: err.message });
+  }
 });
 app.get('/api/decks', (_req, res) => {
   const daily = dailyDeckId();
@@ -45,6 +55,44 @@ app.get('/api/decks', (_req, res) => {
     pairs: d.pairs.length,
     daily: id === daily,
   })));
+});
+
+// Registration / login over REST (address = wallet, passed in body)
+app.post('/api/register', async (req, res) => {
+  const { address, username, name, email, password } = req.body || {};
+  if (!address) return res.status(400).json({ error: 'address is required' });
+  const usernameErr = store.validateUsername(username);
+  if (usernameErr) return res.status(400).json({ error: usernameErr });
+  const result = await store.registerPlayer(address, { name, username, email, password });
+  if (result.error) return res.status(409).json(result);
+  res.json(store.withoutPassword(result));
+});
+
+app.post('/api/login', async (req, res) => {
+  const { address, username, name, password } = req.body || {};
+  // Two ways to log in:
+  // 1) By credentials: username + password (wallet resolved from username index).
+  // 2) By wallet: address + optional password (legacy; password verified if supplied).
+  if (username && password) {
+    const result = await store.loginPlayerByCredentials({ username, password });
+    if (result.error) return res.status(401).json(result);
+    res.json(store.withoutPassword(result));
+    return;
+  }
+  if (!address) return res.status(400).json({ error: 'address is required when not using username+password' });
+  const result = await store.loginPlayer(address, { username, name, password });
+  if (result.error) return res.status(401).json(result);
+  res.json(store.withoutPassword(result));
+});
+
+app.get('/api/player/:address', (req, res) => {
+  const p = store.safeProfile(req.params.address);
+  if (!p) return res.status(404).json({ error: 'Unknown player' });
+  res.json(p);
+});
+
+app.get('/api/me', (_req, res) => {
+  res.json({ note: 'Use /api/player/:address or socket identify to get a profile' });
 });
 
 // ---- Helpers ----
@@ -70,14 +118,14 @@ function broadcastLiveRooms() {
   for (const sid of liveListeners) io.to(sid).emit('rooms:list', list);
 }
 
-function finishRoom(room) {
+async function finishRoom(room) {
   const { game } = room;
   const addrX = game.players.X;
   const addrO = game.players.O;
   const winnerAddr = game.winner === 'X' ? addrX : game.winner === 'O' ? addrO : null;
 
-  // Record on-chain (simulated ledger — swap chain.js for ethers later)
-  const receipt = recordMatch({
+  // Record on-chain (simulated ledger, or real MatchResult.sol via chain-onchain.js)
+  const receipt = await recordMatch({
     matchId: room.id,
     gameType: room.gameType,
     players: { X: addrX, O: addrO },
@@ -167,8 +215,50 @@ io.on('connection', (socket) => {
   socket.on('identify', ({ address, name }) => {
     if (!address) return;
     socketPlayer.set(socket.id, address);
-    const profile = store.upsertPlayer(address, name);
-    socket.emit('player:update', profile);
+    const profile = store.getPlayer(address) || store.upsertPlayer(address, name);
+    socket.emit('player:update', store.withoutPassword(profile));
+    socket.emit('player:registered', store.isRegistered(address));
+    if (store.isRegistered(address)) {
+      socket.emit('player:registered:user', { address, username: profile.username, name: profile.name });
+    }
+  });
+
+  // Register a new player identity (wallet + username + password + optional email)
+  socket.on('player:register', async ({ username, name, email, password }) => {
+    const address = socketPlayer.get(socket.id);
+    if (!address) return socket.emit('player:error', { error: 'Not identified' });
+    const result = await store.registerPlayer(address, { name, username, email, password });
+    if (result.error) return socket.emit('player:error', { error: result.error, conflict: result.conflict });
+    const safeProfile = store.withoutPassword(result);
+    socket.emit('player:update', safeProfile);
+    socket.emit('player:registered', true);
+    socket.emit('auth:success', { address: result.address, username: result.username, name: result.name });
+    socket.emit('player:registered:user', { address: result.address, username: result.username, name: result.name });
+  });
+
+  // Log in by username + password (wallet resolved from the username index).
+  socket.on('player:loginByCredentials', async ({ username, password } = {}) => {
+    const result = await store.loginPlayerByCredentials({ username, password });
+    if (result.error) return socket.emit('player:error', { error: result.error });
+    socketPlayer.set(socket.id, result.address);
+    socket.emit('player:update', store.withoutPassword(result));
+    socket.emit('player:registered', true);
+    socket.emit('player:registered:user', { address: result.address, username: result.username, name: result.name });
+    socket.emit('auth:success', { address: result.address, username: result.username, name: result.name });
+  });
+
+  // Log in / claim an existing wallet as a registered identity.
+  // - Registered wallet: no-op lookup, returns profile.
+  // - Unregistered wallet: requires `username` (+ optional `password`) to claim it.
+  //   If `password` is supplied on an already-registered wallet, it is verified.
+  socket.on('player:login', async ({ username, name, password } = {}) => {
+    const address = socketPlayer.get(socket.id);
+    if (!address) return socket.emit('player:error', { error: 'Not identified' });
+    const result = await store.loginPlayer(address, { username, name, password });
+    if (result.error) return socket.emit('player:error', { error: result.error });
+    socket.emit('player:update', store.withoutPassword(result));
+    socket.emit('player:registered', !!result.registered);
+    socket.emit('player:registered:user', { address: result.address, username: result.username, name: result.name });
   });
 
   socket.on('queue:join', ({ gameType } = {}) => {
@@ -264,4 +354,6 @@ io.on('connection', (socket) => {
 
 server.listen(PORT, () => {
   console.log(`Battle Arena server on http://localhost:${PORT}`);
+  if (isOnchain()) console.log('On-chain match recording ENABLED (MatchResult.sol)');
+  else console.log('Match recording: simulated ledger (chain.js)');
 });

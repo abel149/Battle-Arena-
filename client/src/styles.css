@@ -166,3 +166,35 @@ tr.me td { color: var(--accent2); }
 
 .receipt-actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
 .receipt-actions .btn { text-decoration: none; }
+
+/* ---- auth screens ---- */
+.auth { min-height: 60vh; display: flex; align-items: center; justify-content: center;
+  padding: 1rem 0; }
+.auth-panel { max-width: 420px; width: 100%; text-align: left; }
+.auth-panel h2 { margin-bottom: 0.5rem; }
+.auth-panel form { display: flex; flex-direction: column; gap: 0.85rem; }
+.field { display: flex; flex-direction: column; gap: 0.3rem; }
+.field label { font-size: 0.85rem; color: var(--muted); }
+.field input {
+  background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 8px; padding: 0.6rem 0.8rem; font-size: 0.95rem;
+}
+.auth-error { color: var(--danger); font-size: 0.85rem; background: rgba(255,92,122,.08);
+  border: 1px solid rgba(255,92,122,.3); border-radius: 8px; padding: 0.5rem 0.75rem; }
+.auth-switch { margin-top: 1rem; font-size: 0.9rem; color: var(--muted); }
+.link-btn {
+  background: none; border: none; color: var(--accent2); cursor: pointer;
+  font: inherit; text-decoration: underline; padding: 0;
+}
+.link-btn:hover { color: var(--accent); }
+.wallet-line { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem;
+  padding: 0.6rem 0.8rem; background: var(--panel2); border: 1px solid var(--border);
+  border-radius: 8px; font-size: 0.85rem; }
+
+.pw-field { position: relative; display: flex; align-items: center; }
+.pw-field input { padding-right: 2.4rem; }
+.pw-toggle {
+  position: absolute; right: 0.5rem; background: none; border: none;
+  cursor: pointer; font-size: 1rem; padding: 0.25rem;
+}
+.pw-toggle:hover { color: var(--accent); }

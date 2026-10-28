@@ -17,10 +17,13 @@ function getOrCreateWallet() {
 
 const short = a => (a && a.length > 12 ? a.slice(0, 6) + '…' + a.slice(-4) : a);
 
+const usernameRe = /^[a-zA-Z0-9_]{3,20}$/;
+
 export default function App() {
   const [wallet, setWallet] = useState(getOrCreateWallet());
   const [profile, setProfile] = useState(null);
-  const [view, setView] = useState('lobby'); // lobby | game
+  const [registered, setRegistered] = useState(false); // has a logged-in registered identity?
+  const [view, setView] = useState('lobby'); // register | login | lobby | game
   const [queueing, setQueueing] = useState(false);
   const [room, setRoom] = useState(null);    // { roomId, game, names }
   const [chat, setChat] = useState([]);
@@ -32,12 +35,44 @@ export default function App() {
   const [decks, setDecks] = useState([]);
   const [gameType, setGameType] = useState('memory');
   const [deckId, setDeckId] = useState('flags');
+
+  // Auth form state
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState(null);
+  const [regUsername, setRegUsername] = useState('');
+  const [regName, setRegName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regPasswordConfirm, setRegPasswordConfirm] = useState('');
+  const [regShowPw, setRegShowPw] = useState(false);
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginShowPw, setLoginShowPw] = useState(false);
   const spectatingRef = useRef(false);
+  const walletRef = useRef(wallet);
 
   useEffect(() => {
-    const identify = () => socket.emit('identify', wallet);
+    const identify = () => socket.emit('identify', walletRef.current);
     socket.on('connect', identify);
+    if (socket.connected) identify();
     socket.on('player:update', setProfile);
+    socket.on('player:registered', (yes) => {
+      setRegistered(yes);
+      setView(current => yes
+        ? (current === 'login' || current === 'register' ? 'lobby' : current)
+        : (current === 'lobby' ? 'register' : current));
+    });
+    socket.on('player:registered:user', (u) => {
+      setProfile(p => p ? { ...p, username: u.username, name: u.name } : p);
+      if (u.address) {
+        setWallet(current => {
+          const next = { ...current, address: u.address, name: u.name || current.name };
+          localStorage.setItem('arena_wallet', JSON.stringify(next));
+          return next;
+        });
+      }
+    });
+    socket.on('player:error', ({ error }) => setAuthError(error));
     socket.on('queue:waiting', () => setQueueing(true));
     socket.on('match:start', (data) => {
       setRoom(data);
@@ -54,7 +89,10 @@ export default function App() {
     return () => socket.removeAllListeners();
   }, []);
 
-  useEffect(() => { if (socket.connected) socket.emit('identify', wallet); }, [wallet]);
+  useEffect(() => {
+    walletRef.current = wallet;
+    if (socket.connected) socket.emit('identify', wallet);
+  }, [wallet]);
 
   async function refresh() {
     const [lb, ms, dk] = await Promise.all([
@@ -73,6 +111,53 @@ export default function App() {
     if (!window.ethereum) return alert('MetaMask not found — using demo wallet');
     const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
     setWallet(w => ({ ...w, address: accounts[0] }));
+  }
+
+  function clearAuthError() { setAuthError(null); }
+
+  async function handleRegister(e) {
+    e.preventDefault();
+    setAuthLoading(true);
+    setAuthError(null);
+    if (!usernameRe.test(regUsername)) {
+      setAuthError('Username must be 3–20 letters, numbers, or underscores.');
+      setAuthLoading(false);
+      return;
+    }
+    if (regPassword !== regPasswordConfirm) {
+      setAuthError('Passwords do not match.');
+      setAuthLoading(false);
+      return;
+    }
+    if (regPassword.length < 8) {
+      setAuthError('Password must be at least 8 characters.');
+      setAuthLoading(false);
+      return;
+    }
+    socket.emit('player:register', {
+      username: regUsername.trim(),
+      name: regName.trim() || regUsername.trim(),
+      email: regEmail.trim(),
+      password: regPassword,
+    });
+    setTimeout(() => setAuthLoading(false), 120);
+  }
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    setAuthLoading(true);
+    setAuthError(null);
+    socket.emit('player:loginByCredentials', {
+      username: loginUsername.trim(),
+      password: loginPassword,
+    });
+    setTimeout(() => setAuthLoading(false), 120);
+  }
+
+  async function handleWalletLogin() {
+    // Identify the wallet, then if already registered we land in the lobby.
+    setView('login');
+    socket.emit('identify', wallet);
   }
 
   function spectate(roomId) {
@@ -98,8 +183,108 @@ export default function App() {
           )}
           <button className="btn ghost" onClick={connectMetaMask}>MetaMask</button>
           <span className="chip addr" title={wallet.address}>{short(wallet.address)}</span>
+          {view === 'lobby' && !registered && profile && (
+            <button className="btn ghost sm" onClick={() => { setView('login'); setLoginUsername(profile.username || ''); clearAuthError(); }}>
+              Log in
+            </button>
+          )}
         </div>
       </header>
+
+      {/* ---- Auth screens ---- */}
+      {view === 'register' && (
+        <main className="auth">
+          <section className="panel auth-panel">
+            <h2>Create your arena identity</h2>
+            <p className="muted small">Pick a globally unique username. Your wallet address is your real identity underneath.</p>
+            <form onSubmit={handleRegister}>
+              <div className="field">
+                <label htmlFor="reg-username">Username</label>
+                <input id="reg-username" type="text" autoComplete="username"
+                  value={regUsername} onChange={e => { setRegUsername(e.target.value); clearAuthError(); }}
+                  placeholder="VictoryKing" required />
+              </div>
+              <div className="field">
+                <label htmlFor="reg-name">Display name <span className="muted">(optional)</span></label>
+                <input id="reg-name" type="text"
+                  value={regName} onChange={e => { setRegName(e.target.value); clearAuthError(); }}
+                  placeholder="What friends call you" />
+              </div>
+              <div className="field">
+                <label htmlFor="reg-email">Email <span className="muted">(optional)</span></label>
+                <input id="reg-email" type="email"
+                  value={regEmail} onChange={e => { setRegEmail(e.target.value); clearAuthError(); }}
+                  placeholder="you@example.com" />
+              </div>
+              <div className="field">
+                <label htmlFor="reg-password">Password</label>
+                <div className="pw-field">
+                  <input id="reg-password" type={regShowPw ? 'text' : 'password'} autoComplete="new-password"
+                    value={regPassword} onChange={e => { setRegPassword(e.target.value); clearAuthError(); }}
+                    placeholder="At least 8 characters" required />
+                  <button type="button" className="pw-toggle" onClick={() => setRegShowPw(v => !v)} aria-label="Toggle password visibility">
+                    {regShowPw ? '🙈' : '👁'}
+                  </button>
+                </div>
+              </div>
+              <div className="field">
+                <label htmlFor="reg-password-confirm">Confirm password</label>
+                <div className="pw-field">
+                  <input id="reg-password-confirm" type={regShowPw ? 'text' : 'password'} autoComplete="new-password"
+                    value={regPasswordConfirm} onChange={e => { setRegPasswordConfirm(e.target.value); clearAuthError(); }}
+                    placeholder="Repeat your password" required />
+                </div>
+              </div>
+              {authError && <div className="auth-error">{authError}</div>}
+              <button className="btn primary" type="submit" disabled={authLoading}>
+                {authLoading ? 'Creating…' : 'Create account'}
+              </button>
+            </form>
+            <div className="auth-switch">
+              Already have an account? <button className="link-btn" onClick={() => { setView('login'); setLoginUsername(''); setLoginPassword(''); setLoginShowPw(false); clearAuthError(); }}>Log in</button>
+            </div>
+          </section>
+        </main>
+      )}
+
+      {view === 'login' && (
+        <main className="auth">
+          <section className="panel auth-panel">
+            <h2>Log in to your arena identity</h2>
+            <p className="muted small">Enter your username and password. Your wallet address is shown for reference.</p>
+            <div className="wallet-line">
+              <span className="chip addr" title={wallet.address}>{short(wallet.address)}</span>
+              <button className="btn ghost sm" onClick={() => { setWallet(getOrCreateWallet()); setView('login'); clearAuthError(); }}>New wallet</button>
+            </div>
+            <form onSubmit={handleLogin}>
+              <div className="field">
+                <label htmlFor="login-username">Username</label>
+                <input id="login-username" type="text" autoComplete="username"
+                  value={loginUsername} onChange={e => { setLoginUsername(e.target.value); clearAuthError(); }}
+                  placeholder="Your arena username" required />
+              </div>
+              <div className="field">
+                <label htmlFor="login-password">Password</label>
+                <div className="pw-field">
+                  <input id="login-password" type={loginShowPw ? 'text' : 'password'} autoComplete="current-password"
+                    value={loginPassword} onChange={e => { setLoginPassword(e.target.value); clearAuthError(); }}
+                    placeholder="Your password" required />
+                  <button type="button" className="pw-toggle" onClick={() => setLoginShowPw(v => !v)} aria-label="Toggle password visibility">
+                    {loginShowPw ? '🙈' : '👁'}
+                  </button>
+                </div>
+              </div>
+              {authError && <div className="auth-error">{authError}</div>}
+              <button className="btn primary" type="submit" disabled={authLoading}>
+                {authLoading ? 'Logging in…' : 'Log in'}
+              </button>
+            </form>
+            <div className="auth-switch">
+              New here? <button className="link-btn" onClick={() => { setView('register'); setRegUsername(''); setRegName(''); setRegEmail(''); setRegPassword(''); setRegPasswordConfirm(''); setRegShowPw(false); clearAuthError(); }}>Create account</button>
+            </div>
+          </section>
+        </main>
+      )}
 
       {view === 'lobby' && (
         <main className="lobby">
@@ -320,8 +505,8 @@ function Receipt({ receipt, onRematch }) {
       <div className="mono">matchId&nbsp;&nbsp;: {receipt.matchId}</div>
       <div className="mono">winner&nbsp;&nbsp;&nbsp;: {short(receipt.winner)}</div>
       <div className="mono">time&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: {new Date(receipt.timestamp).toLocaleString()}</div>
-      <div className="mono">resultHash: {receipt.resultHash.slice(0, 24)}…</div>
-      <div className="mono">txHash&nbsp;&nbsp;&nbsp;: {receipt.txHash.slice(0, 24)}…</div>
+      <div className="mono">resultHash: {receipt.resultHash?.slice(0, 24) ?? '—'}…</div>
+      <div className="mono">txHash&nbsp;&nbsp;&nbsp;: {receipt.txHash?.slice(0, 24) ?? '—'}…</div>
       <div className="receipt-actions">
         <a className="btn sm" href={`${API}/api/verify/${receipt.matchId}`} target="_blank" rel="noreferrer">⛓ Verify</a>
         {onRematch && <button className="btn primary sm" onClick={onRematch}>🔁 Play Again</button>}

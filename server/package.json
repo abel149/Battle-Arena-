@@ -5,11 +5,21 @@
   "description": "Web3 Battle Arena - real-time multiplayer game server",
   "scripts": {
     "start": "node index.js",
-    "dev": "node --watch index.js"
+    "dev": "node --watch index.js",
+    "compile": "hardhat compile",
+    "deploy:local": "hardhat run scripts/deploy-match-result.js --network hardhat",
+    "node": "npx hardhat node --block-gas-limit 30000000",
+    "test:onchain": "node scripts/test-onchain.mjs"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "express": "^4.21.2",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.4"
+  },
+  "devDependencies": {
+    "ethers": "^6.17.0",
+    "hardhat": "^3.21.1"
   }
 }
