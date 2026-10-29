@@ -1,7 +1,10 @@
 import { io } from 'socket.io-client';
 import { ethers } from 'ethers';
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
+const defaultServer = typeof window !== 'undefined' && window.location?.hostname
+  ? `${window.location.protocol}//${window.location.hostname}:3001`
+  : 'http://localhost:3001';
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || defaultServer;
 export const socket = io(SERVER_URL, { autoConnect: true });
 export const API = SERVER_URL;
 

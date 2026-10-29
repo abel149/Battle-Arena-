@@ -668,7 +668,7 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Battle Arena server on http://localhost:${PORT}`);
   console.log(isOnchain()
     ? 'On-chain match recording ENABLED (MatchResult.sol)'

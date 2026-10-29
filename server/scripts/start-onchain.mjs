@@ -27,9 +27,11 @@ async function main() {
 
   if (!rpcOk) {
     console.log(`\n⛓️ Local blockchain node not detected at ${NODE_URL}. Starting Hardhat node...`);
-    hardhatNodeProc = spawn('npx', ['hardhat', 'node', '--port', '8545'], {
+    const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+    hardhatNodeProc = spawn(npxCmd, ['hardhat', 'node', '--port', '8545'], {
       cwd: SERVER_DIR,
       stdio: 'ignore',
+      shell: process.platform === 'win32',
     });
     // Wait up to 12s for node to initialize
     for (let i = 0; i < 24; i++) {
