@@ -128,9 +128,17 @@ Or use the equivalent `PRIVATE_KEY` / `MATCH_RESULT_ADDRESS` /
 
 ## How to Play / Demo
 
+- **Sign in first** — the app opens on a sign-in screen. Create an account
+  (username + password; you can optionally use your MetaMask address as your
+  profile ID) or log in. Nothing else is reachable until you are signed in, and
+  the session survives refreshes and works from any browser.
 - **Solo** — click *🤖 Play vs Bot*
-- **Two players** — open http://localhost:5173 in **two browser windows**
-  (or normal + incognito), both click *⚡ Quick Match*
+- **Two players, random opponent** — open http://localhost:5173 in **two browser
+  windows** (or normal + incognito), sign in with a different account in each,
+  and both click *⚡ Quick Match*
+- **Two players, with a friend** — one player clicks *Create Room* and shares the
+  5-character code; the other clicks *Join Room* and types it. Private rooms
+  don't appear in the public live-matches list.
 - **Spectate** — a live match appears under *Live matches* in the other window's lobby
 - After a match: the *Verified Result* card shows the on-chain receipt with the
   real `txHash`, minted ARENA + badge token transactions, and *⛓ Verify* opens

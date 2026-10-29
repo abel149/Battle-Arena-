@@ -3,7 +3,7 @@
 import { io } from 'socket.io-client';
 import { ethers } from 'ethers';
 
-const socket = io('http://localhost:3001');
+const socket = io(process.env.SERVER_URL || 'http://localhost:3001');
 // Real secp256k1 key so the wallet can sign its ownership proof.
 const signer = ethers.Wallet.createRandom();
 const me = signer.address;
@@ -39,9 +39,19 @@ function actOn(game) {
 
 socket.on('game:error', e => console.log('game:error', e));
 
-socket.on('player:update', () => {
+// Playing needs a registered account: register this throwaway wallet first.
+socket.on('player:registered', (yes) => {
+  if (!yes) socket.emit('player:register', {
+    username: 'smoke_' + Math.random().toString(36).slice(2, 8),
+    password: 'password123',
+  });
+});
+
+socket.on('auth:success', () => {
   if (!roomId) socket.emit('match:bot', { gameType: 'memory', deck: 'flags', pairs: 4 });
 });
+
+socket.on('player:error', (e) => { console.log('player:error', e); process.exit(1); });
 
 socket.on('match:end', (d) => {
   console.log(`match end: result=${d.result} winner=${d.winner}`);

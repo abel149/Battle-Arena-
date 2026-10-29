@@ -7,7 +7,7 @@ import { socket, API, signAndIdentify } from './socket.js';
 // a genuine EIP-191 signature. MetaMask users sign with personal_sign instead.
 function getOrCreateWallet() {
   let w = JSON.parse(localStorage.getItem('arena_wallet') || 'null');
-  if (!w || !w.address || !w.privateKey) {
+  if (!w || !w.address || (!w.privateKey && w.source !== 'metamask' && w.source !== 'account')) {
     // Legacy wallets stored only a fake address — regenerate a real key pair.
     const wallet = ethers.Wallet.createRandom();
     w = {
