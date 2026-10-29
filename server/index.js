@@ -520,7 +520,8 @@ function createRoom(gameType, addrX, addrO, getSocket, opts = {}) {
         if (bMove) room.engine.applyMove(room.game, BOT, bMove);
       }
       room.engine.tick(room.game, 40);
-      io.to(room.id).emit('blaster:tick', room.engine.serialize(room.game));
+      const tickData = room.engine.serializeTick ? room.engine.serializeTick(room.game) : room.engine.serialize(room.game);
+      io.to(room.id).emit('blaster:tick', tickData);
       if (room.game.winner) {
         clearInterval(room.tickInterval);
         finishRoom(room);
@@ -745,7 +746,18 @@ io.on('connection', (socket) => {
   socket.on('match:leave', ({ roomId }) => {
     socket.leave(roomId);
     const room = rooms.get(roomId);
-    if (room) room.spectators.delete(socket.id);
+    if (room) {
+      room.spectators.delete(socket.id);
+      const address = socketPlayer.get(socket.id);
+      if (address && (room.game.players.X === address || room.game.players.O === address)) {
+        if (room.tickInterval) clearInterval(room.tickInterval);
+        if (!room.game.winner) {
+          const winnerSeat = room.game.players.X === address ? 'O' : 'X';
+          room.game.winner = winnerSeat;
+          finishRoom(room);
+        }
+      }
+    }
     broadcastLiveRooms();
   });
 
@@ -754,6 +766,17 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     const i = queue.findIndex(q => q.socketId === socket.id);
     if (i !== -1) queue.splice(i, 1);
+    const address = socketPlayer.get(socket.id);
+    if (address) {
+      for (const room of rooms.values()) {
+        if (!room.game.winner && (room.game.players.X === address || room.game.players.O === address)) {
+          if (room.tickInterval) clearInterval(room.tickInterval);
+          const winnerSeat = room.game.players.X === address ? 'O' : 'X';
+          room.game.winner = winnerSeat;
+          finishRoom(room);
+        }
+      }
+    }
     socketPlayer.delete(socket.id);
     liveListeners.delete(socket.id);
   });

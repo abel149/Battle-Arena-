@@ -471,3 +471,41 @@ export function serialize(game) {
     events: game.events.slice(-10),
   };
 }
+
+// Lightweight serializer for 25Hz broadcast — omits static arena & obstacles
+export function serializeTick(game) {
+  return {
+    score: game.score,
+    round: game.round,
+    winner: game.winner,
+    pState: {
+      X: {
+        x: Math.round(game.pState.X.x),
+        y: Math.round(game.pState.X.y),
+        angle: Number(game.pState.X.angle.toFixed(3)),
+        hp: game.pState.X.hp,
+        shield: game.pState.X.shield,
+        speedBoost: Date.now() < game.pState.X.speedBoostUntil,
+        overcharged: Date.now() < game.pState.X.overchargeUntil,
+      },
+      O: {
+        x: Math.round(game.pState.O.x),
+        y: Math.round(game.pState.O.y),
+        angle: Number(game.pState.O.angle.toFixed(3)),
+        hp: game.pState.O.hp,
+        shield: game.pState.O.shield,
+        speedBoost: Date.now() < game.pState.O.speedBoostUntil,
+        overcharged: Date.now() < game.pState.O.overchargeUntil,
+      },
+    },
+    bullets: game.bullets.map(b => ({
+      id: b.id,
+      seat: b.seat,
+      x: Math.round(b.x),
+      y: Math.round(b.y),
+      skinId: b.skinId,
+    })),
+    powerups: game.powerups,
+    events: game.events.slice(-10),
+  };
+}

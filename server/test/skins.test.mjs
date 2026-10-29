@@ -70,3 +70,25 @@ test('verifyParentPin checks default PIN and supports setting custom PIN', () =>
   assert.equal(store.verifyParentPin(parent, '1234').ok, false);
   assert.equal(store.verifyParentPin(parent, '5678').ok, true);
 });
+
+test('verifyParentPin locks out after 5 consecutive failed attempts', () => {
+  const parent = '0xParentLock' + Math.random().toString(36).slice(2, 8);
+  for (let i = 0; i < 4; i++) {
+    const res = store.verifyParentPin(parent, '0000');
+    assert.equal(res.ok, false);
+    assert.equal(res.locked, undefined);
+  }
+  // 5th attempt triggers lockout
+  const lockRes = store.verifyParentPin(parent, '0000');
+  assert.equal(lockRes.ok, false);
+  assert.equal(lockRes.locked, true);
+
+  // Even the correct PIN is rejected during lockout
+  const blockedRes = store.verifyParentPin(parent, '1234');
+  assert.equal(blockedRes.ok, false);
+  assert.equal(blockedRes.locked, true);
+
+  // Resetting attempts unblocks
+  store.resetPinAttempts(parent);
+  assert.equal(store.verifyParentPin(parent, '1234').ok, true);
+});

@@ -101,3 +101,17 @@ test('botMove generates valid input move', () => {
   assert.equal(typeof bMove.angle, 'number');
   assert.equal(typeof bMove.shoot, 'boolean');
 });
+
+test('serializeTick returns dynamic state while omitting static arena & obstacles', () => {
+  const g = cb.createGame('0xA', '0xB');
+  const full = cb.serialize(g);
+  assert.ok(full.arena);
+  assert.ok(full.obstacles);
+
+  const tick = cb.serializeTick(g);
+  assert.equal(tick.arena, undefined);
+  assert.equal(tick.obstacles, undefined);
+  assert.ok(tick.pState);
+  assert.ok(tick.bullets);
+  assert.ok(tick.score);
+});

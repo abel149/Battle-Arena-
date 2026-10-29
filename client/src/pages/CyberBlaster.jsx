@@ -9,6 +9,14 @@ import './cyberblaster.css';
 const ARENA_WIDTH = 800;
 const ARENA_HEIGHT = 600;
 
+const DEFAULT_OBSTACLES = [
+  { x: 180, y: 140, w: 50, h: 100 },
+  { x: 570, y: 140, w: 50, h: 100 },
+  { x: 180, y: 360, w: 50, h: 100 },
+  { x: 570, y: 360, w: 50, h: 100 },
+  { x: 375, y: 260, w: 50, h: 80 },
+];
+
 // Skin color palettes for client rendering
 const SKIN_PALETTES = {
   'neon-striker': { primary: '#00f0ff', accent: '#0077ff', laser: '#00ffff', trail: '#00d4ff', type: 'plasma' },
@@ -147,7 +155,7 @@ export default function CyberBlaster() {
     };
 
     const handleBlasterTick = (state) => {
-      setGameState(state);
+      setGameState(prev => ({ ...prev, ...state }));
       // Sound triggers from events
       if (state.events && state.events.length > 0) {
         state.events.forEach(e => {
@@ -230,20 +238,23 @@ export default function CyberBlaster() {
       if (e.button === 2) keysRef.current.shift = false;
     };
 
+    const canvas = canvasRef.current;
+    const preventContextMenu = (e) => e.preventDefault();
+    if (canvas) canvas.addEventListener('contextmenu', preventContextMenu);
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mouseup', handleMouseUp);
-    window.addEventListener('contextmenu', e => e.preventDefault());
 
     return () => {
+      if (canvas) canvas.removeEventListener('contextmenu', preventContextMenu);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('contextmenu', e => e.preventDefault());
     };
   }, []);
 
@@ -308,19 +319,18 @@ export default function CyberBlaster() {
 
       if (gameState) {
         // 2. Obstacles
-        if (gameState.obstacles) {
-          gameState.obstacles.forEach(obs => {
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-            ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
-            ctx.strokeStyle = '#00f0ff';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+        const obstacles = gameState.obstacles || DEFAULT_OBSTACLES;
+        obstacles.forEach(obs => {
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+          ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+          ctx.strokeStyle = '#00f0ff';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
 
-            // Glow core
-            ctx.fillStyle = 'rgba(0, 240, 255, 0.15)';
-            ctx.fillRect(obs.x + 4, obs.y + 4, obs.w - 8, obs.h - 8);
-          });
-        }
+          // Glow core
+          ctx.fillStyle = 'rgba(0, 240, 255, 0.15)';
+          ctx.fillRect(obs.x + 4, obs.y + 4, obs.w - 8, obs.h - 8);
+        });
 
         // 3. Powerups
         if (gameState.powerups) {

@@ -1021,18 +1021,68 @@ export function getEquippedSkin(address) {
 
 // Parent PIN Verification (Default PIN is '1234')
 const DEFAULT_PARENT_PIN = '1234';
+const PIN_LOCKOUT_MS = 5 * 60 * 1000; // 5 minute lockout
+const pinAttempts = new Map(); // address/key -> { count: number, lockedUntil: number }
+
+export function resetPinAttempts(address) {
+  pinAttempts.delete(address || 'default');
+}
 
 export function verifyParentPin(address, pin) {
   open();
+  const key = address || 'default';
+  const now = Date.now();
+  const attempt = pinAttempts.get(key);
+
+  if (attempt && attempt.lockedUntil > now) {
+    const waitSec = Math.ceil((attempt.lockedUntil - now) / 1000);
+    return {
+      ok: false,
+      locked: true,
+      error: `Too many failed attempts. PIN locked for ${waitSec}s.`,
+    };
+  }
+
   if (!pin) return { ok: false, error: 'PIN required' };
-  const row = prepared.getParentPin.get(address || 'default');
+  const row = prepared.getParentPin.get(key);
+  let isMatch = false;
+  let isDefault = false;
+
   if (!row) {
     // If not set, default is 1234
-    const ok = String(pin).trim() === DEFAULT_PARENT_PIN;
-    return { ok, isDefault: true };
+    isDefault = true;
+    isMatch = String(pin).trim() === DEFAULT_PARENT_PIN;
+  } else {
+    isMatch = bcrypt.compareSync(String(pin).trim(), row.pinHash);
   }
-  const ok = bcrypt.compareSync(String(pin).trim(), row.pinHash);
-  return { ok, isDefault: false };
+
+  if (isMatch) {
+    pinAttempts.delete(key);
+    return { ok: true, isDefault };
+  }
+
+  // Failed attempt
+  const current = attempt && attempt.lockedUntil > 0 && attempt.lockedUntil <= now
+    ? { count: 0, lockedUntil: 0 }
+    : (attempt || { count: 0, lockedUntil: 0 });
+
+  current.count += 1;
+  if (current.count >= 5) {
+    current.lockedUntil = now + PIN_LOCKOUT_MS;
+    pinAttempts.set(key, current);
+    return {
+      ok: false,
+      locked: true,
+      error: 'Too many failed attempts. PIN locked for 5 minutes.',
+    };
+  }
+
+  pinAttempts.set(key, current);
+  const remaining = 5 - current.count;
+  return {
+    ok: false,
+    error: `Incorrect Parent PIN. (${remaining} attempt${remaining === 1 ? '' : 's'} remaining)`,
+  };
 }
 
 export function setParentPin(address, newPin) {
