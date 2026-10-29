@@ -138,6 +138,16 @@ export default function Arena() {
     };
   }, []);
 
+  // Bot, create and join answer within moments. Silence means the server is down
+  // or still running old code — say so instead of spinning forever.
+  useEffect(() => {
+    if (mode === 'match' || game || roomCode || error) return;
+    const id = setTimeout(() => setError(
+      'The arena server did not respond. Restart it ("npm start" in the server folder) so it runs the latest code.'
+    ), 6000);
+    return () => clearTimeout(id);
+  }, [mode, game, roomCode, error]);
+
   useEffect(() => {
     document.title = 'Neon Math Arena — Battle Arena';
     return () => { document.title = 'Battle Arena'; };
