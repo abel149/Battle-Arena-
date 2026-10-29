@@ -16,6 +16,7 @@ export default function Hub() {
   const [deck, setDeck] = useState(DEFAULT_DECK);
   const [loadError, setLoadError] = useState(null);
   const [joinGame, setJoinGame] = useState(null); // 'arena' | 'memory' | null
+  const [liveRooms, setLiveRooms] = useState([]);
 
   const refresh = useCallback(async () => {
     try {
@@ -60,6 +61,19 @@ export default function Hub() {
     socket.on('player:registered:user', onUser);
     return () => socket.off('player:registered:user', onUser);
   }, [setWallet]);
+
+  // Matches in progress. The server pushes this whenever a room starts, ends or gains a viewer.
+  useEffect(() => {
+    const onList = list => setLiveRooms(Array.isArray(list) ? list : []);
+    const ask = () => socket.emit('rooms:list');
+    socket.on('rooms:list', onList);
+    socket.on('connect', ask);
+    if (socket.connected) ask();
+    return () => {
+      socket.off('rooms:list', onList);
+      socket.off('connect', ask);
+    };
+  }, []);
 
   const dailyDeck = decks.find(d => d.daily);
   const myRank = leaderboard.find(p => p.address === wallet.address);
@@ -195,6 +209,8 @@ export default function Hub() {
             )}
           </section>
 
+          <LiveMatches rooms={liveRooms} />
+
           <section className="side-panel onchain">
             <h3 className="side-title"><ChainIcon /> On-Chain Results</h3>
             <div className="onchain-art" aria-hidden="true" />
@@ -246,6 +262,58 @@ export default function Hub() {
         />
       )}
     </div>
+  );
+}
+const BOT_ADDRESS = '0xB07000000000000000000000000000000000000B'; // same constant as the server
+const GAME_LABELS = {
+  memory: 'Memory Match',
+  'math-arena': 'Neon Math Arena',
+  'tic-tac-toe': 'Tic Tac Toe',
+};
+
+function LiveMatches({ rooms }) {
+  // The server lists every room, bot games included. Only show games between two people.
+  const live = rooms
+    .map(r => ({
+      ...r,
+      humans: Object.entries(r.players || {}).filter(
+        ([addr]) => addr.toLowerCase() !== BOT_ADDRESS.toLowerCase()
+      ),
+    }))
+    .filter(r => r.humans.length >= 2);
+
+  return (
+    <section className="side-panel">
+      <h3 className="side-title">Live Matches</h3>
+      {live.length === 0 ? (
+        <p className="side-empty">No player matches right now. Start one and ask a friend to watch.</p>
+      ) : (
+        <ul className="live-list">
+          {live.map(r => (
+            <li key={r.roomId} className="live-row">
+              <div className="live-info">
+                <span className="live-game">{GAME_LABELS[r.gameType] || r.gameType}</span>
+                <span className="live-players">
+                  {r.humans.map(([addr, name]) => name || short(addr)).join(' vs ')}
+                </span>
+                <span className="live-watchers">{r.spectators} watching</span>
+              </div>
+              {r.gameType === 'memory' ? (
+                <button
+                  type="button"
+                  className="live-watch"
+                  onClick={() => navigate(`memory?mode=watch&room=${r.roomId}`)}
+                >
+                  Watch
+                </button>
+              ) : (
+                <span className="live-soon">Watching soon</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 function ProfileCard({ profile }) {

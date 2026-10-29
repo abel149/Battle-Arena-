@@ -3,20 +3,24 @@ import { API, socket, signAndIdentify } from '../socket.js';
 import { navigate, useRoute } from '../lib/router.js';
 import { short, useProfile } from '../lib/session.js';
 import RoomCode from '../components/RoomCode.jsx';
+import MatchChat from '../components/MatchChat.jsx';
 import './memory.css';
 
 const WAITING_COPY = {
   bot: ['Shuffling the deck', 'The bot is taking its seat across the table…'],
   create: ['Room ready', 'Share this code with a friend — the match starts as soon as they join.'],
   join: ['Joining room', 'Connecting you to your friend’s room…'],
+  watch: ['Joining the match', 'Joining the match. If nothing appears, it has already finished.'],
   match: ['Finding an opponent', 'Waiting for another player to join Memory Match. Open a second window to play against yourself.'],
 };
 
 export default function MemoryMatch() {
   const route = useRoute();
   const modeParam = route.params.get('mode');
-  const mode = ['bot', 'create', 'join'].includes(modeParam) ? modeParam : 'match';
+  const mode = ['bot', 'create', 'join', 'watch'].includes(modeParam) ? modeParam : 'match';
   const joinCode = (route.params.get('code') || '').toUpperCase();
+  const watching = mode === 'watch';
+  const watchRoom = route.params.get('room');
   const deck = route.params.get('deck') || 'flags';
   const { wallet } = useProfile();
 
@@ -36,7 +40,8 @@ export default function MemoryMatch() {
       // Await the signed identify — queue:join must arrive after the server
       // has verified our wallet signature, or it is silently dropped.
       await signAndIdentify(wallet);
-      if (mode === 'bot') socket.emit('match:bot', { gameType: 'memory', deck });
+      if (mode === 'watch') socket.emit('spectate', { roomId: watchRoom });
+      else if (mode === 'bot') socket.emit('match:bot', { gameType: 'memory', deck });
       else if (mode === 'create') socket.emit('room:create', { gameType: 'memory', deck });
       else if (mode === 'join') socket.emit('room:join', { code: joinCode });
       else {
@@ -48,7 +53,7 @@ export default function MemoryMatch() {
     else socket.once('connect', start);
     return () => socket.off('connect', start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, deck, joinCode]);
+  }, [mode, deck, joinCode, watchRoom]);
 
   useEffect(() => {
     const onStart = data => {
@@ -112,14 +117,18 @@ export default function MemoryMatch() {
     return () => { document.title = 'Battle Arena'; };
   }, []);
 
-  const mySeat = game ? (game.players.X === wallet.address ? 'X' : game.players.O === wallet.address ? 'O' : null) : null;
+  // When watching, the left card follows the first player (seat X).
+  const meAddr = watching && game ? game.players.X : wallet.address;
+  const mySeat = game ? (game.players.X === meAddr ? 'X' : game.players.O === meAddr ? 'O' : null) : null;
   const oppSeat = mySeat === 'X' ? 'O' : 'X';
-  const myName = mode === 'bot' ? 'You' : (room?.names?.[wallet.address] || 'You');
+  const myName = mode === 'bot'
+    ? 'You'
+    : (room?.names?.[meAddr] || (watching && meAddr ? short(meAddr) : 'You'));
   const oppAddr = game ? game.players[oppSeat] : null;
   const oppName = room?.names?.[oppAddr] || (oppAddr ? short(oppAddr) : 'Opponent');
-  const myTurn = !!game && !game.winner && game.players[game.turn] === wallet.address;
+  const myTurn = !!game && !game.winner && game.players[game.turn] === meAddr;
   // Memory scores are keyed by wallet address, not by seat.
-  const myScore = game ? game.scores?.[wallet.address] ?? 0 : 0;
+  const myScore = game ? game.scores?.[meAddr] ?? 0 : 0;
   const oppScore = game && oppAddr ? game.scores?.[oppAddr] ?? 0 : 0;
 
   const flip = useCallback(index => {
@@ -143,22 +152,25 @@ export default function MemoryMatch() {
 
   const iWon = receipt && receipt.winner === wallet.address;
   const isDraw = receipt && !receipt.winner;
+  const winnerName = receipt?.winner ? (room?.names?.[receipt.winner] || short(receipt.winner)) : '';
 
   return (
     <div className="mem-page">
       <header className="mem-top">
         <a className="mem-back" href="#hub">← Lobby</a>
         <h1 className="mem-title">Memory Match</h1>
-        <span className="mem-deck">{deckLabel}</span>
+        <span className="mem-deck">{deckLabel}{watching ? ' · Watching' : ''}</span>
       </header>
 
       <div className="mem-arena">
         <div className="mem-scores">
-          <ScoreCard name={myName} score={myScore} me active={myTurn} you />
+       <ScoreCard name={myName} score={myScore} me active={myTurn} you={!watching} />
           <div className="mem-status">
             {receipt
-              ? isDraw ? 'Draw' : iWon ? 'Victory' : 'Defeat'
-              : myTurn ? 'Your turn' : `${oppName}'s turn`}
+              ? isDraw ? 'Draw' : watching ? `${winnerName} wins` : iWon ? 'Victory' : 'Defeat'
+              : watching
+                ? `${myTurn ? myName : oppName}'s turn`
+                : myTurn ? 'Your turn' : `${oppName}'s turn`}
           </div>
           <ScoreCard name={oppName} score={oppScore} active={!!game && !myTurn && !game.winner} />
         </div>
@@ -175,7 +187,7 @@ export default function MemoryMatch() {
                     card.matched ? 'matched' : card.flipped ? 'flipped' : '',
                     card.matched && card.content ? 'learned' : '',
                   ].filter(Boolean).join(' ')}
-                  disabled={!myTurn || card.matched || card.flipped || game.locked || !!game.winner}
+                  disabled={watching || !myTurn || card.matched || card.flipped || game.locked || !!game.winner}
                   onClick={() => flip(i)}
                   aria-label={card.flipped || card.matched ? `Card: ${card.content}` : 'Hidden card'}
                 >
@@ -201,14 +213,18 @@ export default function MemoryMatch() {
                   : game.locked
                     ? 'Checking the pair…'
                     : myTurn
-                      ? 'Flip two cards — a matching pair scores and keeps your turn.'
-                      : 'Waiting for your rival to flip…'}
+                      ? (watching ? `${myName} is flipping…` : 'Flip two cards — a matching pair scores and keeps your turn.')
+                      : (watching ? `${oppName} is flipping…` : 'Waiting for your rival to flip…')}
               </span>
               {game.moveCount !== undefined && (
                 <span className="mem-moves">{game.moveCount} flips</span>
               )}
             </div>
           </>
+        )}
+
+        {mode !== 'bot' && !watching && room?.roomId && (
+          <MatchChat roomId={room.roomId} myAddress={wallet.address} />
         )}
 
         {error && <div className="mem-error">{error}</div>}
@@ -218,7 +234,7 @@ export default function MemoryMatch() {
             <div className="mem-result-head">
               <span className="mem-result-icon">{iWon ? '🏆' : isDraw ? '🤝' : '⚔️'}</span>
               <div>
-                <h2>{isDraw ? 'It’s a draw!' : iWon ? 'You win!' : 'You lose this one'}</h2>
+             <h2>{isDraw ? 'It’s a draw!' : watching ? `${winnerName} wins!` : iWon ? 'You win!' : 'You lose this one'}</h2>
                 <p>
                   {myScore} : {oppScore} pairs
                   {receipt.gameType ? ` · ${receipt.gameType}` : ''}

@@ -785,3 +785,32 @@
   padding: 12px 10px 12px 18px;
 }
 .user-pill { color: var(--text); font-weight: 600; }
+
+/* ----------------------------- live matches ----------------------------- */
+.live-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.live-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line-soft);
+  background: rgba(10, 26, 46, 0.7);
+}
+.live-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.live-game { font-size: 11px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--neon); }
+.live-players { font-size: 13px; color: #e8f4ff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-watchers { font-size: 11px; color: var(--muted); }
+.live-watch {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #2f7dff, #3fe0ff);
+  color: #04091a;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.live-soon { font-size: 11px; color: var(--muted); white-space: nowrap; }
