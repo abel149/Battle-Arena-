@@ -4,6 +4,8 @@ import { navigate } from '../lib/router.js';
 import { saveWallet, short, useProfile } from '../lib/session.js';
 import ArenaPreview3D from '../components/ArenaPreview3D.jsx';
 import AuthModal from '../components/AuthModal.jsx';
+import SkinLockerModal from '../components/SkinLockerModal.jsx';
+import ParentApprovalModal from '../components/ParentApprovalModal.jsx';
 import './hub.css';
 
 const DEFAULT_DECK = 'flags';
@@ -22,6 +24,10 @@ export default function Hub() {
   const [mathDiff, setMathDiff] = useState('medium');
   const [memoryDiff, setMemoryDiff] = useState('medium');
   const [c4Diff, setC4Diff] = useState('medium');
+  const [blasterDiff, setBlasterDiff] = useState('medium');
+  const [showSkinLocker, setShowSkinLocker] = useState(false);
+  const [showParentModal, setShowParentModal] = useState(false);
+  const [celebrationToast, setCelebrationToast] = useState(null);
   const [showEnergyModal, setShowEnergyModal] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [liveRooms, setLiveRooms] = useState([]);  const [registered, setRegistered] = useState(false);
@@ -60,7 +66,14 @@ export default function Hub() {
   // Live leaderboard: refresh as soon as any match on this socket finishes.
   useEffect(() => {
     socket.on('match:end', refresh);
-    return () => socket.off('match:end', refresh);
+    const onSkinUnlocked = ({ skin, message }) => {
+      setCelebrationToast(message || `🎉 You unlocked the '${skin.name}' skin!`);
+    };
+    socket.on('skin:unlocked', onSkinUnlocked);
+    return () => {
+      socket.off('match:end', refresh);
+      socket.off('skin:unlocked', onSkinUnlocked);
+    };
   }, [refresh]);
 
   async function connectMetaMask() {
@@ -150,6 +163,22 @@ export default function Hub() {
           <a className="mm-btn bp-nav-btn" href="#battlepass" title="Proof-of-Chore Battle Pass & Allowance">
             🏆 Battle Pass
           </a>
+          <button
+            type="button"
+            className="mm-btn skin-nav-btn"
+            onClick={() => setShowSkinLocker(true)}
+            title="Open Armory to equip skins or submit chore proofs"
+          >
+            🎨 Skins
+          </button>
+          <button
+            type="button"
+            className="mm-btn parent-nav-btn"
+            onClick={() => setShowParentModal(true)}
+            title="Open Parent Portal (PIN) to approve chores"
+          >
+            🛡️ Parents
+          </button>
           <a className="mm-btn ghost" href="#classic" title="Classic lobby with live chat and spectator mode">
             💬 Chat & Spectate
           </a>
@@ -162,6 +191,13 @@ export default function Hub() {
           <span className="addr-pill" title={wallet.address}>{short(wallet.address)}</span>
         </div>
       </header>
+
+      {celebrationToast && (
+        <div className="hub-celebration-toast">
+          <span>{celebrationToast}</span>
+          <button type="button" onClick={() => setCelebrationToast(null)}>✕</button>
+        </div>
+      )}
 
       {loadError && <div className="hub-alert">{loadError}</div>}
 
@@ -326,6 +362,59 @@ export default function Hub() {
           </div>
         </section>
 
+        {/* ---------------- Cyber Blaster Arena ---------------- */}
+        <section className="game-card blaster-card">
+          <h2 className="card-title blaster-card-title">Cyber Blaster Arena</h2>
+
+          <div className="card-art blaster-art">
+            <BlasterArt />
+            <div className="art-fade" aria-hidden="true" />
+          </div>
+
+          <div className="card-meta">
+            <span className="meta-check" aria-hidden="true">✓</span>
+            2D Neon Laser Duel
+            <span className="meta-bonus">+50 Battle Pass XP</span>
+          </div>
+
+          <div className="card-meta blaster-skin-meta">
+            <span className="skin-current-label">🚀 Skin:</span>
+            <span className="skin-current-name">{profile?.equippedSkin || 'neon-striker'}</span>
+            <button
+              type="button"
+              className="btn-change-skin-chip"
+              onClick={() => setShowSkinLocker(true)}
+            >
+              Change Skin 🎨
+            </button>
+          </div>
+
+          <div className="card-meta bot-diff-meta">
+            <span className="diff-label">🤖 Bot Level:</span>
+            <div className="diff-selector" role="radiogroup" aria-label="Cyber Blaster Bot Difficulty">
+              {DIFFICULTIES.map(d => (
+                <button
+                  key={d.id}
+                  type="button"
+                  className={`diff-chip ${blasterDiff === d.id ? 'active' : ''} diff-${d.id}`}
+                  onClick={() => setBlasterDiff(d.id)}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="card-actions">
+            <button type="button" className="btn-quick" onClick={() => tryPlay('blaster?mode=match')}>
+              <BoltIcon /> Quick Match
+            </button>
+            <button type="button" className="btn-bot" onClick={() => tryPlay(`blaster?mode=bot&difficulty=${blasterDiff}`)}>
+              <GamepadIcon /> Play vs Bot
+            </button>
+          </div>
+        </section>
+
         {/* ---------------- Right rail ---------------- */}
           <aside className="hub-side">
           {profile && <ProfileCard profile={profile} />}
@@ -413,6 +502,23 @@ export default function Hub() {
       )}
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+
+      {showSkinLocker && (
+        <SkinLockerModal
+          kidAddress={wallet?.address}
+          parentAddress={profile?.parentAddress}
+          onClose={() => setShowSkinLocker(false)}
+          onSkinEquipped={() => refresh()}
+        />
+      )}
+
+      {showParentModal && (
+        <ParentApprovalModal
+          parentAddress={profile?.parentAddress}
+          onClose={() => setShowParentModal(false)}
+          onChoreApproved={() => refresh()}
+        />
+      )}
     </div>
   );
 }
@@ -421,6 +527,7 @@ const GAME_LABELS = {
   memory: 'Memory Match',
   'math-arena': 'Neon Math Arena',
   'connect-four': 'Connect Four',
+  'cyber-blaster': 'Cyber Blaster Arena',
   'tic-tac-toe': 'Tic Tac Toe',
 };
 
@@ -650,5 +757,39 @@ function ConnectFourArt() {
         </div>
       ))}
     </div>
+  );
+}
+
+function BlasterArt() {
+  return (
+    <svg className="blaster-art-svg" viewBox="0 0 320 180" width="100%" height="100%" aria-hidden="true">
+      <defs>
+        <linearGradient id="blasterGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#00f0ff" stopOpacity="0.8" />
+          <stop offset="100%" stopColor="#0077ff" stopOpacity="0.2" />
+        </linearGradient>
+        <filter id="laserBlur" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="4" result="blur" />
+          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+      </defs>
+      {/* Grid background */}
+      <path d="M0 45h320M0 90h320M0 135h320M80 0v180M160 0v180M240 0v180" stroke="#00f0ff" strokeOpacity="0.08" strokeWidth="1" />
+      {/* Obstacle pillar preview */}
+      <rect x="145" y="60" width="30" height="60" rx="4" fill="#0f172a" stroke="#00f0ff" strokeWidth="1.5" strokeOpacity="0.6" />
+      {/* Laser beams */}
+      <line x1="85" y1="90" x2="145" y2="90" stroke="#00ffff" strokeWidth="3" filter="url(#laserBlur)" strokeLinecap="round" />
+      <line x1="235" y1="85" x2="175" y2="85" stroke="#ff2d55" strokeWidth="3" filter="url(#laserBlur)" strokeLinecap="round" />
+      {/* Ship P1 */}
+      <g transform="translate(65, 90)">
+        <polygon points="18,0 -12,-12 -6,0 -12,12" fill="#00f0ff" stroke="#0077ff" strokeWidth="2" />
+        <polygon points="6,0 -4,-4 -4,4" fill="#ffffff" />
+      </g>
+      {/* Ship P2 */}
+      <g transform="translate(255, 90) rotate(180)">
+        <polygon points="18,0 -12,-12 -6,0 -12,12" fill="#ff2d55" stroke="#ff9500" strokeWidth="2" />
+        <polygon points="6,0 -4,-4 -4,4" fill="#ffffff" />
+      </g>
+    </svg>
   );
 }

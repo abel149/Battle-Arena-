@@ -241,6 +241,12 @@ app.post('/api/chores/verify', async (req, res) => {
   if (kid) {
     notifyPlayer(result.chore.kidAddress, 'player:update', store.withoutPassword(kid));
     notifyPlayer(result.chore.kidAddress, 'chore:verified', { ...result, onchainRecord });
+    if (result.unlockedSkin) {
+      notifyPlayer(result.chore.kidAddress, 'skin:unlocked', {
+        skin: result.unlockedSkin,
+        message: `🎉 Your parent verified your chore! You unlocked the '${result.unlockedSkin.name}' skin!`,
+      });
+    }
   }
   notifyPlayer(parentAddress, 'chore:verified', { ...result, onchainRecord });
 
@@ -297,6 +303,34 @@ app.post('/api/vouchers/redeem', (req, res) => {
   res.json(result);
 });
 
+// ---- Skin & Parent PIN Endpoints ----
+
+app.get('/api/skins/:address', (req, res) => {
+  const skins = store.getSkins(req.params.address);
+  res.json(skins);
+});
+
+app.post('/api/skins/equip', (req, res) => {
+  const { address, skinId } = req.body || {};
+  if (!address || !skinId) return res.status(400).json({ error: 'address and skinId required' });
+  const result = store.equipSkin(address, skinId);
+  if (result.error) return res.status(400).json(result);
+  res.json(result);
+});
+
+app.post('/api/parent/verify-pin', (req, res) => {
+  const { address, pin } = req.body || {};
+  const result = store.verifyParentPin(address, pin);
+  res.json(result);
+});
+
+app.post('/api/parent/set-pin', (req, res) => {
+  const { address, pin } = req.body || {};
+  const result = store.setParentPin(address, pin);
+  if (result.error) return res.status(400).json(result);
+  res.json(result);
+});
+
 // ---- Helpers ----
 function serializeRoom(room) {
   return {
@@ -322,6 +356,7 @@ function broadcastLiveRooms() {
 }
 
 async function finishRoom(room) {
+  if (room.tickInterval) clearInterval(room.tickInterval);
   const { game } = room;
   const addrX = game.players.X;
   const addrO = game.players.O;
@@ -440,12 +475,16 @@ function createRoom(gameType, addrX, addrO, getSocket, opts = {}) {
     : 'medium';
   const diffLabel = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
   const botName = `ArenaBot (${diffLabel})`;
+
+  const skinX = store.getEquippedSkin(addrX)?.id || 'neon-striker';
+  const skinO = (addrO === BOT) ? (opts?.skinO || 'crimson-phoenix') : (store.getEquippedSkin(addrO)?.id || 'neon-striker');
+
   const room = {
     id,
     gameType,
     difficulty,
     engine,
-    game: engine.createGame(addrX, addrO, { ...opts, difficulty }),
+    game: engine.createGame(addrX, addrO, { ...opts, difficulty, skins: { X: skinX, O: skinO } }),
     sockets: {},
     names: { [BOT]: botName },
     spectators: new Set(),
@@ -468,6 +507,27 @@ function createRoom(gameType, addrX, addrO, getSocket, opts = {}) {
       }
     }
   }
+
+  // Real-time tick loop for Cyber Blaster
+  if (gameType === 'cyber-blaster') {
+    room.tickInterval = setInterval(() => {
+      if (room.game.winner) {
+        clearInterval(room.tickInterval);
+        return;
+      }
+      if (room.game.players.O === BOT) {
+        const bMove = room.engine.botMove(room.game, room.difficulty);
+        if (bMove) room.engine.applyMove(room.game, BOT, bMove);
+      }
+      room.engine.tick(room.game, 40);
+      io.to(room.id).emit('blaster:tick', room.engine.serialize(room.game));
+      if (room.game.winner) {
+        clearInterval(room.tickInterval);
+        finishRoom(room);
+      }
+    }, 40);
+  }
+
   broadcastLiveRooms();
   return room;
 }
@@ -633,6 +693,30 @@ io.on('connection', (socket) => {
     if (res.error) return socket.emit('game:error', res.error);
     broadcastState(room);
     afterEngineMove(room, res);
+  });
+
+  socket.on('blaster:input', ({ roomId, ...move }) => {
+    const room = rooms.get(roomId);
+    const address = socketPlayer.get(socket.id);
+    if (!room || !address || room.game.winner) return;
+    room.engine.applyMove(room.game, address, { type: 'input', ...move });
+  });
+
+  socket.on('skins:get', ({ address } = {}, ack) => {
+    const target = address || socketPlayer.get(socket.id);
+    const skins = store.getSkins(target);
+    if (typeof ack === 'function') ack(skins);
+    else socket.emit('skins:list', skins);
+  });
+
+  socket.on('skins:equip', ({ skinId } = {}, ack) => {
+    const addr = socketPlayer.get(socket.id);
+    if (!addr) return ack && ack({ error: 'Identify required' });
+    const res = store.equipSkin(addr, skinId);
+    if (ack) ack(res);
+    if (res.ok) {
+      socket.emit('player:update', store.withoutPassword(res.player));
+    }
   });
 
   socket.on('spectate', ({ roomId }) => {

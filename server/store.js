@@ -34,6 +34,99 @@ export const DEFAULT_CHORES = [
   { id: 'chore_quiz', title: "Pass 5-Question Daily Brain Quiz", category: "quiz", energyReward: 2, xpReward: 40, allowanceReward: 2 },
 ];
 
+export const SKINS = [
+  {
+    id: 'neon-striker',
+    name: 'Neon Striker',
+    rarity: 'Common',
+    isDefault: true,
+    choreId: null,
+    choreTitle: 'Starter Blaster',
+    choreCategory: 'starter',
+    choreDescription: 'Default issue combat interceptor. Free for all arena pilots.',
+    primaryColor: '#00f0ff',
+    accentColor: '#0077ff',
+    laserColor: '#00ffff',
+    bulletType: 'plasma',
+    trailColor: '#00d4ff',
+  },
+  {
+    id: 'crimson-phoenix',
+    name: 'Crimson Phoenix',
+    rarity: 'Rare',
+    isDefault: false,
+    choreId: 'chore_room',
+    choreTitle: 'Clean up bedroom & make bed',
+    choreCategory: 'room',
+    choreDescription: 'Fold all clothes, make your bed, and vacuum or sweep your bedroom floor.',
+    primaryColor: '#ff2d55',
+    accentColor: '#ff9500',
+    laserColor: '#ff3b30',
+    bulletType: 'fireball',
+    trailColor: '#ff6b4a',
+  },
+  {
+    id: 'shadow-phantom',
+    name: 'Shadow Phantom',
+    rarity: 'Epic',
+    isDefault: false,
+    choreId: 'chore_homework',
+    choreTitle: 'Complete math & school homework',
+    choreCategory: 'homework',
+    choreDescription: 'Finish all daily school assignments, math problems, and prepare your school bag.',
+    primaryColor: '#af52de',
+    accentColor: '#5856d6',
+    laserColor: '#bf5af2',
+    bulletType: 'shuriken',
+    trailColor: '#9d4edd',
+  },
+  {
+    id: 'emerald-titan',
+    name: 'Emerald Titan',
+    rarity: 'Rare',
+    isDefault: false,
+    choreId: 'chore_reading',
+    choreTitle: 'Read a book for 30 minutes',
+    choreCategory: 'reading',
+    choreDescription: 'Read 30 minutes of a book, educational article, or chapter.',
+    primaryColor: '#34c759',
+    accentColor: '#30d158',
+    laserColor: '#32d74b',
+    bulletType: 'railgun',
+    trailColor: '#00ff88',
+  },
+  {
+    id: 'solar-sovereign',
+    name: 'Solar Sovereign',
+    rarity: 'Legendary',
+    isDefault: false,
+    choreId: 'chore_dishes',
+    choreTitle: 'Help empty or load the dishwasher',
+    choreCategory: 'dishes',
+    choreDescription: 'Help wash dishes, clear the dining table, or empty the dishwasher.',
+    primaryColor: '#ffd60a',
+    accentColor: '#ff9f0a',
+    laserColor: '#ffe600',
+    bulletType: 'solar',
+    trailColor: '#ffea70',
+  },
+  {
+    id: 'cosmic-dragon',
+    name: 'Cosmic Dragon',
+    rarity: 'Legendary',
+    isDefault: false,
+    choreId: 'chore_pets',
+    choreTitle: 'Feed or walk family pet',
+    choreCategory: 'pets',
+    choreDescription: 'Take the family pet on a 20+ minute walk or feed and care for them.',
+    primaryColor: '#00f5d4',
+    accentColor: '#7b2cbf',
+    laserColor: '#00f5d4',
+    bulletType: 'dragon',
+    trailColor: '#70e000',
+  },
+];
+
 // ---- Schema ----
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS players (
@@ -122,6 +215,20 @@ const SCHEMA = [
     createdAt TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
   `CREATE INDEX IF NOT EXISTS ix_vouchers_kid ON vouchers(kidAddress)`,
+  // Player unlocked skins
+  `CREATE TABLE IF NOT EXISTS player_skins (
+    address TEXT NOT NULL,
+    skinId TEXT NOT NULL,
+    unlockedAt TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (address, skinId)
+  )`,
+  `CREATE INDEX IF NOT EXISTS ix_player_skins ON player_skins(address)`,
+  // Parent 4-digit PINs (stored as bcrypt hash, default '1234')
+  `CREATE TABLE IF NOT EXISTS parent_pins (
+    address TEXT PRIMARY KEY,
+    pinHash TEXT NOT NULL,
+    updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
 ];
 
 let db;
@@ -140,6 +247,7 @@ function open() {
   if (!cols.includes('battlePassXp')) db.exec('ALTER TABLE players ADD COLUMN battlePassXp INTEGER NOT NULL DEFAULT 0');
   if (!cols.includes('battlePassTier')) db.exec('ALTER TABLE players ADD COLUMN battlePassTier INTEGER NOT NULL DEFAULT 1');
   if (!cols.includes('allowanceBalance')) db.exec('ALTER TABLE players ADD COLUMN allowanceBalance INTEGER NOT NULL DEFAULT 0');
+  if (!cols.includes('equippedSkin')) db.exec("ALTER TABLE players ADD COLUMN equippedSkin TEXT NOT NULL DEFAULT 'neon-striker'");
   prepare();
   return db;
 }
@@ -150,10 +258,10 @@ function prepare() {
     upsert: db.prepare(`
       INSERT INTO players (address, name, username, email, password, registered,
         wins, losses, draws, matches, tokens, xp, level, streak, bestStreak,
-        memoryWins, deckStats, badges, energy, parentAddress, battlePassXp, battlePassTier, allowanceBalance, updatedAt)
+        memoryWins, deckStats, badges, energy, parentAddress, battlePassXp, battlePassTier, allowanceBalance, equippedSkin, updatedAt)
       VALUES (@address, @name, @username, @email, @password, @registered,
         @wins, @losses, @draws, @matches, @tokens, @xp, @level, @streak, @bestStreak,
-        @memoryWins, @deckStats, @badges, @energy, @parentAddress, @battlePassXp, @battlePassTier, @allowanceBalance, @updatedAt)
+        @memoryWins, @deckStats, @badges, @energy, @parentAddress, @battlePassXp, @battlePassTier, @allowanceBalance, @equippedSkin, @updatedAt)
       ON CONFLICT(address) DO UPDATE SET
         name = excluded.name,
         username = excluded.username,
@@ -177,6 +285,7 @@ function prepare() {
         battlePassXp = excluded.battlePassXp,
         battlePassTier = excluded.battlePassTier,
         allowanceBalance = excluded.allowanceBalance,
+        equippedSkin = excluded.equippedSkin,
         updatedAt = excluded.updatedAt
     `),
     getByAddress: db.prepare('SELECT * FROM players WHERE address = ?'),
@@ -214,7 +323,7 @@ function prepare() {
     getChoresForKid: db.prepare('SELECT * FROM chores WHERE kidAddress = ? ORDER BY createdAt DESC'),
     getChoreById: db.prepare('SELECT * FROM chores WHERE id = ?'),
     insertChore: db.prepare(`
-      INSERT INTO chores (id, kidAddress, parentAddress, title, category, energyReward, xpReward, allowanceReward, status, submittedAt, verifiedAt, verificationProof, notes, createdAt)
+      INSERT OR IGNORE INTO chores (id, kidAddress, parentAddress, title, category, energyReward, xpReward, allowanceReward, status, submittedAt, verifiedAt, verificationProof, notes, createdAt)
       VALUES (@id, @kidAddress, @parentAddress, @title, @category, @energyReward, @xpReward, @allowanceReward, @status, @submittedAt, @verifiedAt, @verificationProof, @notes, @createdAt)
     `),
     updateChoreStatus: db.prepare(`
@@ -231,6 +340,11 @@ function prepare() {
       VALUES (@id, @kidAddress, @parentAddress, @tier, @title, @type, @status, @claimedAt, @redeemedAt, @createdAt)
     `),
     updateVoucherStatus: db.prepare('UPDATE vouchers SET status = @status, claimedAt = @claimedAt, redeemedAt = @redeemedAt WHERE id = @id'),
+    // Skins and Parent PIN prepared statements
+    getUnlockedSkins: db.prepare('SELECT skinId, unlockedAt FROM player_skins WHERE address = ?'),
+    unlockSkin: db.prepare('INSERT OR IGNORE INTO player_skins (address, skinId, unlockedAt) VALUES (?, ?, ?)'),
+    getParentPin: db.prepare('SELECT pinHash FROM parent_pins WHERE address = ?'),
+    setParentPin: db.prepare('INSERT OR REPLACE INTO parent_pins (address, pinHash, updatedAt) VALUES (?, ?, ?)'),
   };
 }
 
@@ -260,6 +374,7 @@ function rowToPlayer(row) {
     battlePassXp: row.battlePassXp || 0,
     battlePassTier: row.battlePassTier || 1,
     allowanceBalance: row.allowanceBalance || 0,
+    equippedSkin: row.equippedSkin || 'neon-striker',
   };
 }
 
@@ -297,6 +412,7 @@ function playerToRow(p) {
     battlePassXp: p.battlePassXp || 0,
     battlePassTier: p.battlePassTier || 1,
     allowanceBalance: p.allowanceBalance || 0,
+    equippedSkin: p.equippedSkin || 'neon-striker',
     updatedAt: new Date().toISOString(),
   };
 }
@@ -311,6 +427,7 @@ function createPlayer(address, name) {
     streak: 0, bestStreak: 0, memoryWins: 0, deckStats: {}, badges: [],
     registered: false, email: null, password: null, username: null,
     energy: 5, parentAddress: null, battlePassXp: 0, battlePassTier: 1, allowanceBalance: 0,
+    equippedSkin: 'neon-striker',
   };
 }
 
@@ -653,7 +770,7 @@ export function getChores(kidAddress) {
     const p = getPlayer(kidAddress);
     const parent = p?.parentAddress || null;
     for (const d of DEFAULT_CHORES) {
-      const cId = `chore_${kidAddress.slice(2, 8)}_${d.id}`;
+      const cId = `chore_${kidAddress.toLowerCase().replace(/[^a-z0-9]/g, '').slice(-12)}_${d.id}`;
       prepared.insertChore.run({
         id: cId,
         kidAddress,
@@ -712,6 +829,7 @@ export function verifyChore(choreId, parentAddress, proofHash = null) {
   });
 
   const p = getPlayer(chore.kidAddress);
+  let unlockedSkin = null;
   if (p) {
     p.energy = (p.energy || 0) + chore.energyReward;
     p.battlePassXp = (p.battlePassXp || 0) + chore.xpReward;
@@ -719,6 +837,14 @@ export function verifyChore(choreId, parentAddress, proofHash = null) {
     p.allowanceBalance = (p.allowanceBalance || 0) + chore.allowanceReward;
     p.tokens = (p.tokens || 0) + chore.allowanceReward;
     if (parentAddress && !p.parentAddress) p.parentAddress = parentAddress;
+
+    // Check if this chore unlocks any skin!
+    const matchingSkin = SKINS.find(s => s.choreId === chore.id || (s.choreCategory && s.choreCategory === chore.category));
+    if (matchingSkin) {
+      unlockSkin(p.address, matchingSkin.id);
+      unlockedSkin = matchingSkin;
+    }
+
     prepared.upsert.run(playerToRow(p));
     syncBattlePassVouchers(p.address, p.battlePassTier, p.parentAddress);
   }
@@ -727,6 +853,7 @@ export function verifyChore(choreId, parentAddress, proofHash = null) {
     ok: true,
     chore: prepared.getChoreById.get(choreId),
     player: getPlayer(chore.kidAddress),
+    unlockedSkin,
   };
 }
 
@@ -820,4 +947,101 @@ export function completeBrainQuiz(kidAddress) {
   prepared.upsert.run(playerToRow(p));
   syncBattlePassVouchers(p.address, p.battlePassTier, p.parentAddress);
   return { ok: true, energy: p.energy, battlePassXp: p.battlePassXp, battlePassTier: p.battlePassTier };
+}
+
+// ---- Skin & Parent Approval System ----
+
+export function unlockSkin(address, skinId) {
+  open();
+  const skin = SKINS.find(s => s.id === skinId);
+  if (!skin) return { error: 'Unknown skin' };
+  prepared.unlockSkin.run(address, skinId, new Date().toISOString());
+  return { ok: true, skinId };
+}
+
+export function isSkinUnlocked(address, skinId) {
+  open();
+  if (skinId === 'neon-striker') return true;
+  if (!address) return false;
+  const rows = prepared.getUnlockedSkins.all(address);
+  return rows.some(r => r.skinId === skinId);
+}
+
+export function getSkins(address) {
+  open();
+  const p = address ? getPlayer(address) : null;
+  const unlockedRows = address ? prepared.getUnlockedSkins.all(address) : [];
+  const unlockedSet = new Set(unlockedRows.map(r => r.skinId));
+  unlockedSet.add('neon-striker'); // default is always unlocked
+
+  const chores = address ? getChores(address) : [];
+  const choreMap = new Map();
+  for (const c of chores) {
+    choreMap.set(c.id, c);
+    choreMap.set(c.category, c);
+  }
+
+  const equippedId = p?.equippedSkin || 'neon-striker';
+
+  return SKINS.map(skin => {
+    const isUnlocked = unlockedSet.has(skin.id);
+    const chore = skin.choreId ? choreMap.get(skin.choreId) : (skin.choreCategory ? choreMap.get(skin.choreCategory) : null);
+    return {
+      ...skin,
+      unlocked: isUnlocked,
+      equipped: equippedId === skin.id,
+      choreStatus: chore ? chore.status : (skin.isDefault ? 'verified' : 'available'),
+      choreNotes: chore?.notes || null,
+      choreSubmittedAt: chore?.submittedAt || null,
+      choreVerifiedAt: chore?.verifiedAt || null,
+    };
+  });
+}
+
+export function equipSkin(address, skinId) {
+  open();
+  const p = getPlayer(address);
+  if (!p) return { error: 'Player not found' };
+  const skin = SKINS.find(s => s.id === skinId);
+  if (!skin) return { error: 'Unknown skin' };
+  if (!isSkinUnlocked(address, skinId)) {
+    return { error: 'Skin is locked. Complete the required chore first!' };
+  }
+  p.equippedSkin = skinId;
+  prepared.upsert.run(playerToRow(p));
+  return { ok: true, equippedSkin: skinId, player: getPlayer(address) };
+}
+
+export function getEquippedSkin(address) {
+  open();
+  const p = address ? getPlayer(address) : null;
+  const skinId = p?.equippedSkin || 'neon-striker';
+  return SKINS.find(s => s.id === skinId) || SKINS[0];
+}
+
+// Parent PIN Verification (Default PIN is '1234')
+const DEFAULT_PARENT_PIN = '1234';
+
+export function verifyParentPin(address, pin) {
+  open();
+  if (!pin) return { ok: false, error: 'PIN required' };
+  const row = prepared.getParentPin.get(address || 'default');
+  if (!row) {
+    // If not set, default is 1234
+    const ok = String(pin).trim() === DEFAULT_PARENT_PIN;
+    return { ok, isDefault: true };
+  }
+  const ok = bcrypt.compareSync(String(pin).trim(), row.pinHash);
+  return { ok, isDefault: false };
+}
+
+export function setParentPin(address, newPin) {
+  open();
+  const clean = String(newPin || '').trim();
+  if (!/^\d{4,6}$/.test(clean)) {
+    return { error: 'PIN must be 4 to 6 digits' };
+  }
+  const hash = bcrypt.hashSync(clean, 8);
+  prepared.setParentPin.run(address || 'default', hash, new Date().toISOString());
+  return { ok: true };
 }

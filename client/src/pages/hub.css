@@ -1080,3 +1080,104 @@
   font-size: 0.9rem;
   cursor: pointer;
 }
+
+/* ==========================================================================
+   Cyber Blaster Card & Skin Navigation Elements
+   ========================================================================== */
+
+.skin-nav-btn {
+  background: rgba(0, 240, 255, 0.15) !important;
+  border: 1px solid rgba(0, 240, 255, 0.4) !important;
+  color: #00f0ff !important;
+}
+
+.parent-nav-btn {
+  background: rgba(16, 185, 129, 0.15) !important;
+  border: 1px solid rgba(16, 185, 129, 0.4) !important;
+  color: #34d399 !important;
+}
+
+.hub-celebration-toast {
+  margin: 12px 28px 0;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.25), rgba(0, 240, 255, 0.2));
+  border: 1px solid rgba(16, 185, 129, 0.5);
+  border-radius: 12px;
+  padding: 12px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #a7f3d0;
+  font-weight: 700;
+  box-shadow: 0 0 25px rgba(16, 185, 129, 0.2);
+}
+
+.hub-celebration-toast button {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.blaster-card {
+  border-color: rgba(0, 240, 255, 0.3) !important;
+}
+
+.blaster-card:hover {
+  border-color: #00f0ff !important;
+  box-shadow: 0 0 35px rgba(0, 240, 255, 0.25) !important;
+}
+
+.blaster-card-title {
+  color: #00f0ff !important;
+}
+
+.blaster-art {
+  height: 160px;
+  background: radial-gradient(circle at 50% 50%, rgba(0, 240, 255, 0.1) 0%, rgba(15, 23, 42, 0.8) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.blaster-art-svg {
+  filter: drop-shadow(0 0 8px rgba(0, 240, 255, 0.3));
+}
+
+.blaster-skin-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  margin-top: 6px;
+}
+
+.skin-current-label {
+  color: #94a3b8;
+}
+
+.skin-current-name {
+  color: #00f0ff;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.btn-change-skin-chip {
+  background: rgba(0, 240, 255, 0.12);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  color: #00f0ff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-left: auto;
+  transition: all 0.2s ease;
+}
+
+.btn-change-skin-chip:hover {
+  background: rgba(0, 240, 255, 0.25);
+  transform: translateY(-1px);
+}
