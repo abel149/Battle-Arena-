@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { API, socket } from '../socket.js';
 import { navigate, useRoute } from '../lib/router.js';
 import { short, useProfile } from '../lib/session.js';
+import MatchChat from '../components/MatchChat.jsx';
 import './arena.css';
 
 const ROUND_SECONDS = 10;
@@ -441,6 +442,10 @@ export default function Arena() {
             />
           )}
         </div>
+
+        {mode === 'match' && room?.roomId && (
+          <MatchChat roomId={room.roomId} myAddress={wallet.address} />
+        )}
 
         <div className="control-bar">
           <div className="control-group">
