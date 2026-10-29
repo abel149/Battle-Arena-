@@ -27,7 +27,7 @@ export function applyMove(game, address, move) {
     game.players.O === address ? 'O' : null;
   if (!symbol) return { error: 'Not a player in this game' };
   if (game.turn !== symbol) return { error: 'Not your turn' };
-  if (index < 0 || index > 8 || game.board[index]) return { error: 'Invalid cell' };
+  if (!Number.isInteger(index) || index < 0 || index > 8 || game.board[index]) return { error: 'Invalid cell' };
 
   game.board[index] = symbol;
   game.moves.push({ index, symbol, address, t: Date.now() });

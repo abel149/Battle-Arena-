@@ -2,17 +2,28 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { API, socket, signAndIdentify } from '../socket.js';
 import { navigate, useRoute } from '../lib/router.js';
 import { short, useProfile } from '../lib/session.js';
+import RoomCode from '../components/RoomCode.jsx';
 import './memory.css';
+
+const WAITING_COPY = {
+  bot: ['Shuffling the deck', 'The bot is taking its seat across the table…'],
+  create: ['Room ready', 'Share this code with a friend — the match starts as soon as they join.'],
+  join: ['Joining room', 'Connecting you to your friend’s room…'],
+  match: ['Finding an opponent', 'Waiting for another player to join Memory Match. Open a second window to play against yourself.'],
+};
 
 export default function MemoryMatch() {
   const route = useRoute();
-  const mode = route.params.get('mode') === 'bot' ? 'bot' : 'match';
+  const modeParam = route.params.get('mode');
+  const mode = ['bot', 'create', 'join'].includes(modeParam) ? modeParam : 'match';
+  const joinCode = (route.params.get('code') || '').toUpperCase();
   const deck = route.params.get('deck') || 'flags';
   const { wallet } = useProfile();
 
   const [room, setRoom] = useState(null);
   const [game, setGame] = useState(null);
   const [queued, setQueued] = useState(false);
+  const [roomCode, setRoomCode] = useState(null);
   const [error, setError] = useState(null);
   const [receipt, setReceipt] = useState(null);
   const [deckLabel, setDeckLabel] = useState('Educational decks');
@@ -26,8 +37,10 @@ export default function MemoryMatch() {
       // has verified our wallet signature, or it is silently dropped.
       await signAndIdentify(wallet);
       if (mode === 'bot') socket.emit('match:bot', { gameType: 'memory', deck });
+      else if (mode === 'create') socket.emit('room:create', { gameType: 'memory', deck });
+      else if (mode === 'join') socket.emit('room:join', { code: joinCode });
       else {
-        socket.emit('queue:join', { gameType: 'memory' });
+        socket.emit('queue:join', { gameType: 'memory', deck });
         setQueued(true);
       }
     }
@@ -35,7 +48,7 @@ export default function MemoryMatch() {
     else socket.once('connect', start);
     return () => socket.off('connect', start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, deck]);
+  }, [mode, deck, joinCode]);
 
   useEffect(() => {
     const onStart = data => {
@@ -44,6 +57,7 @@ export default function MemoryMatch() {
       setRoom(next);
       setGame(data.game);
       setQueued(false);
+      setRoomCode(null);
       setReceipt(null);
       setError(null);
       if (data.game?.deckLabel) setDeckLabel(data.game.deckLabel);
@@ -55,12 +69,16 @@ export default function MemoryMatch() {
       setReceipt({ ...(data.receipt || {}), winner: data.winner, result: data.result });
     };
     const onWaiting = () => setQueued(true);
+    const onRoomWaiting = ({ code }) => setRoomCode(code);
+    const onRoomExpired = () => { setRoomCode(null); setError('This room expired. Go back and create a new one.'); };
     const onError = msg => setError(typeof msg === 'string' ? msg : msg?.error || 'Something went wrong');
 
     socket.on('match:start', onStart);
     socket.on('game:state', onState);
     socket.on('match:end', onEnd);
     socket.on('queue:waiting', onWaiting);
+    socket.on('room:waiting', onRoomWaiting);
+    socket.on('room:expired', onRoomExpired);
     socket.on('game:error', onError);
     socket.on('player:error', onError);
 
@@ -69,6 +87,8 @@ export default function MemoryMatch() {
       socket.off('game:state', onState);
       socket.off('match:end', onEnd);
       socket.off('queue:waiting', onWaiting);
+      socket.off('room:waiting', onRoomWaiting);
+      socket.off('room:expired', onRoomExpired);
       socket.off('game:error', onError);
       socket.off('player:error', onError);
       const r = roomRef.current;
@@ -227,14 +247,10 @@ export default function MemoryMatch() {
         <div className="mem-waiting">
           <div className="mem-waiting-card">
             <div className="mem-spinner" aria-hidden="true" />
-            <h2>{error ? 'Match error' : mode === 'bot' ? 'Shuffling the deck' : 'Finding an opponent'}</h2>
-            <p>
-              {error ||
-                (mode === 'bot'
-                  ? 'The bot is taking its seat across the table…'
-                  : 'Waiting for another player to join Memory Match. Open a second window to play against yourself.')}
-            </p>
-            <button type="button" className="mem-btn" onClick={leave}>Cancel</button>
+            <h2>{error ? 'Match error' : WAITING_COPY[mode][0]}</h2>
+            <p>{error || WAITING_COPY[mode][1]}</p>
+            {!error && mode === 'create' && roomCode && <RoomCode code={roomCode} />}
+            <button type="button" className="mem-btn" onClick={leave}>{error ? 'Back to hub' : 'Cancel'}</button>
           </div>
         </div>
       )}

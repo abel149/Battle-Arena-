@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { API, socket, signAndIdentify } from '../socket.js';
+import { API, socket, logout } from '../socket.js';
 import { navigate } from '../lib/router.js';
 import { saveWallet, short, useProfile } from '../lib/session.js';
 import ArenaPreview3D from '../components/ArenaPreview3D.jsx';
-import AuthModal from '../components/AuthModal.jsx';
+import JoinRoomModal from '../components/JoinRoomModal.jsx';
 import './hub.css';
 
 const DEFAULT_DECK = 'flags';
@@ -15,8 +15,7 @@ export default function Hub() {
   const [decks, setDecks] = useState([]);
   const [deck, setDeck] = useState(DEFAULT_DECK);
   const [loadError, setLoadError] = useState(null);
-  const [registered, setRegistered] = useState(false);
-  const [showAuth, setShowAuth] = useState(false);
+  const [joinGame, setJoinGame] = useState(null); // 'arena' | 'memory' | null
 
   const refresh = useCallback(async () => {
     try {
@@ -46,29 +45,8 @@ export default function Hub() {
     return () => socket.off('match:end', refresh);
   }, [refresh]);
 
-  async function connectMetaMask() {
-    if (!window.ethereum) {
-      setLoadError('MetaMask is not installed in this browser.');
-      return;
-    }
-    try {
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      if (accounts?.[0]) {
-        // MetaMask identity replaces the demo wallet — drop its private key,
-        // which would otherwise sign for the wrong address.
-        const next = { address: accounts[0], name: wallet.name, source: 'metamask' };
-        setWallet(next);
-        saveWallet(next);
-        await signAndIdentify(next);
-      }
-    } catch {
-      setLoadError('MetaMask connection was cancelled.');
-    }
-  }
-
-  // The server tells us when this socket is logged in to a registered account.
+  // The server tells us which account this socket is logged in to.
   useEffect(() => {
-    const onRegistered = yes => setRegistered(!!yes);
     const onUser = u => {
       if (!u?.address) return;
       setWallet(cur => {
@@ -79,19 +57,9 @@ export default function Hub() {
         return next;
       });
     };
-    socket.on('player:registered', onRegistered);
     socket.on('player:registered:user', onUser);
-    return () => {
-      socket.off('player:registered', onRegistered);
-      socket.off('player:registered:user', onUser);
-    };
+    return () => socket.off('player:registered:user', onUser);
   }, [setWallet]);
-
-  // Logging out just hands this browser a fresh guest wallet.
-  function logout() {
-    localStorage.removeItem('arena_wallet');
-    window.location.reload();
-  }
 
   const dailyDeck = decks.find(d => d.daily);
   const myRank = leaderboard.find(p => p.address === wallet.address);
@@ -116,13 +84,9 @@ export default function Hub() {
               {profile.tokens || 0} ARENA
             </span>
           )}
-          {registered ? (
-            <button type="button" className="mm-btn" onClick={logout}>Log out</button>
-          ) : (
-            <button type="button" className="mm-btn" onClick={() => setShowAuth(true)}>Log in</button>
-          )}
-          <button type="button" className="mm-btn" onClick={connectMetaMask}>MetaMask</button>
-          <span className="addr-pill" title={wallet.address}>{short(wallet.address)}</span>
+          {profile?.username && <span className="user-pill">@{profile.username}</span>}
+          <span className="addr-pill" title={`Profile ID ${wallet.address}`}>{short(wallet.address)}</span>
+          <button type="button" className="mm-btn" onClick={logout}>Log out</button>
         </div>
       </header>
 
@@ -154,6 +118,12 @@ export default function Hub() {
             </button>
             <button type="button" className="btn-bot" onClick={() => navigate('arena?mode=bot')}>
               <GamepadIcon /> Play vs Bot
+            </button>
+            <button type="button" className="btn-bot" onClick={() => navigate('arena?mode=create')}>
+              <PlusIcon /> Create Room
+            </button>
+            <button type="button" className="btn-bot" onClick={() => setJoinGame('arena')}>
+              <KeyIcon /> Join Room
             </button>
           </div>
         </section>
@@ -189,6 +159,12 @@ export default function Hub() {
             </button>
             <button type="button" className="btn-bot" onClick={() => navigate(`memory?mode=bot&deck=${deck}`)}>
               <GamepadIcon /> Play vs Bot
+            </button>
+            <button type="button" className="btn-bot" onClick={() => navigate(`memory?mode=create&deck=${deck}`)}>
+              <PlusIcon /> Create Room
+            </button>
+            <button type="button" className="btn-bot" onClick={() => setJoinGame('memory')}>
+              <KeyIcon /> Join Room
             </button>
           </div>
         </section>
@@ -257,7 +233,18 @@ export default function Hub() {
         </aside>
       </main>
 
-      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+      {joinGame && (
+        <JoinRoomModal
+          gameLabel={joinGame === 'arena' ? 'Neon Math Arena' : 'Memory Match'}
+          onClose={() => setJoinGame(null)}
+          onJoin={code => {
+            setJoinGame(null);
+            navigate(joinGame === 'arena'
+              ? `arena?mode=join&code=${code}`
+              : `memory?mode=join&code=${code}&deck=${deck}`);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -354,6 +341,22 @@ function GamepadIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M7.5 7h9A4.5 4.5 0 0 1 21 11.5v3a3.5 3.5 0 0 1-6.3 2.1l-.7-.9h-4l-.7.9A3.5 3.5 0 0 1 3 14.5v-3A4.5 4.5 0 0 1 7.5 7Zm.5 3v1.6H6.4v1.8H8V15h1.8v-1.6h1.6v-1.8H9.8V10H8Zm7.4.4a1.1 1.1 0 1 0 0 2.2 1.1 1.1 0 0 0 0-2.2Zm2.6 2.9a1.1 1.1 0 1 0 0 2.2 1.1 1.1 0 0 0 0-2.2Z" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7V4Z" />
+    </svg>
+  );
+}
+
+function KeyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M14.5 3a6.5 6.5 0 0 0-6.2 8.4L3 16.7V21h4.3v-2.2H9.5v-2.2h2.2l1-1A6.5 6.5 0 1 0 14.5 3Zm2 3.2a1.8 1.8 0 1 1 0 3.6 1.8 1.8 0 0 1 0-3.6Z" />
     </svg>
   );
 }

@@ -652,13 +652,16 @@
   position: fixed;
   inset: 0;
   z-index: 50;
-  display: grid;
-  place-items: center;
+  display: flex;
   padding: 16px;
+  overflow-y: auto;
   background: rgba(2, 8, 20, 0.78);
   backdrop-filter: blur(4px);
 }
 .auth-card {
+  /* margin:auto centers when there is room and lets the card scroll from its
+     top edge (instead of being clipped) when the form is taller than the window */
+  margin: auto;
   width: min(400px, 100%);
   display: flex;
   flex-direction: column;
@@ -730,3 +733,55 @@
 .auth-cancel { border: 1px solid var(--line); background: transparent; color: var(--muted); }
 .auth-submit { border: 0; background: linear-gradient(135deg, #2f7dff, #3fe0ff); color: #04091a; }
 .auth-submit:disabled { opacity: 0.6; cursor: wait; }
+/* ------------------------------ sign-in gate ---------------------------- */
+.auth-overlay.gate { background: transparent; backdrop-filter: none; z-index: 1; }
+.auth-gate .auth-card { width: min(420px, 100%); position: relative; }
+.auth-brand { text-align: center; padding-bottom: 4px; }
+.auth-brand h1 {
+  margin: 0 0 6px;
+  font-size: 30px;
+  letter-spacing: 0.04em;
+  background: linear-gradient(135deg, #63f0ff, #2f7dff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.auth-brand p { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.auth-gate .hub-alert { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); z-index: 2; width: min(640px, 92%); }
+.auth-wallet {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px dashed var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+.auth-wallet b { color: var(--neon); font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-weight: 600; }
+.auth-wallet button {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--neon);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.auth-wallet em { flex-basis: 100%; color: #ff9fb3; font-style: normal; }
+
+/* ------------------------------ join-room modal ------------------------- */
+.join-card { text-align: center; }
+.join-card h3 { margin: 0; font-size: 18px; }
+.join-card p { margin: 0; font-size: 12.5px; color: var(--muted); }
+.auth-card input.room-input {
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.4em;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 22px;
+  padding: 12px 10px 12px 18px;
+}
+.user-pill { color: var(--text); font-weight: 600; }
