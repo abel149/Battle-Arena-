@@ -1,14 +1,21 @@
 // Shared client identity helpers — one wallet + one socket identity.
 import { useEffect, useState } from 'react';
-import { socket } from '../socket.js';
+import { ethers } from 'ethers';
+import { socket, signAndIdentify } from '../socket.js';
 
+// Demo wallets carry a real secp256k1 private key so every identity can
+// produce a genuine EIP-191 signature (the server verifies it). MetaMask
+// wallets (source: 'metamask') sign via personal_sign and store no key here.
 export function getOrCreateWallet() {
   let w = JSON.parse(localStorage.getItem('arena_wallet') || 'null');
-  if (!w) {
-    const bytes = crypto.getRandomValues(new Uint8Array(20));
+  if (!w || !w.address || (!w.privateKey && w.source !== 'metamask')) {
+    // Legacy wallets stored only a fake address — regenerate a real key pair.
+    const wallet = ethers.Wallet.createRandom();
     w = {
-      address: '0x' + [...bytes].map(b => b.toString(16).padStart(2, '0')).join(''),
+      address: wallet.address,
       name: 'Player-' + Math.random().toString(36).slice(2, 7),
+      privateKey: wallet.privateKey,
+      source: 'demo',
     };
     localStorage.setItem('arena_wallet', JSON.stringify(w));
   }
@@ -27,7 +34,7 @@ export function useProfile() {
   const [profile, setProfile] = useState(null);
 
   useEffect(() => {
-    const identify = () => socket.emit('identify', wallet);
+    const identify = () => signAndIdentify(wallet);
     if (socket.connected) identify();
     socket.on('connect', identify);
     socket.on('player:update', setProfile);

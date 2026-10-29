@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { API, socket } from '../socket.js';
+import { API, socket, signAndIdentify } from '../socket.js';
 import { navigate, useRoute } from '../lib/router.js';
 import { short, useProfile } from '../lib/session.js';
 import './memory.css';
@@ -21,8 +21,10 @@ export default function MemoryMatch() {
   useEffect(() => { roomRef.current = room; }, [room]);
 
   useEffect(() => {
-    function start() {
-      socket.emit('identify', wallet);
+    async function start() {
+      // Await the signed identify — queue:join must arrive after the server
+      // has verified our wallet signature, or it is silently dropped.
+      await signAndIdentify(wallet);
       if (mode === 'bot') socket.emit('match:bot', { gameType: 'memory', deck });
       else {
         socket.emit('queue:join', { gameType: 'memory' });
@@ -53,13 +55,14 @@ export default function MemoryMatch() {
       setReceipt({ ...(data.receipt || {}), winner: data.winner, result: data.result });
     };
     const onWaiting = () => setQueued(true);
-    const onError = msg => setError(msg);
+    const onError = msg => setError(typeof msg === 'string' ? msg : msg?.error || 'Something went wrong');
 
     socket.on('match:start', onStart);
     socket.on('game:state', onState);
     socket.on('match:end', onEnd);
     socket.on('queue:waiting', onWaiting);
     socket.on('game:error', onError);
+    socket.on('player:error', onError);
 
     return () => {
       socket.off('match:start', onStart);
@@ -67,6 +70,7 @@ export default function MemoryMatch() {
       socket.off('match:end', onEnd);
       socket.off('queue:waiting', onWaiting);
       socket.off('game:error', onError);
+      socket.off('player:error', onError);
       const r = roomRef.current;
       socket.emit('queue:leave');
       if (r?.roomId) socket.emit('match:leave', { roomId: r.roomId });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { API, socket } from '../socket.js';
+import { API, socket, signAndIdentify } from '../socket.js';
 import { navigate } from '../lib/router.js';
 import { saveWallet, short, useProfile } from '../lib/session.js';
 import ArenaPreview3D from '../components/ArenaPreview3D.jsx';
@@ -54,10 +54,12 @@ export default function Hub() {
     try {
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
       if (accounts?.[0]) {
-        const next = { ...wallet, address: accounts[0] };
+        // MetaMask identity replaces the demo wallet — drop its private key,
+        // which would otherwise sign for the wrong address.
+        const next = { address: accounts[0], name: wallet.name, source: 'metamask' };
         setWallet(next);
         saveWallet(next);
-        socket.emit('identify', next);
+        await signAndIdentify(next);
       }
     } catch {
       setLoadError('MetaMask connection was cancelled.');

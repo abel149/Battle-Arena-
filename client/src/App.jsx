@@ -353,8 +353,8 @@ export default function App() {
             {profile && (
               <div className="profile">
                 <input className="name-input" defaultValue={profile.name}
-                  onBlur={e => { setWallet(w => ({ ...w, name: e.target.value }));
-                                 socket.emit('identify', { ...wallet, name: e.target.value }); }} />
+                  onBlur={e => { const next = { ...wallet, name: e.target.value }; setWallet(next);
+                                 signAndIdentify(next); }} />
                 <div className="stats">
                   <span>⭐ Lv {profile.level || 1} ({profile.xp || 0} XP)</span>
                   <span>{profile.matches} matches</span>
