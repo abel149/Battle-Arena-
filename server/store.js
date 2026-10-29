@@ -5,6 +5,7 @@
 
 import Database from 'better-sqlite3';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -60,6 +61,12 @@ const SCHEMA = [
     points INTEGER NOT NULL DEFAULT 0,
     wins INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (week, address)
+  )`,
+  // Login sessions: the client keeps a random token; only its hash is stored.
+  `CREATE TABLE IF NOT EXISTS sessions (
+    tokenHash TEXT PRIMARY KEY,
+    address TEXT NOT NULL,
+    createdAt INTEGER NOT NULL
   )`,
 ];
 
@@ -137,7 +144,42 @@ function prepare() {
       LIMIT 50
     `),
     weeklyGet: db.prepare('SELECT points, wins FROM weekly_points WHERE week = ? AND address = ?'),
+    sessionInsert: db.prepare('INSERT INTO sessions (tokenHash, address, createdAt) VALUES (?, ?, ?)'),
+    sessionGet: db.prepare('SELECT address, createdAt FROM sessions WHERE tokenHash = ?'),
+    sessionDelete: db.prepare('DELETE FROM sessions WHERE tokenHash = ?'),
   };
+}
+
+// ---- Login sessions ----
+
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const hashToken = token => crypto.createHash('sha256').update(String(token)).digest('hex');
+
+/** Create a login session for `address`; returns the opaque token for the client. */
+export function createSession(address) {
+  open();
+  const token = crypto.randomBytes(32).toString('hex');
+  prepared.sessionInsert.run(hashToken(token), address, Date.now());
+  return token;
+}
+
+/** Address a valid, unexpired session token belongs to — or null. */
+export function addressForSession(token) {
+  if (!token || typeof token !== 'string') return null;
+  open();
+  const row = prepared.sessionGet.get(hashToken(token));
+  if (!row) return null;
+  if (Date.now() - row.createdAt > SESSION_TTL_MS) {
+    prepared.sessionDelete.run(hashToken(token));
+    return null;
+  }
+  return row.address;
+}
+
+export function deleteSession(token) {
+  if (!token || typeof token !== 'string') return;
+  open();
+  prepared.sessionDelete.run(hashToken(token));
 }
 
 function rowToPlayer(row) {
@@ -356,7 +398,7 @@ export function isRegistered(address) {
 export function safeProfile(address) {
   const p = getPlayer(address);
   if (!p) return null;
-  const { password, ...safe } = p;
+  const { password, email, ...safe } = p;
   return safe;
 }
 
@@ -368,7 +410,7 @@ export function usernames() {
 
 export function withoutPassword(p) {
   if (!p) return p;
-  const { password, ...safe } = p;
+  const { password, email, ...safe } = p;
   return safe;
 }
 
@@ -428,7 +470,8 @@ export function applyResult(address, result, ctx = {}) {
 
 export function leaderboard() {
   open();
-  return prepared.leaderboard.all().map((row, i) => ({ rank: i + 1, ...rowToPlayer(row) }));
+  return prepared.leaderboard.all()
+    .map((row, i) => withoutPassword({ rank: i + 1, ...rowToPlayer(row) }));
 }
 
 // ---- Finished-match archive (for the replay feature) ----

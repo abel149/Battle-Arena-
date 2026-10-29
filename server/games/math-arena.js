@@ -13,6 +13,10 @@ const TOTAL_ROUNDS = 8;
 const MAX_LIVES = 3;
 const POINTS = 20;
 
+// Server-side round deadline: the client gets ~10s; the server enforces this
+// after a grace period so an idle opponent cannot stall the match forever.
+export const ROUND_MS = 14000;
+
 const OPERATORS = ['+', '−', '×', '÷'];
 
 function rand(min, max) {
@@ -115,6 +119,17 @@ export function applyMove(game, address, move) {
   else game.turn = seat === 'X' ? 'O' : 'X';
 
   return { ok: true };
+}
+
+// Called by the server when the round deadline expires: lock an empty
+// pick for every seat that has not answered yet (costs a life, as usual).
+export function timeoutMove(game) {
+  if (game.winner) return;
+  const round = game.round;
+  for (const seat of ['X', 'O']) {
+    if (game.round !== round || game.winner) break;
+    if (!game.answered[seat]) applyMove(game, game.players[seat], { index: null });
+  }
 }
 
 export function botMove(game) {
