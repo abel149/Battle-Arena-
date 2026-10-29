@@ -8,10 +8,12 @@
 
 import * as tictactoe from './tictactoe.js';
 import * as memory from './memory.js';
+import * as mathArena from './math-arena.js';
 
 export const ENGINES = {
   'tic-tac-toe': tictactoe,
   memory,
+  'math-arena': mathArena,
 };
 
 export { DECKS, dailyDeckId } from './decks.js';
