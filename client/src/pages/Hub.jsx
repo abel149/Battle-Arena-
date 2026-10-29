@@ -3,6 +3,7 @@ import { API, socket } from '../socket.js';
 import { navigate } from '../lib/router.js';
 import { saveWallet, short, useProfile } from '../lib/session.js';
 import ArenaPreview3D from '../components/ArenaPreview3D.jsx';
+import AuthModal from '../components/AuthModal.jsx';
 import './hub.css';
 
 const DEFAULT_DECK = 'flags';
@@ -14,6 +15,8 @@ export default function Hub() {
   const [decks, setDecks] = useState([]);
   const [deck, setDeck] = useState(DEFAULT_DECK);
   const [loadError, setLoadError] = useState(null);
+  const [registered, setRegistered] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -61,6 +64,33 @@ export default function Hub() {
     }
   }
 
+  // The server tells us when this socket is logged in to a registered account.
+  useEffect(() => {
+    const onRegistered = yes => setRegistered(!!yes);
+    const onUser = u => {
+      if (!u?.address) return;
+      setWallet(cur => {
+        const nextName = u.name || cur.name;
+        if (cur.address === u.address && cur.name === nextName) return cur;
+        const next = { ...cur, address: u.address, name: nextName };
+        saveWallet(next);
+        return next;
+      });
+    };
+    socket.on('player:registered', onRegistered);
+    socket.on('player:registered:user', onUser);
+    return () => {
+      socket.off('player:registered', onRegistered);
+      socket.off('player:registered:user', onUser);
+    };
+  }, [setWallet]);
+
+  // Logging out just hands this browser a fresh guest wallet.
+  function logout() {
+    localStorage.removeItem('arena_wallet');
+    window.location.reload();
+  }
+
   const dailyDeck = decks.find(d => d.daily);
   const myRank = leaderboard.find(p => p.address === wallet.address);
   const topRows = leaderboard.slice(0, 5);
@@ -83,6 +113,11 @@ export default function Hub() {
               <span className="dot-sep" aria-hidden="true">·</span>
               {profile.tokens || 0} ARENA
             </span>
+          )}
+          {registered ? (
+            <button type="button" className="mm-btn" onClick={logout}>Log out</button>
+          ) : (
+            <button type="button" className="mm-btn" onClick={() => setShowAuth(true)}>Log in</button>
           )}
           <button type="button" className="mm-btn" onClick={connectMetaMask}>MetaMask</button>
           <span className="addr-pill" title={wallet.address}>{short(wallet.address)}</span>
@@ -219,6 +254,8 @@ export default function Hub() {
           )}
         </aside>
       </main>
+
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
     </div>
   );
 }
