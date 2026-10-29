@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { API, socket, signAndIdentify } from '../socket.js';
 import { navigate, useRoute } from '../lib/router.js';
 import { short, useProfile } from '../lib/session.js';
+import RoomCode from '../components/RoomCode.jsx';
 import './arena.css';
 
 const ROUND_SECONDS = 10;
@@ -20,12 +21,15 @@ const otherSeat = seat => (seat === 'X' ? 'O' : 'X');
 
 export default function Arena() {
   const route = useRoute();
-  const mode = route.params.get('mode') === 'bot' ? 'bot' : 'match';
+  const modeParam = route.params.get('mode');
+  const mode = ['bot', 'create', 'join'].includes(modeParam) ? modeParam : 'match';
+  const joinCode = (route.params.get('code') || '').toUpperCase();
   const { wallet } = useProfile();
 
   const [room, setRoom] = useState(null);          // { roomId, names, gameType }
   const [game, setGame] = useState(null);
   const [queued, setQueued] = useState(false);
+  const [roomCode, setRoomCode] = useState(null);  // private room code while waiting for a friend
   const [error, setError] = useState(null);
   const [receipt, setReceipt] = useState(null);
   const [tile, setTile] = useState(2);
@@ -63,6 +67,8 @@ export default function Arena() {
       // has verified our wallet signature, or it is silently dropped.
       await signAndIdentify(wallet);
       if (mode === 'bot') socket.emit('match:bot', { gameType: 'math-arena' });
+      else if (mode === 'create') socket.emit('room:create', { gameType: 'math-arena' });
+      else if (mode === 'join') socket.emit('room:join', { code: joinCode });
       else {
         socket.emit('queue:join', { gameType: 'math-arena' });
         setQueued(true);
@@ -72,7 +78,7 @@ export default function Arena() {
     else socket.once('connect', start);
     return () => socket.off('connect', start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+  }, [mode, joinCode]);
 
   useEffect(() => {
     const onStart = data => {
@@ -83,6 +89,7 @@ export default function Arena() {
       setRoom(next);
       setGame(data.game);
       setQueued(false);
+      setRoomCode(null);
       setReceipt(null);
       setError(null);
       setOppTile(3);
@@ -99,12 +106,16 @@ export default function Arena() {
       setReceipt({ ...(data.receipt || {}), winner: data.winner, result: data.result });
     };
     const onWaiting = () => setQueued(true);
+    const onRoomWaiting = ({ code }) => setRoomCode(code);
+    const onRoomExpired = () => { setRoomCode(null); setError('This room expired. Go back and create a new one.'); };
     const onError = msg => setError(typeof msg === 'string' ? msg : msg?.error || 'Something went wrong');
 
     socket.on('match:start', onStart);
     socket.on('game:state', onState);
     socket.on('match:end', onEnd);
     socket.on('queue:waiting', onWaiting);
+    socket.on('room:waiting', onRoomWaiting);
+    socket.on('room:expired', onRoomExpired);
     socket.on('game:error', onError);
     socket.on('player:error', onError);
 
@@ -113,6 +124,8 @@ export default function Arena() {
       socket.off('game:state', onState);
       socket.off('match:end', onEnd);
       socket.off('queue:waiting', onWaiting);
+      socket.off('room:waiting', onRoomWaiting);
+      socket.off('room:expired', onRoomExpired);
       socket.off('game:error', onError);
       socket.off('player:error', onError);
       const r = roomRef.current;
@@ -485,8 +498,8 @@ export default function Arena() {
 
       {!game && (
         <Waiting
-          bot={mode === 'bot'}
-          queued={queued}
+          mode={mode}
+          code={roomCode}
           error={error}
           onCancel={leave}
         />
@@ -497,23 +510,28 @@ export default function Arena() {
 
 /* ------------------------------- components ------------------------------ */
 
-function Waiting({ bot, error, onCancel }) {
+const WAITING_COPY = {
+  bot: ['Warming up the bot', 'Your rival is stepping onto the arena floor…'],
+  create: ['Room ready', 'Share this code with a friend — the match starts as soon as they join.'],
+  join: ['Joining room', 'Connecting you to your friend’s room…'],
+  match: ['Finding an opponent', 'Waiting for another player to join Neon Math Arena. Open the arena in a second window to test.'],
+};
+
+function Waiting({ mode, code, error, onCancel }) {
+  const [title, text] = WAITING_COPY[mode] || WAITING_COPY.match;
   return (
     <div className="waiting-overlay">
       <div className="waiting-card">
         <div className="waiting-spinner" aria-hidden="true" />
-        <h2>{error ? 'Match error' : bot ? 'Warming up the bot' : 'Finding an opponent'}</h2>
-        <p>
-          {error ||
-            (bot
-              ? 'Your rival is stepping onto the arena floor…'
-              : 'Waiting for another player to join Neon Math Arena. Open the arena in a second window to test.')}
-        </p>
-        <button type="button" className="lock-btn" onClick={onCancel}>Cancel</button>
+        <h2>{error ? 'Match error' : title}</h2>
+        <p>{error || text}</p>
+        {!error && mode === 'create' && code && <RoomCode code={code} />}
+        <button type="button" className="lock-btn" onClick={onCancel}>{error ? 'Back to hub' : 'Cancel'}</button>
       </div>
     </div>
   );
 }
+
 
 function PlayerCard({ side, name, score, lives, maxLives, you }) {
   return (
