@@ -47,11 +47,15 @@ function makeQuestion() {
   };
 }
 
-export function createGame(addrX, addrO, _opts = {}) {
+export function createGame(addrX, addrO, opts = {}) {
+  const difficulty = ['easy', 'medium', 'hard'].includes(opts?.difficulty)
+    ? opts.difficulty
+    : 'medium';
   return {
     players: { X: addrX, O: addrO },
     questions: Array.from({ length: TOTAL_ROUNDS }, makeQuestion),
     round: 0,
+    difficulty,
     picks: { X: null, O: null },
     answered: { X: false, O: false },
     scores: { X: 0, O: 0 },
@@ -117,10 +121,14 @@ export function applyMove(game, address, move) {
   return { ok: true };
 }
 
-export function botMove(game) {
+export function botMove(game, difficulty = game.difficulty || 'medium') {
   const q = game.questions[game.round];
   if (!q) return { index: 0 };
-  if (Math.random() < 0.65) return { index: q.correct };
+  const accuracy =
+    difficulty === 'easy' ? 0.35 :
+    difficulty === 'hard' ? 0.95 : 0.70;
+
+  if (Math.random() < accuracy) return { index: q.correct };
   const wrong = [0, 1, 2, 3].filter(i => i !== q.correct);
   return { index: wrong[Math.floor(Math.random() * wrong.length)] };
 }
@@ -131,6 +139,7 @@ export function serialize(game) {
     round: game.round,
     totalRounds: TOTAL_ROUNDS,
     maxLives: MAX_LIVES,
+    difficulty: game.difficulty,
     question: q ? { text: q.text, expr: q.expr, options: q.options } : null,
     picks: game.picks,
     answered: game.answered,

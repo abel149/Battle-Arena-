@@ -1,14 +1,17 @@
 // Shared client identity helpers — one wallet + one socket identity.
 import { useEffect, useState } from 'react';
-import { socket } from '../socket.js';
+import { ethers } from 'ethers';
+import { socket, signAndIdentify } from '../socket.js';
 
 export function getOrCreateWallet() {
   let w = JSON.parse(localStorage.getItem('arena_wallet') || 'null');
-  if (!w) {
-    const bytes = crypto.getRandomValues(new Uint8Array(20));
+  if (!w || !w.address || !w.privateKey) {
+    const wallet = ethers.Wallet.createRandom();
     w = {
-      address: '0x' + [...bytes].map(b => b.toString(16).padStart(2, '0')).join(''),
+      address: wallet.address,
       name: 'Player-' + Math.random().toString(36).slice(2, 7),
+      privateKey: wallet.privateKey,
+      source: 'demo',
     };
     localStorage.setItem('arena_wallet', JSON.stringify(w));
   }
@@ -27,7 +30,7 @@ export function useProfile() {
   const [profile, setProfile] = useState(null);
 
   useEffect(() => {
-    const identify = () => socket.emit('identify', wallet);
+    const identify = () => { signAndIdentify(wallet); };
     if (socket.connected) identify();
     socket.on('connect', identify);
     socket.on('player:update', setProfile);
@@ -35,8 +38,7 @@ export function useProfile() {
       socket.off('connect', identify);
       socket.off('player:update', setProfile);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wallet.address, wallet.name]);
+  }, [wallet]);
 
   useEffect(() => {
     if (!profile) return;

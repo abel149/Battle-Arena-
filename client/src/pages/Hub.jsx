@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { API, socket } from '../socket.js';
+import { API, socket, signAndIdentify } from '../socket.js';
 import { navigate } from '../lib/router.js';
 import { saveWallet, short, useProfile } from '../lib/session.js';
 import ArenaPreview3D from '../components/ArenaPreview3D.jsx';
@@ -7,6 +7,11 @@ import AuthModal from '../components/AuthModal.jsx';
 import './hub.css';
 
 const DEFAULT_DECK = 'flags';
+const DIFFICULTIES = [
+  { id: 'easy', label: 'Easy' },
+  { id: 'medium', label: 'Medium' },
+  { id: 'hard', label: 'Hard' },
+];
 
 export default function Hub() {
   const { wallet, setWallet, profile } = useProfile();
@@ -14,6 +19,8 @@ export default function Hub() {
   const [matches, setMatches] = useState([]);
   const [decks, setDecks] = useState([]);
   const [deck, setDeck] = useState(DEFAULT_DECK);
+  const [mathDiff, setMathDiff] = useState('medium');
+  const [memoryDiff, setMemoryDiff] = useState('medium');
   const [loadError, setLoadError] = useState(null);
   const [liveRooms, setLiveRooms] = useState([]);  const [registered, setRegistered] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
@@ -54,10 +61,10 @@ export default function Hub() {
     try {
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
       if (accounts?.[0]) {
-        const next = { ...wallet, address: accounts[0] };
+        const next = { ...wallet, address: accounts[0], source: 'metamask' };
         setWallet(next);
         saveWallet(next);
-        socket.emit('identify', next);
+        signAndIdentify(next);
       }
     } catch {
       setLoadError('MetaMask connection was cancelled.');
@@ -127,6 +134,9 @@ export default function Hub() {
               {profile.tokens || 0} ARENA
             </span>
           )}
+          <a className="mm-btn ghost" href="#classic" title="Classic lobby with live chat and spectator mode">
+            💬 Chat & Spectate
+          </a>
           {registered ? (
             <button type="button" className="mm-btn" onClick={logout}>Log out</button>
           ) : (
@@ -159,11 +169,27 @@ export default function Hub() {
             <span className="meta-bonus">+15 bonus XP</span>
           </div>
 
+          <div className="card-meta bot-diff-meta">
+            <span className="diff-label">🤖 Bot Level:</span>
+            <div className="diff-selector" role="radiogroup" aria-label="Math Arena Bot Difficulty">
+              {DIFFICULTIES.map(d => (
+                <button
+                  key={d.id}
+                  type="button"
+                  className={`diff-chip ${mathDiff === d.id ? 'active' : ''} diff-${d.id}`}
+                  onClick={() => setMathDiff(d.id)}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="card-actions">
             <button type="button" className="btn-quick" onClick={() => navigate('arena?mode=match')}>
               <BoltIcon /> Quick Match
             </button>
-            <button type="button" className="btn-bot" onClick={() => navigate('arena?mode=bot')}>
+            <button type="button" className="btn-bot" onClick={() => navigate(`arena?mode=bot&difficulty=${mathDiff}`)}>
               <GamepadIcon /> Play vs Bot
             </button>
           </div>
@@ -194,11 +220,27 @@ export default function Hub() {
             </select>
           </div>
 
+          <div className="card-meta bot-diff-meta">
+            <span className="diff-label">🤖 Bot Level:</span>
+            <div className="diff-selector" role="radiogroup" aria-label="Memory Match Bot Difficulty">
+              {DIFFICULTIES.map(d => (
+                <button
+                  key={d.id}
+                  type="button"
+                  className={`diff-chip ${memoryDiff === d.id ? 'active' : ''} diff-${d.id}`}
+                  onClick={() => setMemoryDiff(d.id)}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="card-actions">
             <button type="button" className="btn-quick" onClick={() => navigate(`memory?mode=match&deck=${deck}`)}>
               <BoltIcon /> Quick Match
             </button>
-            <button type="button" className="btn-bot" onClick={() => navigate(`memory?mode=bot&deck=${deck}`)}>
+            <button type="button" className="btn-bot" onClick={() => navigate(`memory?mode=bot&deck=${deck}&difficulty=${memoryDiff}`)}>
               <GamepadIcon /> Play vs Bot
             </button>
           </div>

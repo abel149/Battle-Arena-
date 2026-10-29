@@ -106,3 +106,28 @@ test('botMove returns a legal open card', () => {
   const mv = memory.botMove(g);
   assert.ok(mv.index >= 0 && mv.index < g.cards.length);
 });
+
+test('botMove in hard mode recalls seen matching card on second flip', () => {
+  const g = memory.createGame('0xA', '0xB', { deck: 'flags', pairs: 4, difficulty: 'hard' });
+  // Find two cards with the same pairId
+  const ids = {};
+  g.cards.forEach((c, i) => { (ids[c.pairId] ??= []).push(i); });
+  const pairId = Object.keys(ids)[0];
+  const [c1, c2] = ids[pairId];
+
+  // Mark both as seen in history
+  g.seen[c1] = g.cards[c1].pairId;
+  g.seen[c2] = g.cards[c2].pairId;
+
+  // Simulate card c1 being flipped on this turn
+  g.flipped = [c1];
+  g.turn = 'O';
+
+  // In hard mode (95% recall), test over several trials that it consistently recalls c2
+  let recalled = 0;
+  for (let trial = 0; trial < 20; trial++) {
+    const mv = memory.botMove(g, 'hard');
+    if (mv.index === c2) recalled++;
+  }
+  assert.ok(recalled >= 17, `Expected high recall in hard mode, got ${recalled}/20`);
+});

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { API, socket } from '../socket.js';
+import { API, socket, signAndIdentify } from '../socket.js';
 import { navigate, useRoute } from '../lib/router.js';
 import { short, useProfile } from '../lib/session.js';
 import MatchChat from '../components/MatchChat.jsx';
@@ -12,6 +12,9 @@ export default function MemoryMatch() {
   const watching = mode === 'watch';
   const watchRoom = route.params.get('room');
   const deck = route.params.get('deck') || 'flags';
+  const rawDiff = route.params.get('difficulty');
+  const initialDiff = ['easy', 'medium', 'hard'].includes(rawDiff) ? rawDiff : 'medium';
+  const [difficulty, setDifficulty] = useState(initialDiff);
   const { wallet } = useProfile();
 
   const [room, setRoom] = useState(null);
@@ -26,9 +29,9 @@ export default function MemoryMatch() {
 
   useEffect(() => {
     function start() {
-      socket.emit('identify', wallet);
+      signAndIdentify(wallet);
       if (mode === 'watch') socket.emit('spectate', { roomId: watchRoom });
-      else if (mode === 'bot') socket.emit('match:bot', { gameType: 'memory', deck });
+      else if (mode === 'bot') socket.emit('match:bot', { gameType: 'memory', deck, difficulty });
       else {
         socket.emit('queue:join', { gameType: 'memory' });
         setQueued(true);
@@ -113,11 +116,13 @@ export default function MemoryMatch() {
     socket.emit('game:move', { roomId: r.roomId, index });
   }, []);
 
-  function playAgain() {
+  function playAgain(diffOverride) {
+    const nextDiff = diffOverride || difficulty;
+    if (diffOverride && diffOverride !== difficulty) setDifficulty(diffOverride);
     setGame(null);
     setRoom(null);
     setReceipt(null);
-    socket.emit('match:bot', { gameType: 'memory', deck });
+    socket.emit('match:bot', { gameType: 'memory', deck, difficulty: nextDiff });
   }
 
   function leave() {
@@ -148,7 +153,12 @@ export default function MemoryMatch() {
                 ? `${myTurn ? myName : oppName}'s turn`
                 : myTurn ? 'Your turn' : `${oppName}'s turn`}
           </div>
-          <ScoreCard name={oppName} score={oppScore} active={!!game && !myTurn && !game.winner} />
+          <ScoreCard
+            name={oppName}
+            score={oppScore}
+            active={!!game && !myTurn && !game.winner}
+            difficulty={mode === 'bot' ? difficulty : null}
+          />
         </div>
 
         {game && (
@@ -217,6 +227,23 @@ export default function MemoryMatch() {
                 </p>
               </div>
             </div>
+            {mode === 'bot' && (
+              <div className="rematch-difficulty">
+                <span className="diff-title">🤖 Bot Level:</span>
+                <div className="diff-selector" role="radiogroup" aria-label="Bot Difficulty">
+                  {['easy', 'medium', 'hard'].map(lvl => (
+                    <button
+                      key={lvl}
+                      type="button"
+                      className={`diff-chip ${difficulty === lvl ? 'active' : ''} diff-${lvl}`}
+                      onClick={() => setDifficulty(lvl)}
+                    >
+                      {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="mem-result-actions">
               <a
                 className="mem-btn ghost"
@@ -227,7 +254,7 @@ export default function MemoryMatch() {
                 ⛓ {short(receipt.txHash || receipt.matchId)}
               </a>
               {mode === 'bot' && (
-                <button type="button" className="mem-btn" onClick={playAgain}>Play again</button>
+                <button type="button" className="mem-btn" onClick={() => playAgain(difficulty)}>Play again</button>
               )}
               <button type="button" className="mem-btn ghost" onClick={leave}>Back to hub</button>
             </div>
@@ -254,12 +281,16 @@ export default function MemoryMatch() {
   );
 }
 
-function ScoreCard({ name, score, active, me, you }) {
+function ScoreCard({ name, score, active, me, you, difficulty }) {
   return (
     <div className={`mem-score ${me ? 'me' : ''} ${active ? 'active' : ''}`}>
       <span className="mem-avatar">{(name || '?').slice(0, 1).toUpperCase()}</span>
       <div className="mem-who">
-        <span className="mem-name">{name}{you && <span className="mem-you">YOU</span>}</span>
+        <span className="mem-name">
+          {name}
+          {you && <span className="mem-you">YOU</span>}
+          {difficulty && <span className={`diff-tag diff-${difficulty}`}>{difficulty.toUpperCase()}</span>}
+        </span>
         <span className="mem-pairs">{score} {score === 1 ? 'pair' : 'pairs'}</span>
       </div>
     </div>
