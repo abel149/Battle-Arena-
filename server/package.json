@@ -8,11 +8,18 @@
     "dev": "node --watch index.js",
     "compile": "hardhat compile",
     "deploy:local": "hardhat run scripts/deploy-match-result.js --network hardhat",
+    "deploy:base-sepolia": "hardhat run scripts/deploy-match-result.js --network baseSepolia",
+    "deploy:tokens:local": "hardhat run scripts/deploy-tokens.js --network hardhat",
+    "deploy:tokens:base-sepolia": "hardhat run scripts/deploy-tokens.js --network baseSepolia",
+    "test": "node --test 'test/*.test.mjs'",
+    "test:ci": "npm run compile && npm run test && npm run test:ci:e2e",
+    "test:ci:e2e": "bash scripts/e2e-ci.sh",
     "node": "npx hardhat node --block-gas-limit 30000000",
     "test:onchain": "node scripts/test-onchain.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^13.0.3",
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "socket.io": "^4.8.1",
