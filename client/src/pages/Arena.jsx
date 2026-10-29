@@ -25,6 +25,9 @@ export default function Arena() {
   const modeParam = route.params.get('mode');
   const mode = ['bot', 'create', 'join'].includes(modeParam) ? modeParam : 'match';
   const joinCode = (route.params.get('code') || '').toUpperCase();
+  const rawDiff = route.params.get('difficulty');
+  const initialDiff = ['easy', 'medium', 'hard'].includes(rawDiff) ? rawDiff : 'medium';
+  const [difficulty, setDifficulty] = useState(initialDiff);
   const { wallet } = useProfile();
 
   const [room, setRoom] = useState(null);          // { roomId, names, gameType }
@@ -67,7 +70,7 @@ export default function Arena() {
       // Await the signed identify — queue:join must arrive after the server
       // has verified our wallet signature, or it is silently dropped.
       await signAndIdentify(wallet);
-      if (mode === 'bot') socket.emit('match:bot', { gameType: 'math-arena' });
+      if (mode === 'bot') socket.emit('match:bot', { gameType: 'math-arena', difficulty });
       else if (mode === 'create') socket.emit('room:create', { gameType: 'math-arena' });
       else if (mode === 'join') socket.emit('room:join', { code: joinCode });
       else {
@@ -280,7 +283,9 @@ export default function Arena() {
     return () => window.removeEventListener('keydown', onKey);
   }, [game?.question, game?.winner, lockPlayer]);
 
-  function playAgain() {
+  function playAgain(diffOverride) {
+    const nextDiff = diffOverride || difficulty;
+    if (diffOverride && diffOverride !== difficulty) setDifficulty(diffOverride);
     sentRound.current = -1;
     revealRound.current = -1;
     setReceipt(null);
@@ -289,7 +294,7 @@ export default function Arena() {
     setRoom(null);
     roomRef.current = null;
     setOppTile(3);
-    socket.emit('match:bot', { gameType: 'math-arena' });
+    socket.emit('match:bot', { gameType: 'math-arena', difficulty: nextDiff });
   }
 
   function leave() {
@@ -342,6 +347,7 @@ export default function Arena() {
             score={oppScore}
             lives={oppLives}
             maxLives={game?.maxLives || 3}
+            difficulty={mode === 'bot' ? difficulty : null}
           />
         </div>
 
@@ -453,8 +459,10 @@ export default function Arena() {
               myName={myName}
               oppName={oppName}
               receipt={receipt}
-              onPlayAgain={playAgain}
+              onPlayAgain={() => playAgain(difficulty)}
               canRematch={mode === 'bot'}
+              difficulty={difficulty}
+              onSelectDifficulty={setDifficulty}
               onLeave={leave}
             />
           )}
@@ -537,8 +545,7 @@ function Waiting({ mode, code, error, onCancel }) {
   );
 }
 
-
-function PlayerCard({ side, name, score, lives, maxLives, you }) {
+function PlayerCard({ side, name, score, lives, maxLives, you, difficulty }) {
   return (
     <div className={`player-card ${side}`}>
       <div className="player-avatar">
@@ -548,6 +555,7 @@ function PlayerCard({ side, name, score, lives, maxLives, you }) {
         <div className="p-name">
           {name}
           {you && <span className="you-tag">YOU</span>}
+          {difficulty && <span className={`diff-tag diff-${difficulty}`}>{difficulty.toUpperCase()}</span>}
         </div>
         <div className="p-score">
           <span className="star">★</span> {score}
@@ -609,7 +617,7 @@ function RoundResult({ result, question, mySeat, myName, oppName }) {
   );
 }
 
-function MatchResult({ game, mySeat, myName, oppName, receipt, onPlayAgain, canRematch, onLeave }) {
+function MatchResult({ game, mySeat, myName, oppName, receipt, onPlayAgain, canRematch, onLeave, difficulty, onSelectDifficulty }) {
   const winner = game.winner;
   const iWon = winner === mySeat;
   const draw = winner === 'draw';
@@ -637,6 +645,23 @@ function MatchResult({ game, mySeat, myName, oppName, receipt, onPlayAgain, canR
           >
             ⛓ On-chain: {short(receipt.txHash || receipt.matchId)}
           </a>
+        )}
+        {canRematch && onSelectDifficulty && (
+          <div className="rematch-difficulty">
+            <span className="diff-title">🤖 Bot Level:</span>
+            <div className="diff-selector" role="radiogroup" aria-label="Bot Difficulty">
+              {['easy', 'medium', 'hard'].map(lvl => (
+                <button
+                  key={lvl}
+                  type="button"
+                  className={`diff-chip ${difficulty === lvl ? 'active' : ''} diff-${lvl}`}
+                  onClick={() => onSelectDifficulty(lvl)}
+                >
+                  {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
         <div className="final-actions">
           {canRematch && (

@@ -192,6 +192,7 @@ function serializeRoom(room) {
   return {
     roomId: room.id,
     gameType: room.gameType,
+    difficulty: room.difficulty || room.game.difficulty || 'medium',
     deck: room.game.deck || null,
     names: room.names,
     game: room.engine.serialize(room.game),
@@ -352,13 +353,19 @@ function botStep(roomId) {
 function createRoom(gameType, addrX, addrO, getSocket, opts = {}) {
   const engine = ENGINES[gameType];
   const id = 'match_' + crypto.randomBytes(6).toString('hex');
+  const difficulty = ['easy', 'medium', 'hard'].includes(opts?.difficulty)
+    ? opts.difficulty
+    : 'medium';
+  const diffLabel = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
+  const botName = `ArenaBot (${diffLabel})`;
   const room = {
     id,
     gameType,
+    difficulty,
     engine,
-    game: engine.createGame(addrX, addrO, opts),
+    game: engine.createGame(addrX, addrO, { ...opts, difficulty }),
     sockets: {},
-    names: { [BOT]: 'ArenaBot' },
+    names: { [BOT]: botName },
     spectators: new Set(),
     chat: [],
     private: !!opts.private,
@@ -581,12 +588,13 @@ io.on('connection', (socket) => {
     );
   });
 
-  socket.on('match:bot', ({ gameType, deck, pairs } = {}) => {
+  socket.on('match:bot', ({ gameType, deck, pairs, difficulty } = {}) => {
     const address = accountOf(socket);
     const type = ENGINES[gameType] ? gameType : 'tic-tac-toe';
     if (!address) return;
+    const diff = ['easy', 'medium', 'hard'].includes(difficulty) ? difficulty : 'medium';
     const room = createRoom(type, address, BOT,
-      addr => (addr === address ? socket : null), { deck, pairs });
+      addr => (addr === address ? socket : null), { deck, pairs, difficulty: diff });
     // If the bot ever has the first turn, drive it
     afterEngineMove(room);
   });

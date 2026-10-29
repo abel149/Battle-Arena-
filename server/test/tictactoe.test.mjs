@@ -60,3 +60,19 @@ test('botMove returns an empty cell', () => {
   const mv = ttt.botMove(g);
   assert.ok(mv.index >= 1 && mv.index <= 8);
 });
+
+test('bot in hard mode takes winning move and blocks opponent win', () => {
+  // 1) Winning move: O has cells 3 and 4, 5 is empty
+  const gWin = ttt.createGame('0xA', '0xB', { difficulty: 'hard' });
+  gWin.board = ['X', 'X', null, 'O', 'O', null, null, null, null];
+  gWin.turn = 'O';
+  const mvWin = ttt.botMove(gWin, 'hard');
+  assert.equal(mvWin.index, 5);
+
+  // 2) Blocking move: X has cells 0 and 1, 2 is empty
+  const gBlock = ttt.createGame('0xA', '0xB', { difficulty: 'hard' });
+  gBlock.board = ['X', 'X', null, null, 'O', null, null, null, null];
+  gBlock.turn = 'O';
+  const mvBlock = ttt.botMove(gBlock, 'hard');
+  assert.equal(mvBlock.index, 2);
+});

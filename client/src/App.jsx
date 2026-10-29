@@ -41,6 +41,7 @@ export default function App() {
   const [decks, setDecks] = useState([]);
   const [gameType, setGameType] = useState('memory');
   const [deckId, setDeckId] = useState('flags');
+  const [botDifficulty, setBotDifficulty] = useState('medium');
 
   // Auth form state
   const [authLoading, setAuthLoading] = useState(false);
@@ -202,7 +203,10 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <h1>⚔️ Battle Arena</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <a href="#hub" style={{ textDecoration: 'none', color: 'inherit' }}><h1>⚔️ Battle Arena</h1></a>
+          <a className="btn ghost sm" href="#hub">← Back to Hub</a>
+        </div>
         <div className="wallet">
           {profile && (
             <span className="chip">{profile.tokens} ARENA · {profile.wins}W/{profile.losses}L</span>
@@ -341,13 +345,29 @@ export default function App() {
               </div>
             )}
 
+            <div className="bot-diff-row" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '8px 0' }}>
+              <span className="muted small">🤖 Bot Level:</span>
+              <span className="lb-tabs" style={{ margin: 0 }}>
+                {['easy', 'medium', 'hard'].map(lvl => (
+                  <button
+                    key={lvl}
+                    type="button"
+                    className={`tab ${botDifficulty === lvl ? 'sel' : ''}`}
+                    onClick={() => setBotDifficulty(lvl)}
+                  >
+                    {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                  </button>
+                ))}
+              </span>
+            </div>
+
             <div className="actions">
               <button className="btn primary" disabled={queueing}
                 onClick={() => { spectatingRef.current = false; socket.emit('queue:join', { gameType }); setQueueing(true); }}>
                 {queueing ? 'Finding opponent…' : '⚡ Quick Match'}
               </button>
               {queueing && <button className="btn" onClick={() => { socket.emit('queue:leave'); setQueueing(false); }}>Cancel</button>}
-              <button className="btn" onClick={() => { spectatingRef.current = false; socket.emit('match:bot', { gameType, deck: deckId }); }}>🤖 Play vs Bot</button>
+              <button className="btn" onClick={() => { spectatingRef.current = false; socket.emit('match:bot', { gameType, deck: deckId, difficulty: botDifficulty }); }}>🤖 Play vs Bot</button>
             </div>
 
             {profile && (
@@ -452,7 +472,7 @@ export default function App() {
             ))}
             {receipt && <Receipt receipt={receipt}
               onRematch={() => { spectatingRef.current = false;
-                socket.emit('match:bot', { gameType: room.gameType, deck: room.deck }); }} />}
+                socket.emit('match:bot', { gameType: room.gameType, deck: room.deck, difficulty: botDifficulty }); }} />}
           </section>
 
           <aside className="panel chat-panel">

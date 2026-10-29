@@ -66,7 +66,7 @@ export function useProfile() {
   const [profile, setProfile] = useState(null);
 
   useEffect(() => {
-    const identify = () => signAndIdentify(wallet);
+    const identify = () => { signAndIdentify(wallet); };
     if (socket.connected) identify();
     socket.on('connect', identify);
     socket.on('player:update', setProfile);
@@ -74,8 +74,7 @@ export function useProfile() {
       socket.off('connect', identify);
       socket.off('player:update', setProfile);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wallet.address, wallet.name]);
+  }, [wallet]);
 
   useEffect(() => {
     if (!profile) return;

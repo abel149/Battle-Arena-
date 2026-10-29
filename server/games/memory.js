@@ -24,6 +24,9 @@ export function createGame(addrX, addrO, opts = {}) {
     { pairId: i, content: p.a, matched: false },
     { pairId: i, content: p.b, matched: false },
   ]));
+  const difficulty = ['easy', 'medium', 'hard'].includes(opts?.difficulty)
+    ? opts.difficulty
+    : 'medium';
   return {
     deck: deckId,
     deckLabel: DECKS[deckId].label,
@@ -32,6 +35,8 @@ export function createGame(addrX, addrO, opts = {}) {
     scores: { [addrX]: 0, [addrO]: 0 },
     players: { X: addrX, O: addrO },
     turn: 'X',
+    difficulty,
+    seen: {},                          // index -> pairId of cards revealed during game
     moves: [],
     winner: null,
     resolving: false,                  // a pair is face-up waiting to resolve
@@ -51,6 +56,7 @@ export function applyMove(game, address, move) {
   if (!card || card.matched || game.flipped.includes(index)) return { error: 'Invalid card' };
 
   game.flipped.push(index);
+  game.seen[index] = card.pairId;
   game.moves.push({ index, address, t: Date.now() });
 
   if (game.flipped.length === 2) {
@@ -83,10 +89,61 @@ export function resolve(game) {
   }
 }
 
-export function botMove(game) {
+export function botMove(game, difficulty = game.difficulty || 'medium') {
   const open = game.cards
     .map((c, i) => (!c.matched && !game.flipped.includes(i) ? i : null))
     .filter(v => v !== null);
+  if (open.length === 0) return { index: 0 };
+
+  const unseen = open.filter(i => game.seen[i] === undefined);
+
+  // Group open cards that have already been seen by pairId
+  const seenByPair = {};
+  for (const i of open) {
+    if (game.seen[i] !== undefined) {
+      const pid = game.seen[i];
+      (seenByPair[pid] ??= []).push(i);
+    }
+  }
+
+  // Case 1: First card is already face-up on this turn
+  if (game.flipped.length === 1) {
+    const firstIdx = game.flipped[0];
+    const targetPairId = game.cards[firstIdx].pairId;
+    const matchIdx = open.find(i => game.seen[i] === targetPairId);
+
+    // Recall rate: easy 20%, medium 65%, hard 95%
+    const recallRate =
+      difficulty === 'easy' ? 0.20 :
+      difficulty === 'hard' ? 0.95 : 0.65;
+
+    if (matchIdx !== undefined && Math.random() < recallRate) {
+      return { index: matchIdx };
+    }
+
+    // When not recalling or match unknown, prefer exploring unseen cards (except on easy)
+    if (unseen.length > 0 && difficulty !== 'easy') {
+      return { index: unseen[Math.floor(Math.random() * unseen.length)] };
+    }
+    return { index: open[Math.floor(Math.random() * open.length)] };
+  }
+
+  // Case 2: Opening pick of the turn
+  const knownPairs = Object.values(seenByPair).filter(arr => arr.length === 2);
+  const pairRecallRate =
+    difficulty === 'easy' ? 0.15 :
+    difficulty === 'hard' ? 0.95 : 0.60;
+
+  if (knownPairs.length > 0 && Math.random() < pairRecallRate) {
+    const chosenPair = knownPairs[Math.floor(Math.random() * knownPairs.length)];
+    return { index: chosenPair[0] };
+  }
+
+  // Explore unseen cards to build knowledge
+  if (unseen.length > 0 && (difficulty === 'hard' || Math.random() < 0.70)) {
+    return { index: unseen[Math.floor(Math.random() * unseen.length)] };
+  }
+
   return { index: open[Math.floor(Math.random() * open.length)] };
 }
 
@@ -95,6 +152,7 @@ export function serialize(game) {
   return {
     deck: game.deck,
     deckLabel: game.deckLabel,
+    difficulty: game.difficulty,
     cards: game.cards.map((c, i) => ({
       matched: c.matched,
       flipped: game.flipped.includes(i),
