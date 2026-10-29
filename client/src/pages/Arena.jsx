@@ -102,12 +102,17 @@ export default function Arena() {
     };
     const onWaiting = () => setQueued(true);
     const onError = msg => setError(msg);
+    const onMatchError = data => {
+      setError(data?.error || 'Match error');
+      setQueued(false);
+    };
 
     socket.on('match:start', onStart);
     socket.on('game:state', onState);
     socket.on('match:end', onEnd);
     socket.on('queue:waiting', onWaiting);
     socket.on('game:error', onError);
+    socket.on('match:error', onMatchError);
 
     return () => {
       socket.off('match:start', onStart);
@@ -115,6 +120,7 @@ export default function Arena() {
       socket.off('match:end', onEnd);
       socket.off('queue:waiting', onWaiting);
       socket.off('game:error', onError);
+      socket.off('match:error', onMatchError);
       const r = roomRef.current;
       socket.emit('queue:leave');
       if (r?.roomId) socket.emit('match:leave', { roomId: r.roomId });

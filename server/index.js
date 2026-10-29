@@ -24,6 +24,7 @@ function verifyAuthSignature(signature, address) {
 import { ENGINES, DECKS, dailyDeckId } from './games/index.js';
 import { recordMatch, getLedger, isOnchain, normalizeLedgerEntry, ONCHAIN_LABELS } from './chain-onchain.js';
 import { distributeRewards, isTokensOnchain, tokenAddresses, tokenBalance } from './chain-tokens.js';
+import { recordChoreVerification, verifyParentAttestation, getChoreLedger, isChoreOnchain } from './chain-chore.js';
 import * as store from './store.js';
 
 const PORT = process.env.PORT || 3001;
@@ -45,6 +46,16 @@ const io = new Server(server, { cors: { origin: '*' } });
 const rooms = new Map();          // roomId -> room
 const queue = [];                 // { socketId, gameType } waiting for a match
 const socketPlayer = new Map();   // socketId -> address
+
+function notifyPlayer(address, event, payload) {
+  if (!address) return;
+  for (const [sId, addr] of socketPlayer.entries()) {
+    if (addr?.toLowerCase() === address.toLowerCase()) {
+      const s = io.sockets.sockets.get(sId);
+      if (s) s.emit(event, payload);
+    }
+  }
+}
 const liveListeners = new Set();  // socketIds in the lobby (for rooms:live push)
 
 // The server uses room ids as match ids. On-chain, those are stored as bytes32.
@@ -159,6 +170,131 @@ app.get('/api/player/:address', (req, res) => {
 
 app.get('/api/me', (_req, res) => {
   res.json({ note: 'Use /api/player/:address or socket identify to get a profile' });
+});
+
+// ---- Proof-of-Chore & Battle Pass Endpoints ----
+app.get('/api/battlepass/tiers', (_req, res) => {
+  res.json(store.BATTLE_PASS_TIERS);
+});
+
+app.get('/api/chores/:address', (req, res) => {
+  const address = req.params.address;
+  const p = store.getPlayer(address) || store.upsertPlayer(address);
+  const chores = store.getChores(address);
+  const vouchers = store.getVouchers(address);
+  res.json({
+    kidAddress: address,
+    energy: p.energy ?? 5,
+    battlePassXp: p.battlePassXp ?? 0,
+    battlePassTier: p.battlePassTier ?? 1,
+    allowanceBalance: p.allowanceBalance ?? 0,
+    parentAddress: p.parentAddress,
+    tiers: store.BATTLE_PASS_TIERS,
+    chores,
+    vouchers,
+  });
+});
+
+app.post('/api/chores/submit', (req, res) => {
+  const { kidAddress, choreId, notes } = req.body || {};
+  if (!kidAddress || !choreId) return res.status(400).json({ error: 'kidAddress and choreId required' });
+  const result = store.submitChore(kidAddress, choreId, notes);
+  if (result.error) return res.status(400).json(result);
+  const p = store.getPlayer(kidAddress);
+  if (p?.parentAddress) {
+    notifyPlayer(p.parentAddress, 'chore:submitted', result);
+  }
+  notifyPlayer(kidAddress, 'chore:updated', result);
+  res.json(result);
+});
+
+app.post('/api/chores/verify', async (req, res) => {
+  const { choreId, parentAddress, signature, message } = req.body || {};
+  if (!choreId || !parentAddress) return res.status(400).json({ error: 'choreId and parentAddress required' });
+
+  // If signed attestation provided, verify it
+  if (signature && message) {
+    const valid = verifyParentAttestation(signature, parentAddress, message);
+    if (!valid) return res.status(401).json({ error: 'Invalid parent oracle signature' });
+  }
+
+  const result = store.verifyChore(choreId, parentAddress);
+  if (result.error) return res.status(400).json(result);
+
+  // Record on-chain or to simulated proof ledger
+  let onchainRecord = null;
+  try {
+    onchainRecord = await recordChoreVerification({
+      choreId: result.chore.id,
+      kidAddress: result.chore.kidAddress,
+      parentAddress,
+      title: result.chore.title,
+      category: result.chore.category,
+      energyGranted: result.chore.energyReward,
+      allowanceGranted: result.chore.allowanceReward,
+    });
+  } catch (err) {
+    console.warn('Chore verification record warning:', err.message);
+  }
+
+  const kid = store.getPlayer(result.chore.kidAddress);
+  if (kid) {
+    notifyPlayer(result.chore.kidAddress, 'player:update', store.withoutPassword(kid));
+    notifyPlayer(result.chore.kidAddress, 'chore:verified', { ...result, onchainRecord });
+  }
+  notifyPlayer(parentAddress, 'chore:verified', { ...result, onchainRecord });
+
+  res.json({ ...result, onchainRecord });
+});
+
+app.post('/api/chores/create', (req, res) => {
+  const { kidAddress, parentAddress, title, category, energyReward, xpReward, allowanceReward } = req.body || {};
+  if (!kidAddress || !title) return res.status(400).json({ error: 'kidAddress and title required' });
+  const chore = store.createCustomChore({
+    kidAddress,
+    parentAddress,
+    title,
+    category,
+    energyReward,
+    xpReward,
+    allowanceReward,
+  });
+  notifyPlayer(kidAddress, 'chore:created', chore);
+  res.json(chore);
+});
+
+app.post('/api/chores/quiz-complete', (req, res) => {
+  const { kidAddress, score } = req.body || {};
+  if (!kidAddress) return res.status(400).json({ error: 'kidAddress required' });
+  if (score < 4) return res.status(400).json({ error: 'Need at least 4/5 correct answers to pass' });
+  const result = store.completeBrainQuiz(kidAddress);
+  if (result.error) return res.status(400).json(result);
+  const updated = store.getPlayer(kidAddress);
+  if (updated) {
+    notifyPlayer(kidAddress, 'player:update', store.withoutPassword(updated));
+  }
+  res.json(result);
+});
+
+app.post('/api/parent/link', (req, res) => {
+  const { kidAddress, parentAddress } = req.body || {};
+  if (!kidAddress || !parentAddress) return res.status(400).json({ error: 'kidAddress and parentAddress required' });
+  const kid = store.linkParent(kidAddress, parentAddress);
+  res.json(store.withoutPassword(kid));
+});
+
+app.get('/api/parent/:parentAddress/dashboard', (req, res) => {
+  const parentAddress = req.params.parentAddress;
+  const data = store.getParentKids(parentAddress);
+  res.json(data);
+});
+
+app.post('/api/vouchers/redeem', (req, res) => {
+  const { voucherId, parentAddress } = req.body || {};
+  if (!voucherId) return res.status(400).json({ error: 'voucherId required' });
+  const result = store.redeemVoucher(voucherId, parentAddress);
+  if (result.error) return res.status(400).json(result);
+  res.json(result);
 });
 
 // ---- Helpers ----
@@ -317,12 +453,19 @@ function createRoom(gameType, addrX, addrO, getSocket, opts = {}) {
   };
   rooms.set(id, room);
   for (const addr of [addrX, addrO]) {
+    if (addr && addr !== BOT) {
+      store.consumeEnergy(addr, 1);
+    }
     const s = getSocket(addr);
     if (s) {
       room.sockets[addr] = s.id;
-      room.names[addr] = store.getPlayer(addr)?.name;
+      const p = store.getPlayer(addr);
+      room.names[addr] = p?.name;
       s.join(id);
       s.emit('match:start', serializeRoom(room));
+      if (p) {
+        s.emit('player:update', store.withoutPassword(p));
+      }
     }
   }
   broadcastLiveRooms();
@@ -393,23 +536,46 @@ io.on('connection', (socket) => {
     const address = socketPlayer.get(socket.id);
     const type = ENGINES[gameType] ? gameType : 'tic-tac-toe';
     if (!address || queue.some(q => q.socketId === socket.id)) return;
+    const p = store.getPlayer(address) || store.upsertPlayer(address);
+    if ((p.energy ?? 5) <= 0) {
+      return socket.emit('match:error', {
+        error: '⚡ Out of Arena Energy! Complete a chore or pass the Brain Quiz to earn Energy.',
+        needsEnergy: true,
+      });
+    }
     queue.push({ socketId: socket.id, gameType: type });
     socket.emit('queue:waiting', { gameType: type });
 
     // Pair the first two players waiting for the same game
     const peers = queue.filter(q => q.gameType === type);
     if (peers.length >= 2) {
+      const [a, b] = peers;
+      const addrA = socketPlayer.get(a.socketId);
+      const addrB = socketPlayer.get(b.socketId);
+      const pA = store.getPlayer(addrA);
+      const pB = store.getPlayer(addrB);
+      if ((pA?.energy ?? 5) <= 0) {
+        queue.splice(queue.indexOf(a), 1);
+        const sockA = io.sockets.sockets.get(a.socketId);
+        if (sockA) sockA.emit('match:error', { error: '⚡ Out of Arena Energy!', needsEnergy: true });
+        return;
+      }
+      if ((pB?.energy ?? 5) <= 0) {
+        queue.splice(queue.indexOf(b), 1);
+        const sockB = io.sockets.sockets.get(b.socketId);
+        if (sockB) sockB.emit('match:error', { error: '⚡ Out of Arena Energy!', needsEnergy: true });
+        return;
+      }
       for (const p of peers.slice(0, 2)) {
         queue.splice(queue.indexOf(p), 1);
       }
-      const [a, b] = peers;
       const sockA = io.sockets.sockets.get(a.socketId);
       const sockB = io.sockets.sockets.get(b.socketId);
       if (!sockA || !sockB) return;
       createRoom(
         type,
-        socketPlayer.get(a.socketId),
-        socketPlayer.get(b.socketId),
+        addrA,
+        addrB,
         addr => [sockA, sockB].find(s => socketPlayer.get(s.id) === addr),
       );
     }
@@ -424,11 +590,39 @@ io.on('connection', (socket) => {
     const address = socketPlayer.get(socket.id);
     const type = ENGINES[gameType] ? gameType : 'tic-tac-toe';
     if (!address) return;
+    const p = store.getPlayer(address) || store.upsertPlayer(address);
+    if ((p.energy ?? 5) <= 0) {
+      return socket.emit('match:error', {
+        error: '⚡ Out of Arena Energy! Complete a chore or pass the Brain Quiz to earn Energy.',
+        needsEnergy: true,
+      });
+    }
     const diff = ['easy', 'medium', 'hard'].includes(difficulty) ? difficulty : 'medium';
     const room = createRoom(type, address, BOT,
       addr => (addr === address ? socket : null), { deck, pairs, difficulty: diff });
     // If the bot ever has the first turn, drive it
     afterEngineMove(room);
+  });
+
+  socket.on('chores:get', ({ kidAddress } = {}, ack) => {
+    const target = kidAddress || socketPlayer.get(socket.id);
+    if (!target) return ack?.({ error: 'No address' });
+    const p = store.getPlayer(target) || store.upsertPlayer(target);
+    const chores = store.getChores(target);
+    const vouchers = store.getVouchers(target);
+    const payload = {
+      kidAddress: target,
+      energy: p.energy ?? 5,
+      battlePassXp: p.battlePassXp ?? 0,
+      battlePassTier: p.battlePassTier ?? 1,
+      allowanceBalance: p.allowanceBalance ?? 0,
+      parentAddress: p.parentAddress,
+      tiers: store.BATTLE_PASS_TIERS,
+      chores,
+      vouchers,
+    };
+    if (ack) ack(payload);
+    else socket.emit('chores:data', payload);
   });
 
   socket.on('game:move', ({ roomId, ...move }) => {

@@ -21,9 +21,19 @@ export default function Hub() {
   const [deck, setDeck] = useState(DEFAULT_DECK);
   const [mathDiff, setMathDiff] = useState('medium');
   const [memoryDiff, setMemoryDiff] = useState('medium');
+  const [c4Diff, setC4Diff] = useState('medium');
+  const [showEnergyModal, setShowEnergyModal] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [liveRooms, setLiveRooms] = useState([]);  const [registered, setRegistered] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+
+  function tryPlay(path) {
+    if ((profile?.energy ?? 5) <= 0) {
+      setShowEnergyModal(true);
+      return;
+    }
+    navigate(path);
+  }
 
   const refresh = useCallback(async () => {
     try {
@@ -127,6 +137,9 @@ export default function Hub() {
           <span className="brand-name">Battle Arena</span>
         </a>
         <div className="hub-wallet">
+          <a className="stat-pill energy-pill" href="#battlepass" title="⚡ Arena Energy — Earn by doing chores or quiz">
+            ⚡ {profile?.energy ?? 5} Energy
+          </a>
           {profile && (
             <span className="stat-pill">
               <span className="lvl">Lv {profile.level || 1}</span>
@@ -134,6 +147,9 @@ export default function Hub() {
               {profile.tokens || 0} ARENA
             </span>
           )}
+          <a className="mm-btn bp-nav-btn" href="#battlepass" title="Proof-of-Chore Battle Pass & Allowance">
+            🏆 Battle Pass
+          </a>
           <a className="mm-btn ghost" href="#classic" title="Classic lobby with live chat and spectator mode">
             💬 Chat & Spectate
           </a>
@@ -148,6 +164,29 @@ export default function Hub() {
       </header>
 
       {loadError && <div className="hub-alert">{loadError}</div>}
+
+      {/* ---------------- Proof-of-Chore Battle Pass Banner ---------------- */}
+      <section className="hub-bp-hero">
+        <div className="bp-hero-badge">⚡ Proof-of-Chore Battle Pass</div>
+        <div className="bp-hero-body">
+          <div className="bp-hero-text">
+            <h2>"The only video game that gets your kids to clean their room first."</h2>
+            <p>
+              Arena Energy cannot be bought with money — it must be earned! Clean your room, finish homework, or pass the Brain Quiz to earn Energy, unlock Battle Pass tiers, and win real allowance rewards.
+            </p>
+          </div>
+          <div className="bp-hero-action">
+            <div className="bp-hero-pills">
+              <span className="bp-hero-tier">Tier {profile?.battlePassTier ?? 1}</span>
+              <span className="bp-hero-allowance">${(profile?.allowanceBalance ?? 0).toFixed(2)} Allowance</span>
+              <span className="bp-hero-energy">⚡ {profile?.energy ?? 5} Energy</span>
+            </div>
+            <a className="btn-hero-bp" href="#battlepass">
+              Open Battle Pass & Chores →
+            </a>
+          </div>
+        </div>
+      </section>
 
       <main className="hub-grid">
         {/* ---------------- Neon Math Arena ---------------- */}
@@ -186,10 +225,10 @@ export default function Hub() {
           </div>
 
           <div className="card-actions">
-            <button type="button" className="btn-quick" onClick={() => navigate('arena?mode=match')}>
+            <button type="button" className="btn-quick" onClick={() => tryPlay('arena?mode=match')}>
               <BoltIcon /> Quick Match
             </button>
-            <button type="button" className="btn-bot" onClick={() => navigate(`arena?mode=bot&difficulty=${mathDiff}`)}>
+            <button type="button" className="btn-bot" onClick={() => tryPlay(`arena?mode=bot&difficulty=${mathDiff}`)}>
               <GamepadIcon /> Play vs Bot
             </button>
           </div>
@@ -237,10 +276,51 @@ export default function Hub() {
           </div>
 
           <div className="card-actions">
-            <button type="button" className="btn-quick" onClick={() => navigate(`memory?mode=match&deck=${deck}`)}>
+            <button type="button" className="btn-quick" onClick={() => tryPlay(`memory?mode=match&deck=${deck}`)}>
               <BoltIcon /> Quick Match
             </button>
-            <button type="button" className="btn-bot" onClick={() => navigate(`memory?mode=bot&deck=${deck}&difficulty=${memoryDiff}`)}>
+            <button type="button" className="btn-bot" onClick={() => tryPlay(`memory?mode=bot&deck=${deck}&difficulty=${memoryDiff}`)}>
+              <GamepadIcon /> Play vs Bot
+            </button>
+          </div>
+        </section>
+
+        {/* ---------------- Connect Four Arena ---------------- */}
+        <section className="game-card c4-card">
+          <h2 className="card-title c4-card-title">Connect Four Arena</h2>
+
+          <div className="card-art c4-art">
+            <ConnectFourArt />
+            <div className="art-fade" aria-hidden="true" />
+          </div>
+
+          <div className="card-meta">
+            <span className="meta-check" aria-hidden="true">✓</span>
+            Classic 7×6 Drop Grid
+            <span className="meta-bonus">+25 Battle Pass XP</span>
+          </div>
+
+          <div className="card-meta bot-diff-meta">
+            <span className="diff-label">🤖 Bot Level:</span>
+            <div className="diff-selector" role="radiogroup" aria-label="Connect Four Bot Difficulty">
+              {DIFFICULTIES.map(d => (
+                <button
+                  key={d.id}
+                  type="button"
+                  className={`diff-chip ${c4Diff === d.id ? 'active' : ''} diff-${d.id}`}
+                  onClick={() => setC4Diff(d.id)}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="card-actions">
+            <button type="button" className="btn-quick" onClick={() => tryPlay('connectfour?mode=match')}>
+              <BoltIcon /> Quick Match
+            </button>
+            <button type="button" className="btn-bot" onClick={() => tryPlay(`connectfour?mode=bot&difficulty=${c4Diff}`)}>
               <GamepadIcon /> Play vs Bot
             </button>
           </div>
@@ -312,6 +392,26 @@ export default function Hub() {
         </aside>
       </main>
 
+      {showEnergyModal && (
+        <div className="hub-energy-overlay" onClick={() => setShowEnergyModal(false)}>
+          <div className="hub-energy-modal" onClick={e => e.stopPropagation()}>
+            <div className="energy-modal-icon">⚡</div>
+            <h2>Out of Arena Energy!</h2>
+            <p>
+              Arena Energy cannot be bought with money — it must be earned! Clean your room, finish homework, or pass the Brain Quiz to earn Energy and enter matches.
+            </p>
+            <div className="energy-modal-actions">
+              <button type="button" className="btn-modal-bp" onClick={() => navigate('battlepass')}>
+                Go to Battle Pass & Chores →
+              </button>
+              <button type="button" className="btn-modal-close" onClick={() => setShowEnergyModal(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
     </div>
   );
@@ -320,6 +420,7 @@ const BOT_ADDRESS = '0xB07000000000000000000000000000000000000B'; // same consta
 const GAME_LABELS = {
   memory: 'Memory Match',
   'math-arena': 'Neon Math Arena',
+  'connect-four': 'Connect Four',
   'tic-tac-toe': 'Tic Tac Toe',
 };
 
@@ -524,5 +625,30 @@ function BrainArt() {
         <path d="M152 156c-4 12 2 22 12 24" fill="none" stroke="url(#brainStroke)" strokeWidth="3" strokeLinecap="round" strokeOpacity=".75" />
       </g>
     </svg>
+  );
+}
+
+function ConnectFourArt() {
+  const preview = [
+    [0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 2, 0, 0, 0],
+    [0, 0, 1, 1, 0, 0, 0],
+    [0, 2, 1, 2, 1, 0, 0],
+    [0, 1, 2, 1, 2, 0, 0],
+    [1, 2, 1, 2, 1, 2, 1],
+  ];
+  return (
+    <div className="c4-art-frame" aria-hidden="true">
+      {preview.map((row, r) => (
+        <div key={r} className="c4-art-row">
+          {row.map((val, c) => (
+            <span
+              key={c}
+              className={`c4-art-cell ${val === 1 ? 'cell-x' : val === 2 ? 'cell-o' : 'cell-empty'}`}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
   );
 }

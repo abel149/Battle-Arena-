@@ -821,3 +821,262 @@
   cursor: pointer;
 }
 .live-soon { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+/* ---------------- Battle Pass & Energy in Hub ---------------- */
+.energy-pill {
+  background: rgba(250, 204, 21, 0.15) !important;
+  border-color: rgba(250, 204, 21, 0.5) !important;
+  color: #facc15 !important;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.energy-pill:hover {
+  background: rgba(250, 204, 21, 0.25) !important;
+  transform: translateY(-1px);
+}
+
+.bp-nav-btn {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+  border-color: #8b5cf6 !important;
+  color: #fff !important;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.bp-nav-btn:hover {
+  filter: brightness(1.1);
+}
+
+/* Battle Pass Hero Banner */
+.hub-bp-hero {
+  max-width: 1400px;
+  margin: 0 auto 24px;
+  background: linear-gradient(135deg, rgba(20, 18, 50, 0.88) 0%, rgba(8, 20, 38, 0.95) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  border-radius: 18px;
+  padding: 22px 28px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5), inset 0 0 30px rgba(139, 92, 246, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.bp-hero-badge {
+  display: inline-block;
+  background: rgba(250, 204, 21, 0.15);
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  color: #facc15;
+  font-size: 0.8rem;
+  font-weight: 800;
+  padding: 4px 12px;
+  border-radius: 999px;
+  margin-bottom: 10px;
+}
+
+.bp-hero-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.bp-hero-text h2 {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #fff;
+  margin: 0 0 6px;
+  letter-spacing: -0.01em;
+}
+
+.bp-hero-text p {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  margin: 0;
+  max-width: 780px;
+  line-height: 1.45;
+}
+
+.bp-hero-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.bp-hero-pills {
+  display: flex;
+  gap: 8px;
+}
+
+.bp-hero-tier {
+  background: rgba(139, 92, 246, 0.2);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  color: #c084fc;
+  font-size: 0.8rem;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 8px;
+}
+
+.bp-hero-allowance {
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+  font-size: 0.8rem;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 8px;
+}
+
+.bp-hero-energy {
+  background: rgba(250, 204, 21, 0.2);
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  color: #facc15;
+  font-size: 0.8rem;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 8px;
+}
+
+.btn-hero-bp {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #0f172a;
+  font-weight: 800;
+  font-size: 0.92rem;
+  padding: 10px 20px;
+  border-radius: 10px;
+  text-decoration: none;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-hero-bp:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+/* Connect Four Card in Hub */
+.c4-card-title {
+  background: linear-gradient(90deg, #38bdf8, #818cf8, #f43f5e) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+.c4-art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+
+.c4-art-frame {
+  background: linear-gradient(180deg, #1e3a8a 0%, #172554 100%);
+  border: 2px solid #3b82f6;
+  border-radius: 12px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+  width: 100%;
+  max-width: 240px;
+}
+
+.c4-art-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.c4-art-cell {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgba(10, 15, 30, 0.9);
+}
+
+.c4-art-cell.cell-x {
+  background: radial-gradient(circle at 35% 35%, #fbbf24, #d97706);
+  box-shadow: 0 0 6px rgba(217, 119, 6, 0.7);
+}
+
+.c4-art-cell.cell-o {
+  background: radial-gradient(circle at 35% 35%, #22d3ee, #0891b2);
+  box-shadow: 0 0 6px rgba(8, 145, 178, 0.7);
+}
+
+.c4-art-cell.cell-empty {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* Hub Out of Energy Modal */
+.hub-energy-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 999;
+}
+
+.hub-energy-modal {
+  background: #0f172a;
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  border-radius: 20px;
+  padding: 30px;
+  max-width: 460px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+}
+
+.energy-modal-icon {
+  font-size: 3.2rem;
+  margin-bottom: 12px;
+}
+
+.hub-energy-modal h2 {
+  font-size: 1.45rem;
+  color: #fbbf24;
+  margin: 0 0 10px;
+}
+
+.hub-energy-modal p {
+  color: #cbd5e1;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  margin-bottom: 22px;
+}
+
+.energy-modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.btn-modal-bp {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  border: none;
+  color: #0f172a;
+  font-weight: 800;
+  padding: 12px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.btn-modal-close {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+  font-weight: 700;
+  padding: 10px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}

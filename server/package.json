@@ -12,6 +12,7 @@
     "deploy:base-sepolia": "hardhat run scripts/deploy-match-result.js --network baseSepolia",
     "deploy:tokens:local": "hardhat run scripts/deploy-tokens.js --network hardhat",
     "deploy:tokens:base-sepolia": "hardhat run scripts/deploy-tokens.js --network baseSepolia",
+    "deploy:chore:local": "node scripts/deploy-chore.js",
     "test": "node --test 'test/*.test.mjs'",
     "test:ci": "npm run compile && npm run test && npm run test:ci:e2e",
     "test:ci:e2e": "bash scripts/e2e-ci.sh",

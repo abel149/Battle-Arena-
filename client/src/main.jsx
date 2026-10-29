@@ -7,6 +7,8 @@ import { useRoute } from './lib/router.js';
 const Hub = lazy(() => import('./pages/Hub.jsx'));
 const Arena = lazy(() => import('./pages/Arena.jsx'));
 const MemoryMatch = lazy(() => import('./pages/MemoryMatch.jsx'));
+const ConnectFour = lazy(() => import('./pages/ConnectFour.jsx'));
+const BattlePass = lazy(() => import('./pages/BattlePass.jsx'));
 // The earlier lobby (register / login / chat / spectate) stays reachable at #classic.
 const ClassicLobby = lazy(() => import('./App.jsx'));
 
@@ -16,6 +18,8 @@ function Root() {
   let page;
   if (path === 'arena') page = <Arena />;
   else if (path === 'memory') page = <MemoryMatch />;
+  else if (path === 'connectfour' || path === 'connect-four') page = <ConnectFour />;
+  else if (path === 'battlepass' || path === 'parent') page = <BattlePass />;
   else if (path === 'classic') page = <ClassicLobby />;
   else page = <Hub />;
 

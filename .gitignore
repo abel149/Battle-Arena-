@@ -12,6 +12,8 @@ server/.match-result-test-*.json
 server/.match-result-e2e-*.json
 server/token-address.json
 server/.token-test-*.json
+server/chore-address.json
+server/chore-ledger.json
 server/data.sqlite*
 *.sqlite*
 
