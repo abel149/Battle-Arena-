@@ -40,10 +40,15 @@ export default function Arena() {
   const tilesRef = useRef(null);
   const gameRef = useRef(null);
   const roomRef = useRef(null);
+  const questionsByRound = useRef({});
+  const wasRevealing = useRef(false);
 
   useEffect(() => { tileRef.current = tile; }, [tile]);
   useEffect(() => { gameRef.current = game; }, [game]);
   useEffect(() => { roomRef.current = room; }, [room]);
+  useEffect(() => {
+    if (game?.question) questionsByRound.current[game.round] = game.question;
+  }, [game?.round, game?.question]);
 
   const mySeat = seatOf(game, wallet.address);
   const oppSeat = mySeat ? otherSeat(mySeat) : null;
@@ -82,6 +87,7 @@ export default function Arena() {
       setTile(2);
       sentRound.current = -1;
       revealRound.current = -1;
+      questionsByRound.current = {};
     };
     // Ignore traffic from any other room still open on this socket.
     const mine = roomId => !!roomId && roomId === roomRef.current?.roomId;
@@ -149,10 +155,18 @@ export default function Arena() {
   // Reset position + clock for every new question.
   useEffect(() => {
     if (!game?.question) return;
-    setTile(2);
-    tileRef.current = 2;
     setTimeLeft(ROUND_SECONDS);
   }, [game?.round, game?.question]);
+
+  // When the round result closes, both players return to their start tiles.
+  useEffect(() => {
+    if (reveal) { wasRevealing.current = true; return; }
+    if (!wasRevealing.current) return;
+    wasRevealing.current = false;
+    setTile(2);
+    tileRef.current = 2;
+    setOppTile(3);
+  }, [reveal]);
 
   // Show the previous round result for a moment before playing on.
   useEffect(() => {
@@ -274,6 +288,9 @@ export default function Arena() {
   };
 
   const q = game?.question;
+  // While the round result is showing, the server has already moved on to the
+  // next question, so show the question that was actually just answered.
+  const shownQ = (reveal && questionsByRound.current[reveal.round]) || q;
   const myScore = game && mySeat ? game.scores[mySeat] : 0;
   const oppScore = game && oppSeat ? game.scores[oppSeat] : 0;
   const myLives = game && mySeat ? game.lives[mySeat] : 3;
@@ -315,7 +332,7 @@ export default function Arena() {
             <span className={`question-side ${locked ? 'locked' : ''}`}>
               {locked ? 'LOCKED IN' : 'YOUR MOVE'}
             </span>
-            <h1 className="question-text">{q ? q.text : 'Neon Math Arena'}</h1>
+            <h1 className="question-text">{shownQ ? shownQ.text : 'Neon Math Arena'}</h1>
             <div className="round-dots" aria-hidden="true">
               {Array.from({ length: game?.totalRounds ?? 8 }).map((_, i) => (
                 <span
@@ -363,10 +380,10 @@ export default function Arena() {
                           isMyMiss ? 'is-miss' : '',
                         ].filter(Boolean).join(' ')}
                         onClick={() => { if (!locked && !reveal) setTile(i); }}
-                        aria-label={`Tile ${t.key}${q ? `, answer ${q.options[i]}` : ''}`}
+                        aria-label={`Tile ${t.key}${shownQ ? `, answer ${shownQ.options[i]}` : ''}`}
                       >
                         <span className="tile-letter">{t.key}</span>
-                        {q && <span className="tile-value">{q.options[i]}</span>}
+                        {shownQ && <span className="tile-value">{shownQ.options[i]}</span>}
                       </button>
                     );
                   })}
@@ -374,8 +391,7 @@ export default function Arena() {
               </div>
             </div>
 
-            {/* Kept outside the tilted floor so screen-space tile coordinates
-                stay accurate for every row (A/B included). */}
+            
             <div className="actor-layer">
               <div className="actor p1" style={actorStyle(tile, 'p1')}>
                 <div className="actor-tag p1">P1</div>
@@ -405,6 +421,7 @@ export default function Arena() {
           {reveal && q && (
             <RoundResult
               result={reveal}
+              question={shownQ}
               mySeat={mySeat}
               myName={myName}
               oppName={oppName}
@@ -537,7 +554,7 @@ function TimerRing({ seconds, urgent }) {
   );
 }
 
-function RoundResult({ result, mySeat, myName, oppName }) {
+function RoundResult({ result, question, mySeat, myName, oppName }) {
   const mine = result.picks?.[mySeat];
   const theirs = result.picks?.[mySeat === 'X' ? 'O' : 'X'];
   const mineOk = mine === result.correct;
@@ -549,14 +566,16 @@ function RoundResult({ result, mySeat, myName, oppName }) {
         <h2 className="round-title">{mineOk ? 'Correct!' : 'Not quite!'}</h2>
         <div className="round-players">
           <div className={`res-pill p1 ${mineOk ? 'good' : 'bad'}`}>
-            <span className="res-name">{myName}</span>
+            <span className="res-name">{myName}{question && mine !== null ? ` · chose ${question.options[mine]}` : ''}</span>
             <span className="res-value">{mineOk ? '+20 Points' : mine === null ? 'No answer' : '−1 Life'}</span>
           </div>
           <div className={`res-pill p2 ${theirsOk ? 'good' : 'bad'}`}>
-            <span className="res-name">{oppName}</span>
-            <span className="res-value">{theirsOk ? '+20 Points' : theirs === null ? 'No answer' : '−1 Life'}</span>
+            <span className="res-name">{oppName}{question && theirs !== null ? ` · chose ${question.options[theirs]}` : ''}</span>            <span className="res-value">{theirsOk ? '+20 Points' : theirs === null ? 'No answer' : '−1 Life'}</span>
           </div>
         </div>
+        {question && (
+          <div className="round-next">Correct answer: {question.options[result.correct]}</div>
+        )}
         <div className="round-next">Next question coming up…</div>
       </div>
     </div>
