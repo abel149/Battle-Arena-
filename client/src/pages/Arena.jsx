@@ -443,7 +443,7 @@ export default function Arena() {
           <div className="stage-hint">
             <span className={`hint-pill ${locked ? 'on' : ''}`}>
               {game?.winner
-                ? 'Match complete'
+                ? (game.winner === mySeat ? '🏆 Victory!' : game.winner === 'draw' ? '🤝 Match Drawn' : '⚔️ Defeat')
                 : locked
                   ? 'Answer locked — waiting for your rival'
                   : 'Move with WASD, then lock in the tile you stand on'}
@@ -452,7 +452,7 @@ export default function Arena() {
 
           {error && <div className="arena-toast">{error}</div>}
 
-          {reveal && q && (
+          {reveal && shownQ && !game?.winner && (
             <RoundResult
               result={reveal}
               question={shownQ}
@@ -462,7 +462,7 @@ export default function Arena() {
             />
           )}
 
-          {receipt && game && (
+          {(game?.winner || receipt) && game && (
             <MatchResult
               game={game}
               mySeat={mySeat}
@@ -633,19 +633,29 @@ function MatchResult({ game, mySeat, myName, oppName, receipt, onPlayAgain, canR
   const draw = winner === 'draw';
   const myScore = game.scores?.[mySeat] ?? 0;
   const oppScore = game.scores?.[mySeat === 'X' ? 'O' : 'X'] ?? 0;
+  const myLives = game.lives?.[mySeat] ?? 0;
+  const oppLives = game.lives?.[mySeat === 'X' ? 'O' : 'X'] ?? 0;
+
+  const oppKnockedOut = oppLives <= 0;
+  const meKnockedOut = myLives <= 0;
+  const subtitle = oppKnockedOut
+    ? `${oppName} ran out of health!`
+    : meKnockedOut
+      ? 'You ran out of health!'
+      : 'All rounds complete!';
 
   return (
     <div className="match-overlay">
       <div className={`final-card ${iWon ? 'p1' : draw ? 'draw' : 'p2'}`}>
         <div className="final-trophy"><TrophyIcon /></div>
-        <div className="final-eyebrow">Match over</div>
+        <div className="final-eyebrow">{subtitle}</div>
         <h2>{draw ? 'It’s a draw!' : iWon ? `${myName} wins!` : `${oppName} wins!`}</h2>
         <div className="final-score">
           <span className="p1">{myScore}</span>
           <span className="vs">FINAL</span>
           <span className="p2">{oppScore}</span>
         </div>
-        {receipt && (
+        {receipt ? (
           <a
             className="receipt-link"
             href={`${API}/api/verify/${receipt.matchId}`}
@@ -654,7 +664,14 @@ function MatchResult({ game, mySeat, myName, oppName, receipt, onPlayAgain, canR
             title={`Verify ${receipt.matchId}`}
           >
             ⛓ On-chain: {short(receipt.txHash || receipt.matchId)}
+            {receipt.rewards && receipt.rewards[game.players?.[mySeat]]?.tokens ? (
+              <span className="reward-tag"> (+{receipt.rewards[game.players[mySeat]].tokens} ARENA)</span>
+            ) : null}
           </a>
+        ) : (
+          <div className="receipt-link recording">
+            ⛓ Confirming on blockchain…
+          </div>
         )}
         {canRematch && onSelectDifficulty && (
           <div className="rematch-difficulty">
@@ -674,10 +691,12 @@ function MatchResult({ game, mySeat, myName, oppName, receipt, onPlayAgain, canR
           </div>
         )}
         <div className="final-actions">
-          {canRematch && (
-            <button type="button" className="lock-btn" onClick={onPlayAgain}>Play again</button>
-          )}
-          <button type="button" className="lock-btn ghost" onClick={onLeave}>Back to hub</button>
+          <button type="button" className="lock-btn" onClick={onPlayAgain}>
+            {canRematch ? 'Play again' : 'Play another match'}
+          </button>
+          <button type="button" className="lock-btn ghost" onClick={onLeave}>
+            Back to hub
+          </button>
         </div>
       </div>
     </div>

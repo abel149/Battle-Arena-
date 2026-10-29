@@ -249,15 +249,15 @@ export default function MemoryMatch() {
 
         {error && <div className="mem-error">{error}</div>}
 
-        {receipt && (
+        {(game?.winner || receipt) && (
           <div className={`mem-result ${iWon ? 'win' : isDraw ? 'draw' : 'loss'}`}>
             <div className="mem-result-head">
               <span className="mem-result-icon">{iWon ? '🏆' : isDraw ? '🤝' : '⚔️'}</span>
               <div>
-             <h2>{isDraw ? 'It’s a draw!' : watching ? `${winnerName} wins!` : iWon ? 'You win!' : 'You lose this one'}</h2>
+                <h2>{isDraw ? 'It’s a draw!' : watching ? `${winnerName} wins!` : iWon ? 'You win!' : 'You lose this one'}</h2>
                 <p>
                   {myScore} : {oppScore} pairs
-                  {receipt.gameType ? ` · ${receipt.gameType}` : ''}
+                  {receipt?.gameType ? ` · ${receipt.gameType}` : ''}
                 </p>
               </div>
             </div>
@@ -279,14 +279,20 @@ export default function MemoryMatch() {
               </div>
             )}
             <div className="mem-result-actions">
-              <a
-                className="mem-btn ghost"
-                href={`${API}/api/verify/${receipt.matchId}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                ⛓ {short(receipt.txHash || receipt.matchId)}
-              </a>
+              {receipt ? (
+                <a
+                  className="mem-btn ghost"
+                  href={`${API}/api/verify/${receipt.matchId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  ⛓ {short(receipt.txHash || receipt.matchId)}
+                </a>
+              ) : (
+                <span className="mem-btn ghost" style={{ opacity: 0.7 }}>
+                  ⛓ Confirming on blockchain…
+                </span>
+              )}
               {mode === 'bot' && (
                 <button type="button" className="mem-btn" onClick={() => playAgain(difficulty)}>Play again</button>
               )}

@@ -242,13 +242,26 @@ async function finishRoom(room) {
   // recording is enabled, it includes matchIdRaw as the exact bytes32 stored
   // on-chain. When recording falls back to the simulated ledger, matchIdRaw is
   // the same as matchId.
-  const receipt = await recordMatch({
-    matchId: room.id,
-    gameType: room.gameType,
-    players: { X: addrX, O: addrO },
-    winner: winnerAddr || 'draw',
-    moves: game.moves,
-  });
+  let receipt = null;
+  try {
+    receipt = await recordMatch({
+      matchId: room.id,
+      gameType: room.gameType,
+      players: { X: addrX, O: addrO },
+      winner: winnerAddr || 'draw',
+      moves: game.moves,
+    });
+  } catch (err) {
+    console.warn('On-chain match recording failed:', err.message);
+    receipt = {
+      matchId: room.id,
+      gameType: room.gameType,
+      players: { X: addrX, O: addrO },
+      winner: winnerAddr || 'draw',
+      timestamp: Date.now(),
+      error: err.message,
+    };
+  }
 
   // Update stats for human players and compute on-chain reward deltas
   const rewards = [];

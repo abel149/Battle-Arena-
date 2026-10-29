@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SERVER_DIR = path.resolve(__dirname, '..');
 const NODE_URL = process.env.NODE_HTTP_URL || 'http://127.0.0.1:8545';
-const LOCAL_PK = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+const LOCAL_PK = process.env.PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 
 async function checkRpc() {
   try {
@@ -22,15 +22,33 @@ async function checkRpc() {
 }
 
 async function main() {
-  const rpcOk = await checkRpc();
+  let rpcOk = await checkRpc();
+  let hardhatNodeProc = null;
+
   if (!rpcOk) {
-    console.error(`\n❌ Could not connect to local Ethereum node at ${NODE_URL}.`);
-    console.error('Please start the Hardhat node first in another terminal:');
+    console.log(`\n⛓️ Local blockchain node not detected at ${NODE_URL}. Starting Hardhat node...`);
+    hardhatNodeProc = spawn('npx', ['hardhat', 'node', '--port', '8545'], {
+      cwd: SERVER_DIR,
+      stdio: 'ignore',
+    });
+    // Wait up to 12s for node to initialize
+    for (let i = 0; i < 24; i++) {
+      await new Promise(r => setTimeout(r, 500));
+      if (await checkRpc()) {
+        rpcOk = true;
+        break;
+      }
+    }
+  }
+
+  if (!rpcOk) {
+    console.error(`\n❌ Could not connect to or start local Ethereum node at ${NODE_URL}.`);
+    console.error('Please start the Hardhat node first:');
     console.error('  cd server && npx hardhat node\n');
     process.exit(1);
   }
 
-  console.log(`\n🔗 Connected to local blockchain at ${NODE_URL}`);
+  console.log(`\n🔗 Connected to blockchain at ${NODE_URL}`);
   console.log('📦 Compiling contracts...');
   execSync('npx hardhat compile', { cwd: SERVER_DIR, stdio: 'inherit' });
 
@@ -54,11 +72,11 @@ async function main() {
   const matchResult = JSON.parse(fs.readFileSync(matchFile, 'utf8')).address;
   const tokens = JSON.parse(fs.readFileSync(tokenFile, 'utf8'));
 
-  console.log('\n✅ Contracts deployed:');
+  console.log('\n✅ On-chain contracts ready:');
   console.log('   MatchResult: ', matchResult);
   console.log('   ArenaToken:  ', tokens.arenaToken);
   console.log('   ArenaBadges: ', tokens.arenaBadges);
-  console.log('\n🎮 Starting Battle Arena server in on-chain mode...\n');
+  console.log('\n🎮 Starting Battle Arena server in real blockchain mode...\n');
 
   const env = {
     ...process.env,
@@ -77,7 +95,18 @@ async function main() {
     env,
   });
 
-  proc.on('exit', (code) => process.exit(code || 0));
+  const cleanup = () => {
+    if (hardhatNodeProc) {
+      try { hardhatNodeProc.kill(); } catch {}
+    }
+  };
+
+  process.on('SIGINT', () => { cleanup(); process.exit(0); });
+  process.on('SIGTERM', () => { cleanup(); process.exit(0); });
+  proc.on('exit', (code) => {
+    cleanup();
+    process.exit(code || 0);
+  });
 }
 
 main().catch(err => {

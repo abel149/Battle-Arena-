@@ -4,7 +4,8 @@
   "type": "module",
   "description": "Web3 Battle Arena - real-time multiplayer game server",
   "scripts": {
-    "start": "node index.js",
+    "start": "node scripts/start-onchain.mjs",
+    "start:simulated": "node index.js",
     "start:onchain": "node scripts/start-onchain.mjs",
     "dev": "node --watch index.js",
     "compile": "hardhat compile",
