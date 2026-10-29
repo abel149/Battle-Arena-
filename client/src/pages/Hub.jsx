@@ -157,7 +157,8 @@ export default function Hub() {
         </section>
 
         {/* ---------------- Right rail ---------------- */}
-        <aside className="hub-side">
+          <aside className="hub-side">
+          {profile && <ProfileCard profile={profile} />}
           <section className="side-panel">
             <h3 className="side-title"><TrophyIcon /> Leaderboard</h3>
             <div className="lb-head">
@@ -221,7 +222,54 @@ export default function Hub() {
     </div>
   );
 }
+function ProfileCard({ profile }) {
+  const xp = profile.xp || 0;
+  const level = profile.level || 1;
+  const into = xp % 100; // the server levels up every 100 XP (levelFor in store.js)
+  const badges = profile.badges || [];
+  const name = profile.name || short(profile.address);
 
+  return (
+    <section className="side-panel profile-card">
+      <h3 className="side-title">
+        <span className="pc-avatar">{name.slice(0, 1).toUpperCase()}</span>
+        <span className="pc-name">{name}</span>
+      </h3>
+
+      <div className="pc-level">
+        <span>Level {level}</span>
+        <span>{into} / 100 XP</span>
+      </div>
+      <div
+        className="pc-bar"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={into}
+      >
+        <span style={{ width: `${into}%` }} />
+      </div>
+
+      <div className="pc-stats">
+        <div><b>{profile.wins || 0}</b><span>Wins</span></div>
+        <div><b>{profile.losses || 0}</b><span>Losses</span></div>
+        <div><b>{profile.streak || 0}</b><span>Streak</span></div>
+        <div><b>{profile.bestStreak || 0}</b><span>Best</span></div>
+      </div>
+
+      <div className="pc-badges-title">Badges ({badges.length})</div>
+      {badges.length === 0 ? (
+        <p className="side-empty">Win a match to earn your first badge.</p>
+      ) : (
+        <div className="pc-badges">
+          {badges.map(b => (
+            <span key={b.id} className="pc-badge" title={b.desc}>{b.label}</span>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
 function LeaderRow({ player, me }) {
   return (
     <li className={`lb-row ${me ? 'me' : ''} ${player.rank <= 3 ? `top${player.rank}` : ''}`}>
