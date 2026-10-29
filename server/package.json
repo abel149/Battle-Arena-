@@ -5,6 +5,7 @@
   "description": "Web3 Battle Arena - real-time multiplayer game server",
   "scripts": {
     "start": "node index.js",
+    "start:onchain": "node scripts/start-onchain.mjs",
     "dev": "node --watch index.js",
     "compile": "hardhat compile",
     "deploy:local": "hardhat run scripts/deploy-match-result.js --network hardhat",
@@ -14,7 +15,7 @@
     "test": "node --test 'test/*.test.mjs'",
     "test:ci": "npm run compile && npm run test && npm run test:ci:e2e",
     "test:ci:e2e": "bash scripts/e2e-ci.sh",
-    "node": "npx hardhat node --block-gas-limit 30000000",
+    "node": "npx hardhat node --port 8545",
     "test:onchain": "node scripts/test-onchain.mjs"
   },
   "dependencies": {

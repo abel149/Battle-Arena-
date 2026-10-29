@@ -198,3 +198,17 @@ tr.me td { color: var(--accent2); }
   cursor: pointer; font-size: 1rem; padding: 0.25rem;
 }
 .pw-toggle:hover { color: var(--accent); }
+
+/* ---- leaderboard scope tabs ---- */
+.lb-tabs { display: inline-flex; gap: 0.35rem; margin-left: 0.75rem; vertical-align: middle; }
+.lb-tabs .tab {
+  background: var(--panel2); border: 1px solid var(--border); color: var(--muted);
+  border-radius: 8px; padding: 0.25rem 0.7rem; font: inherit; font-size: 0.8rem; cursor: pointer;
+}
+.lb-tabs .tab.sel { color: var(--text); border-color: var(--accent); background: rgba(124,92,255,.15); }
+
+/* ---- match rows + replay ---- */
+.match-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  padding: 0.45rem 0; border-bottom: 1px solid var(--border); }
+.match-row:last-child { border-bottom: none; }
+.replay-controls { display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; justify-content: center; }

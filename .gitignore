@@ -7,6 +7,19 @@ client/dist/
 # Runtime-generated game data (local persistence)
 server/data.json
 server/ledger.json
+server/match-result-address.json
+server/.match-result-test-*.json
+server/.match-result-e2e-*.json
+server/token-address.json
+server/.token-test-*.json
+server/data.sqlite*
+*.sqlite*
+
+# Hardhat build artifacts & cache
+server/artifacts/
+server/cache/
+artifacts/
+cache/
 
 # Environment / secrets
 .env

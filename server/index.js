@@ -7,14 +7,32 @@ import http from 'http';
 import cors from 'cors';
 import { Server } from 'socket.io';
 import crypto from 'crypto';
+import { ethers } from 'ethers';
+
+// Wallet signature verification helpers
+function verifyAuthSignature(signature, address) {
+  if (!signature || typeof signature !== 'string') return false;
+  try {
+    const recovered = ethers.verifyMessage(AUTH_MESSAGE(address), signature);
+    return recovered.toLowerCase() === address.toLowerCase();
+  } catch (e) {
+    console.log('verifyAuthSignature failed: ' + e.message);
+    return false;
+  }
+}
 
 import { ENGINES, DECKS, dailyDeckId } from './games/index.js';
-import { recordMatch, getLedger, isOnchain } from './chain-onchain.js';
+import { recordMatch, getLedger, isOnchain, normalizeLedgerEntry, ONCHAIN_LABELS } from './chain-onchain.js';
+import { distributeRewards, isTokensOnchain, tokenAddresses, tokenBalance } from './chain-tokens.js';
 import * as store from './store.js';
 
 const PORT = process.env.PORT || 3001;
 const BOT = '0xB07000000000000000000000000000000000000B';
 const BOT_STEP_MS = 700;
+
+// Shared auth message: client (MetaMask personal_sign or local key) must sign
+// exactly this string; verification is standard EIP-191 via ethers.verifyMessage.
+const AUTH_MESSAGE = a => `Battle Arena login for ${a}`;
 
 const app = express();
 app.use(cors());
@@ -29,8 +47,31 @@ const queue = [];                 // { socketId, gameType } waiting for a match
 const socketPlayer = new Map();   // socketId -> address
 const liveListeners = new Set();  // socketIds in the lobby (for rooms:live push)
 
+// The server uses room ids as match ids. On-chain, those are stored as bytes32.
+// The on-chain module normalizes them back to strings where possible.
+
 // ---- REST ----
 app.get('/api/leaderboard', (_req, res) => res.json(store.leaderboard()));
+app.get('/api/leaderboard/weekly', (_req, res) => res.json(store.leaderboardWeekly()));
+
+// Match ledger and verification expose the normalized on-chain shape.
+// matchId is the stable lookup key used by the game flow; matchIdRaw is the
+// exact on-chain bytes32 for proof/debugging when it differs from matchId.
+
+app.get('/api/replay/:matchId', (req, res) => {
+  const replay = store.getReplay(req.params.matchId);
+  replay ? res.json(replay) : res.status(404).json({ error: 'Match not found' });
+});
+
+app.get('/api/wallet/:address/tokens', async (req, res) => {
+  try {
+    if (!isTokensOnchain()) return res.json({ onchain: false, symbol: 'ARENA', balance: store.safeProfile(req.params.address)?.tokens ?? 0 });
+    const balance = await tokenBalance(req.params.address);
+    res.json({ onchain: true, symbol: 'ARENA', balance, addresses: tokenAddresses() });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to read token balance', detail: err.message });
+  }
+});
 app.get('/api/matches', async (_req, res) => {
   try {
     res.json(await getLedger());
@@ -38,10 +79,25 @@ app.get('/api/matches', async (_req, res) => {
     res.status(500).json({ error: 'Failed to load match ledger', detail: err.message });
   }
 });
+
+// On-chain match recording is the immutable receipt layer. The operational
+// store (SQLite) keeps stats, weekly leaderboards, and the replay archive.
+//
+// matchId is the stable lookup key used by the game flow and REST APIs.
+// matchIdRaw is the exact bytes32 stored on-chain, surfaced when on-chain
+// proof details matter (for example, when a deployment cannot recover the
+// original matchId from the stored bytes32).
 app.get('/api/verify/:matchId', async (req, res) => {
   try {
     const ledger = await getLedger();
-    const entry = ledger.find(e => e.matchId === req.params.matchId);
+    const requestedMatchId = req.params.matchId;
+    // The contract stores match IDs as original room IDs (bytes32 = encoded room ID).
+    // Do NOT hash the matchId here; look up the original value directly.
+    // On-chain entries are normalized by chain-onchain.js; when a deployment cannot
+    // recover the original matchId, matchIdRaw is the exact bytes32 stored on-chain.
+    const entry = ledger.find(
+      e => e.matchId === requestedMatchId || e.matchIdRaw === requestedMatchId
+    );
     entry ? res.json({ valid: true, entry }) : res.status(404).json({ valid: false });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load match', detail: err.message });
@@ -59,8 +115,15 @@ app.get('/api/decks', (_req, res) => {
 
 // Registration / login over REST (address = wallet, passed in body)
 app.post('/api/register', async (req, res) => {
-  const { address, username, name, email, password } = req.body || {};
+  const { address, username, name, email, password, signature } = req.body || {};
   if (!address) return res.status(400).json({ error: 'address is required' });
+  // Verify wallet ownership via signed message
+  if (signature) {
+    if (!verifyAuthSignature(signature, address)) return res.status(401).json({ error: 'Invalid wallet signature' });
+  } else {
+    // Fallback: if no signature, still allow but note it's unauthenticated
+    console.warn('Register without signature verification — address not cryptographically verified');
+  }
   const usernameErr = store.validateUsername(username);
   if (usernameErr) return res.status(400).json({ error: usernameErr });
   const result = await store.registerPlayer(address, { name, username, email, password });
@@ -69,10 +132,13 @@ app.post('/api/register', async (req, res) => {
 });
 
 app.post('/api/login', async (req, res) => {
-  const { address, username, name, password } = req.body || {};
+  const { address, username, name, password, signature } = req.body || {};
+  // Verify wallet ownership via signed message when address is provided
+  if (address && signature) {
+    if (!verifyAuthSignature(signature, address)) return res.status(401).json({ error: 'Invalid wallet signature' });
+  }
   // Two ways to log in:
   // 1) By credentials: username + password (wallet resolved from username index).
-  // 2) By wallet: address + optional password (legacy; password verified if supplied).
   if (username && password) {
     const result = await store.loginPlayerByCredentials({ username, password });
     if (result.error) return res.status(401).json(result);
@@ -125,6 +191,10 @@ async function finishRoom(room) {
   const winnerAddr = game.winner === 'X' ? addrX : game.winner === 'O' ? addrO : null;
 
   // Record on-chain (simulated ledger, or real MatchResult.sol via chain-onchain.js)
+  // The returned receipt is normalized by chain-onchain.js. When on-chain
+  // recording is enabled, it includes matchIdRaw as the exact bytes32 stored
+  // on-chain. When recording falls back to the simulated ledger, matchIdRaw is
+  // the same as matchId.
   const receipt = await recordMatch({
     matchId: room.id,
     gameType: room.gameType,
@@ -133,29 +203,73 @@ async function finishRoom(room) {
     moves: game.moves,
   });
 
-  // Update stats for human players
+  // Update stats for human players and compute on-chain reward deltas
+  const rewards = [];
   for (const addr of [addrX, addrO]) {
     if (addr === BOT) continue;
+    const before = store.getPlayer(addr);
     const result = winnerAddr === null ? 'draw' : addr === winnerAddr ? 'win' : 'loss';
     const profile = store.applyResult(addr, result, {
       gameType: room.gameType,
       deck: room.game.deck,
       daily: !!room.game.deck && room.game.deck === dailyDeckId(),
     });
+    const beforeBadges = before?.badges || [];
+    rewards.push({
+      address: addr,
+      tokens: profile.tokens - (before?.tokens ?? 0),
+      badges: profile.badges
+        .filter(b => !beforeBadges.some(x => x.id === b.id))
+        .map(b => ({ id: store.badgeNumericId(b.id), label: b.label }))
+        .filter(b => b.id != null),
+    });
     const sid = room.sockets[addr];
-    if (sid) io.to(sid).emit('player:update', profile);
+    if (sid)    io.to(sid).emit('player:update', profile);
+    // DB-only update: profile, stats, badges. The on-chain reward is handled
+    // separately by distributeRewards().
+  }
+
+  // Archive the match for replays (full move list + final layout)
+  store.saveMatch({
+    matchId: room.id,
+    gameType: room.gameType,
+    deck: room.game.deck || null,
+    players: { X: addrX, O: addrO },
+    names: room.names,
+    layout: room.gameType === 'memory'
+      ? room.game.cards.map(c => ({ pairId: c.pairId, content: c.content }))
+      : null,
+    result: game.winner,
+    winner: winnerAddr,
+    moves: game.moves,
+  });
+
+  // Mint ARENA tokens + newly earned badges on-chain (simulated when not configured,
+  // or when mints fail — always fail open so the match result still reaches players).
+  // This is the on-chain reward path. It is separate from the DB stats update.
+  // The server wallet is the trusted minter in ArenaToken.sol / ArenaBadges.sol.
+  let rewardReceipts = null;
+  try {
+    rewardReceipts = await distributeRewards(rewards);
+  } catch (err) {
+    console.warn('On-chain reward distribution failed:', err.message);
   }
 
   io.to(room.id).emit('match:end', {
     roomId: room.id,
     winner: winnerAddr,
     result: game.winner,
-    receipt, // { matchId, winner, timestamp, resultHash, txHash }
+    receipt: { ...receipt, rewards: rewardReceipts }, // { matchId, matchIdRaw?, winner, timestamp, resultHash, txHash, rewards? }
   });
+  // Note: the on-chain record and the DB writes below are intentionally
+  // independent. The chain is the proof layer; SQLite is the operational store.
+  // If one fails, the other can still stand on its own.
   broadcastLiveRooms();
 }
 
 // Advance game flow after any move: resolve pending state, then run the bot
+//
+// The on-chain path is called only when the room ends, in finishRoom().
 function afterEngineMove(room, res) {
   if (room.game.winner) return finishRoom(room);
   if (res?.pendingMs && room.engine.resolve) {
@@ -209,11 +323,18 @@ function createRoom(gameType, addrX, addrO, getSocket, opts = {}) {
 }
 
 // ---- Socket.IO ----
+// The on-chain module is intentionally disconnected from game logic. It only
+// records finished matches and distributes rewards. Game state, matchmaking,
+// chat, and spectators remain server-side.
 io.on('connection', (socket) => {
   liveListeners.add(socket.id);
 
-  socket.on('identify', ({ address, name }) => {
-    if (!address) return;
+  socket.on('identify', async ({ address, name, signature } = {}) => {
+    if (!address) return socket.emit('player:error', { error: 'Not identified: no address provided' });
+    // Require a signed message to prove wallet ownership
+    if (!signature || typeof signature !== 'string' || !signature.trim()) return socket.emit('player:error', { error: 'Not identified: signature required (got: ' + JSON.stringify(signature) + ')' });
+    if (!verifyAuthSignature(signature, address)) return socket.emit('player:error', { error: 'Not identified: invalid signature' });
+    // Address verified via signature — now treat as authenticated
     socketPlayer.set(socket.id, address);
     const profile = store.getPlayer(address) || store.upsertPlayer(address, name);
     socket.emit('player:update', store.withoutPassword(profile));
@@ -354,6 +475,13 @@ io.on('connection', (socket) => {
 
 server.listen(PORT, () => {
   console.log(`Battle Arena server on http://localhost:${PORT}`);
-  if (isOnchain()) console.log('On-chain match recording ENABLED (MatchResult.sol)');
-  else console.log('Match recording: simulated ledger (chain.js)');
+  console.log(isOnchain()
+    ? 'On-chain match recording ENABLED (MatchResult.sol)'
+    : 'Match recording: simulated ledger (chain.js)');
+  if (isTokensOnchain()) {
+    const { arenaToken, arenaBadges } = tokenAddresses();
+    console.log(`On-chain rewards ENABLED — ArenaToken ${arenaToken}, ArenaBadges ${arenaBadges}`);
+  } else {
+    console.log('Rewards: simulated only (set ARENA_TOKEN_ADDRESS/ARENA_BADGES_ADDRESS to enable)');
+  }
 });

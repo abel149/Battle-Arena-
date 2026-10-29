@@ -14,20 +14,29 @@ const MATCH_RESULT_ABI = [
 ];
 
 async function main() {
-  // Connect to the node. When run via `hardhat run --network hardhat`, Hardhat
-  // already started a local in-process network; otherwise fall back to the LAN node.
-  const nodeUrl = process.env.NODE_HTTP_URL || 'http://127.0.0.1:8545';
+  const nodeUrl = process.env.NODE_HTTP_URL
+    || process.env.BASE_SEPOLIA_RPC_URL
+    || 'http://127.0.0.1:8545';
   const provider = new ethers.JsonRpcProvider(nodeUrl);
-
-  // Use a signer that can send transactions. Prefer PRIVATE_KEY if set, else
-  // fall back to Hardhat local account #0 (the well-known dev account).
-  let signer;
-  if (process.env.PRIVATE_KEY) {
-    signer = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
-  } else {
-    // Hardhat local default account #0.
-    signer = new ethers.Wallet('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80', provider);
+  const network = await provider.getNetwork();
+  const chainId = Number(network.chainId);
+  const isLocalChain = chainId === 31337;
+  if (process.env.DEPLOYMENT_NETWORK === 'base-sepolia' && chainId !== 84532) {
+    throw new Error(`Base Sepolia deployment requested, but RPC chain ID is ${chainId}`);
   }
+  const networkName = process.env.DEPLOYMENT_NETWORK || (isLocalChain ? 'hardhat-local' : null);
+  if (!networkName) {
+    throw new Error('Set DEPLOYMENT_NETWORK to label this deployment (for example base-sepolia)');
+  }
+
+  const privateKey = process.env.PRIVATE_KEY || process.env.BASE_SEPOLIA_PRIVATE_KEY;
+  if (!privateKey && !isLocalChain) {
+    throw new Error('PRIVATE_KEY is required for non-local deployments');
+  }
+  const signer = new ethers.Wallet(
+    privateKey || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+    provider,
+  );
 
   // Read bytecode from the compiled artifact.
   const artifactPath = path.join(__dirname, '..', 'artifacts', 'contracts', 'MatchResult.sol', 'MatchResult.json');
@@ -46,10 +55,12 @@ async function main() {
   console.log('MatchResult deployed to:', address);
   console.log('deployer:', await signer.getAddress());
 
-  const outPath = path.join(__dirname, '..', 'match-result-address.json');
+  const outPath = process.env.MATCH_RESULT_DEPLOYMENT_FILE
+    || path.join(__dirname, '..', 'match-result-address.json');
   fs.writeFileSync(outPath, JSON.stringify({
     address,
-    network: process.env.HARDHAT_NETWORK || 'hardhat',
+    network: networkName,
+    chainId,
     timestamp: Date.now(),
   }, null, 2));
   console.log('Wrote', outPath);

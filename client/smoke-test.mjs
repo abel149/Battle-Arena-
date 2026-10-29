@@ -1,15 +1,19 @@
 // Smoke test: plays a full Memory Match vs the bot over Socket.IO.
 // Run from client/:  node smoke-test.mjs
 import { io } from 'socket.io-client';
+import { ethers } from 'ethers';
 
 const socket = io('http://localhost:3001');
-const me = '0x' + 'ab'.repeat(20);
+// Real secp256k1 key so the wallet can sign its ownership proof.
+const signer = ethers.Wallet.createRandom();
+const me = signer.address;
 let roomId = null;
 let moves = 0;
 
-socket.on('connect', () => {
+socket.on('connect', async () => {
   console.log('connected');
-  socket.emit('identify', { address: me, name: 'SmokeTest' });
+  const sig = await signer.signMessage(`Battle Arena login for ${me}`);
+  socket.emit('identify', { address: me, name: 'SmokeTest', signature: sig });
 });
 
 socket.on('match:start', (d) => {
