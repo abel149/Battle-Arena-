@@ -95,12 +95,39 @@ function sanitizeChatMessage(raw) {
   return trimmed.slice(0, 100);
 }
 
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
+const allowedOriginChecker = (origin, callback) => {
+  // Allow requests with no origin (curl, mobile/desktop shells, server-to-server)
+  if (!origin) return callback(null, true);
+  if (
+    origin === CLIENT_ORIGIN ||
+    origin === 'http://localhost:5173' ||
+    origin === 'http://127.0.0.1:5173' ||
+    origin === 'http://localhost:3000' ||
+    origin === 'http://127.0.0.1:3000' ||
+    /^http:\/\/localhost:[0-9]+$/.test(origin) ||
+    /^http:\/\/127\.0\.0\.1:[0-9]+$/.test(origin)
+  ) {
+    return callback(null, true);
+  }
+  return callback(new Error('CORS policy: origin not allowed'));
+};
+
 const app = express();
-app.use(cors());
+app.use(cors({ origin: allowedOriginChecker, credentials: true }));
 app.use(express.json());
 
+// Standard security headers (X-Content-Type-Options, X-Frame-Options, Referrer-Policy)
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
+
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+const io = new Server(server, { cors: { origin: allowedOriginChecker, credentials: true } });
 
 // ---- In-memory runtime state ----
 const rooms = new Map();          // roomId -> room
@@ -906,7 +933,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('queue:join', ({ gameType, deck, inviteCode } = {}) => {
-    const address = accountOf(socket) || socketPlayer.get(socket.id);
+    const address = accountOf(socket);
+    if (!address) return;
     const type = ENGINES[gameType] ? gameType : 'memory';
     if (!address || queue.some(q => q.socketId === socket.id)) return;
     const p = store.getPlayer(address) || store.upsertPlayer(address);

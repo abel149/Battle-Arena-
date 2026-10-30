@@ -75,6 +75,27 @@ test('Security SEC-01 & SEC-02: rejecting unauthenticated login and registration
   const noncedData = await loginNonced.json();
   assert.ok(noncedData.token, 'Session token returned on nonced login');
 
+  // 5. Security headers check (SEC-07)
+  const headRes = await fetch(`${serverUrl}/api/leaderboard`);
+  assert.equal(headRes.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(headRes.headers.get('x-frame-options'), 'DENY');
+  assert.equal(headRes.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
+
+  // 6. Guest queue bypass check (SEC-06)
+  const { io: ClientIO } = await import('socket.io-client');
+  const guestWallet = ethers.Wallet.createRandom();
+  const guestSock = ClientIO(serverUrl, { reconnection: false });
+  await new Promise(r => guestSock.on('connect', r));
+  const guestSig = await guestWallet.signMessage(`Battle Arena login for ${guestWallet.address}`);
+  guestSock.emit('identify', { address: guestWallet.address, name: 'GuestUser', signature: guestSig });
+  await new Promise(r => setTimeout(r, 80));
+
+  const guestErrPromise = new Promise(resolve => guestSock.on('player:error', resolve));
+  guestSock.emit('queue:join', { gameType: 'memory' });
+  const guestErr = await guestErrPromise;
+  assert.equal(guestErr.code, 'AUTH_REQUIRED', 'Unregistered guest must be blocked from matchmaking queue');
+
+  guestSock.disconnect();
   io.close();
   await new Promise(r => server.close(r));
   process.exit(0);
