@@ -32,7 +32,9 @@ export default function ConnectFour() {
   const [outOfEnergy, setOutOfEnergy] = useState(false);
 
   const roomRef = useRef(null);
-  useEffect(() => { roomRef.current = room; }, [room]);
+  useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
 
   useEffect(() => {
     async function start() {
@@ -131,9 +133,13 @@ export default function ConnectFour() {
   // Server silence safeguard
   useEffect(() => {
     if (mode === 'match' || game || roomCode || error) return;
-    const id = setTimeout(() => setError(
-      'The arena server did not respond. Restart it ("npm start" in the server folder) so it runs the latest code.'
-    ), 6000);
+    const id = setTimeout(
+      () =>
+        setError(
+          'The arena server did not respond. Restart it ("npm start" in the server folder) so it runs the latest code.'
+        ),
+      6000
+    );
     return () => clearTimeout(id);
   }, [mode, game, roomCode, error]);
 
@@ -145,7 +151,8 @@ export default function ConnectFour() {
 
   function handleDrop(col) {
     if (!room || !game || game.winner || watching) return;
-    const mySymbol = game.players.X === wallet.address ? 'X' : game.players.O === wallet.address ? 'O' : null;
+    const mySymbol =
+      game.players.X === wallet.address ? 'X' : game.players.O === wallet.address ? 'O' : null;
     if (game.turn !== mySymbol) return;
     socket.emit('game:move', { roomId: room.roomId, col });
   }
@@ -164,7 +171,8 @@ export default function ConnectFour() {
     }
   }
 
-  const mySymbol = game?.players.X === wallet.address ? 'X' : game?.players.O === wallet.address ? 'O' : null;
+  const mySymbol =
+    game?.players.X === wallet.address ? 'X' : game?.players.O === wallet.address ? 'O' : null;
   const isMyTurn = !watching && mySymbol && game?.turn === mySymbol && !game?.winner;
   const nameOf = (addr) => room?.names?.[addr] || short(addr) || 'Player';
 
@@ -198,11 +206,15 @@ export default function ConnectFour() {
             <div className="modal-icon">⚡</div>
             <h2>Out of Arena Energy!</h2>
             <p>
-              Arena Energy cannot be bought with money — it must be earned!
-              Clean your room, finish your homework, or pass the Brain Quiz to earn Energy and play again.
+              Arena Energy cannot be bought with money — it must be earned! Clean your room, finish
+              your homework, or pass the Brain Quiz to earn Energy and play again.
             </p>
             <div className="modal-actions">
-              <button type="button" className="btn-go-battlepass" onClick={() => navigate('battlepass')}>
+              <button
+                type="button"
+                className="btn-go-battlepass"
+                onClick={() => navigate('battlepass')}
+              >
                 Go to Battle Pass & Chores →
               </button>
               <button type="button" className="btn-cancel" onClick={() => navigate('hub')}>
@@ -220,9 +232,10 @@ export default function ConnectFour() {
             <div className="modal-icon">{error ? '⚠️' : mode === 'create' ? '🏷️' : '🔑'}</div>
             <h2>{error ? 'Match error' : mode === 'create' ? 'Room Ready' : 'Joining Room'}</h2>
             <p>
-              {error || (mode === 'create'
-                ? 'Share this 5-character code with a friend — the match begins as soon as they enter it.'
-                : 'Connecting to your friend’s Connect Four room…')}
+              {error ||
+                (mode === 'create'
+                  ? 'Share this 5-character code with a friend — the match begins as soon as they enter it.'
+                  : 'Connecting to your friend’s Connect Four room…')}
             </p>
             {!error && mode === 'create' && roomCode && <RoomCode code={roomCode} />}
             <div className="modal-actions">
@@ -260,11 +273,13 @@ export default function ConnectFour() {
               </div>
 
               <div className="c4-turn-pill">
-                {game.winner ? (
-                  game.winner === 'draw' ? 'Game Drawn!' : `${nameOf(game.players[game.winner])} Wins!`
-                ) : (
-                  isMyTurn ? '👉 Your Turn to Drop' : `Waiting for ${nameOf(game.players[game.turn])}…`
-                )}
+                {game.winner
+                  ? game.winner === 'draw'
+                    ? 'Game Drawn!'
+                    : `${nameOf(game.players[game.winner])} Wins!`
+                  : isMyTurn
+                    ? '👉 Your Turn to Drop'
+                    : `Waiting for ${nameOf(game.players[game.turn])}…`}
               </div>
 
               <div className="player-badge seat-o">
@@ -297,26 +312,32 @@ export default function ConnectFour() {
 
             {/* Board Frame & Slots */}
             <div className="c4-board-frame">
-              {(game?.grid || Array.from({ length: ROWS }, () => Array(COLS).fill(null))).map((row, r) => (
-                <div key={r} className="c4-row">
-                  {row.map((cell, c) => {
-                    const isWin = isWinCell(r, c);
-                    return (
-                      <div
-                        key={c}
-                        className={`c4-slot ${cell ? `filled cell-${cell.toLowerCase()}` : 'empty'} ${isWin ? 'win-slot' : ''}`}
-                        onClick={() => handleDrop(c)}
-                        onMouseEnter={() => setHoverCol(c)}
-                        onMouseLeave={() => setHoverCol(null)}
-                      >
-                        <div className="c4-slot-inner">
-                          {cell && <div className={`c4-disc disc-${cell.toLowerCase()} ${isWin ? 'disc-win' : ''}`} />}
+              {(game?.grid || Array.from({ length: ROWS }, () => Array(COLS).fill(null))).map(
+                (row, r) => (
+                  <div key={r} className="c4-row">
+                    {row.map((cell, c) => {
+                      const isWin = isWinCell(r, c);
+                      return (
+                        <div
+                          key={c}
+                          className={`c4-slot ${cell ? `filled cell-${cell.toLowerCase()}` : 'empty'} ${isWin ? 'win-slot' : ''}`}
+                          onClick={() => handleDrop(c)}
+                          onMouseEnter={() => setHoverCol(c)}
+                          onMouseLeave={() => setHoverCol(null)}
+                        >
+                          <div className="c4-slot-inner">
+                            {cell && (
+                              <div
+                                className={`c4-disc disc-${cell.toLowerCase()} ${isWin ? 'disc-win' : ''}`}
+                              />
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
+                      );
+                    })}
+                  </div>
+                )
+              )}
             </div>
           </div>
 
@@ -324,7 +345,13 @@ export default function ConnectFour() {
           {receipt && (
             <div className="c4-receipt-box">
               <div className="receipt-head">
-                <h3>{receipt.winner === wallet.address ? '🏆 Victory!' : receipt.winner === 'draw' ? '🤝 Draw!' : 'Match Finished'}</h3>
+                <h3>
+                  {receipt.winner === wallet.address
+                    ? '🏆 Victory!'
+                    : receipt.winner === 'draw'
+                      ? '🤝 Draw!'
+                      : 'Match Finished'}
+                </h3>
                 <span className="receipt-xp">+25 Battle Pass XP earned!</span>
               </div>
               <p className="receipt-sub">

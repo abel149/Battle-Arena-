@@ -128,9 +128,8 @@ export function getOrCreateWallet() {
     w = null;
   }
 
-  const keyless = !w?.privateKey
-    && w?.source !== 'metamask'
-    && !(w?.source === 'account' && getSessionToken());
+  const keyless =
+    !w?.privateKey && w?.source !== 'metamask' && !(w?.source === 'account' && getSessionToken());
 
   if (!w || !w.address || keyless) {
     const wallet = ethers.Wallet.createRandom();
@@ -223,7 +222,7 @@ export function restoreWalletFromInput(input, name) {
 
   const restored = {
     address: walletInstance.address,
-    name: name || ('Player-' + walletInstance.address.slice(2, 7)),
+    name: name || 'Player-' + walletInstance.address.slice(2, 7),
     privateKey: walletInstance.privateKey,
     mnemonic: phrase || null,
     source: 'imported',
@@ -253,7 +252,8 @@ export function exportKeystoreJson(wallet) {
     privateKey: wallet.privateKey || null,
     recoveryPhrase: wallet.mnemonic || null,
     exportedAt: new Date().toISOString(),
-    instructions: 'Keep this backup file private. Anyone with this file or phrase has full control over your player account and trophies.',
+    instructions:
+      'Keep this backup file private. Anyone with this file or phrase has full control over your player account and trophies.',
   };
   return JSON.stringify(backup, null, 2);
 }
@@ -265,7 +265,7 @@ export function exportKeystoreJson(wallet) {
  * @param {string | null | undefined} a - Full address string.
  * @returns {string} Truncated address.
  */
-export const short = a => (a && a.length > 12 ? a.slice(0, 6) + '…' + a.slice(-4) : a || '');
+export const short = (a) => (a && a.length > 12 ? a.slice(0, 6) + '…' + a.slice(-4) : a || '');
 
 /**
  * App-level authentication state hook: 'checking' | 'out' | 'in' | 'offline'.
@@ -279,7 +279,7 @@ export function useAuth() {
 
   useEffect(() => {
     const identify = () => signAndIdentify(getOrCreateWallet());
-    const onRegistered = yes => {
+    const onRegistered = (yes) => {
       if (!yes && !getSessionToken()) setStatus('out');
     };
     const onUser = () => setStatus('in');
@@ -287,7 +287,7 @@ export function useAuth() {
     socket.on('player:registered', onRegistered);
     socket.on('player:registered:user', onUser);
     if (socket.connected) identify();
-    const timer = setTimeout(() => setStatus(s => (s === 'checking' ? 'offline' : s)), 5000);
+    const timer = setTimeout(() => setStatus((s) => (s === 'checking' ? 'offline' : s)), 5000);
     return () => {
       clearTimeout(timer);
       socket.off('connect', identify);
@@ -317,7 +317,10 @@ export function useProfile() {
       if (!local) {
         const idbWallet = await idbGetWallet();
         if (idbWallet?.address && (idbWallet.privateKey || idbWallet.source === 'metamask')) {
-          console.log('[ArenaVault] Auto-healed account identity from IndexedDB:', idbWallet.address);
+          console.log(
+            '[ArenaVault] Auto-healed account identity from IndexedDB:',
+            idbWallet.address
+          );
           localStorage.setItem('arena_wallet', JSON.stringify(idbWallet));
           setWallet(idbWallet);
           signAndIdentify(idbWallet);
@@ -333,7 +336,9 @@ export function useProfile() {
   }, []);
 
   useEffect(() => {
-    const identify = () => { signAndIdentify(wallet); };
+    const identify = () => {
+      signAndIdentify(wallet);
+    };
     if (socket.connected) identify();
     socket.on('connect', identify);
     socket.on('player:update', setProfile);
@@ -345,7 +350,7 @@ export function useProfile() {
 
   useEffect(() => {
     if (!profile) return;
-    setWallet(w => (w.name === profile.name ? w : { ...w, name: profile.name }));
+    setWallet((w) => (w.name === profile.name ? w : { ...w, name: profile.name }));
   }, [profile]);
 
   return { wallet, setWallet, profile };

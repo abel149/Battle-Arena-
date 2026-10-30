@@ -37,9 +37,9 @@ export function createGame(addrX, addrO, opts = {}) {
     players: { X: addrX, O: addrO },
     difficulty,
     moves: [],
-    winner: null,     // 'X' | 'O' | 'draw' | null
-    winCells: null,   // [[r, c], [r, c], [r, c], [r, c]]
-    lastDrop: null,   // { row, col, symbol }
+    winner: null, // 'X' | 'O' | 'draw' | null
+    winCells: null, // [[r, c], [r, c], [r, c], [r, c]]
+    lastDrop: null, // { row, col, symbol }
   };
 }
 
@@ -56,9 +56,7 @@ export function createGame(addrX, addrO, opts = {}) {
  */
 export function applyMove(game, address, move) {
   if (game.winner) return { error: 'Game is over' };
-  const symbol =
-    game.players.X === address ? 'X' :
-    game.players.O === address ? 'O' : null;
+  const symbol = game.players.X === address ? 'X' : game.players.O === address ? 'O' : null;
   if (!symbol) return { error: 'Not a player in this game' };
   if (game.turn !== symbol) return { error: 'Not your turn' };
 
@@ -107,10 +105,10 @@ export function applyMove(game, address, move) {
  */
 function checkWin(grid, r, c, sym) {
   const directions = [
-    [0, 1],   // horizontal
-    [1, 0],   // vertical
-    [1, 1],   // diagonal down-right
-    [1, -1],  // diagonal down-left
+    [0, 1], // horizontal
+    [1, 0], // vertical
+    [1, 1], // diagonal down-right
+    [1, -1], // diagonal down-left
   ];
 
   for (const [dr, dc] of directions) {
@@ -190,7 +188,7 @@ export function botMove(game, difficulty = game.difficulty || 'medium') {
 
   if (difficulty === 'easy') {
     // 80% random, 20% instant win
-    if (Math.random() < 0.20) {
+    if (Math.random() < 0.2) {
       for (const col of validCols) {
         if (testWin(col, botSymbol)) return { col };
       }
@@ -211,7 +209,7 @@ export function botMove(game, difficulty = game.difficulty || 'medium') {
   }
 
   // 3) Avoid moves that hand the opponent a win directly above us
-  const safeCols = validCols.filter(col => {
+  const safeCols = validCols.filter((col) => {
     const r = getLowestEmptyRow(game.grid, col);
     if (r <= 0) return true; // top row, nothing can go above
     // simulate drop
@@ -226,7 +224,7 @@ export function botMove(game, difficulty = game.difficulty || 'medium') {
   // 4) Prefer center columns (3, then 2 & 4, then 1 & 5)
   const centerPriority = [3, 2, 4, 1, 5, 0, 6];
   for (const c of centerPriority) {
-    if (pool.includes(c) && (difficulty === 'hard' ? Math.random() < 0.85 : Math.random() < 0.50)) {
+    if (pool.includes(c) && (difficulty === 'hard' ? Math.random() < 0.85 : Math.random() < 0.5)) {
       return { col: c };
     }
   }

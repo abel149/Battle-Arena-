@@ -11,7 +11,10 @@ const WAITING_COPY = {
   create: ['Room ready', 'Share this code with a friend — the match starts as soon as they join.'],
   join: ['Joining room', 'Connecting you to your friend’s room…'],
   watch: ['Joining the match', 'Joining the match. If nothing appears, it has already finished.'],
-  match: ['Finding an opponent', 'Waiting for another player to join Memory Match. Open a second window to play against yourself.'],
+  match: [
+    'Finding an opponent',
+    'Waiting for another player to join Memory Match. Open a second window to play against yourself.',
+  ],
 };
 
 export default function MemoryMatch() {
@@ -37,7 +40,9 @@ export default function MemoryMatch() {
   const [deckLabel, setDeckLabel] = useState('Educational decks');
 
   const roomRef = useRef(null);
-  useEffect(() => { roomRef.current = room; }, [room]);
+  useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
 
   useEffect(() => {
     async function start() {
@@ -60,7 +65,7 @@ export default function MemoryMatch() {
   }, [mode, deck, inviteCode, joinCode, watchRoom]);
 
   useEffect(() => {
-    const onStart = data => {
+    const onStart = (data) => {
       const next = { roomId: data.roomId, names: data.names || {} };
       roomRef.current = next;
       setRoom(next);
@@ -71,17 +76,23 @@ export default function MemoryMatch() {
       setError(null);
       if (data.game?.deckLabel) setDeckLabel(data.game.deckLabel);
     };
-    const mine = roomId => !!roomId && roomId === roomRef.current?.roomId;
-    const onState = data => { if (mine(data.roomId)) setGame(data.game); };
-    const onEnd = data => {
+    const mine = (roomId) => !!roomId && roomId === roomRef.current?.roomId;
+    const onState = (data) => {
+      if (mine(data.roomId)) setGame(data.game);
+    };
+    const onEnd = (data) => {
       if (!mine(data.roomId)) return;
       setReceipt({ ...(data.receipt || {}), winner: data.winner, result: data.result });
     };
     const onWaiting = () => setQueued(true);
     const onRoomWaiting = ({ code }) => setRoomCode(code);
-    const onRoomExpired = () => { setRoomCode(null); setError('This room expired. Go back and create a new one.'); };
-    const onError = msg => setError(typeof msg === 'string' ? msg : msg?.error || 'Something went wrong');
-    const onMatchError = data => {
+    const onRoomExpired = () => {
+      setRoomCode(null);
+      setError('This room expired. Go back and create a new one.');
+    };
+    const onError = (msg) =>
+      setError(typeof msg === 'string' ? msg : msg?.error || 'Something went wrong');
+    const onMatchError = (data) => {
       setError(data?.error || 'Match error');
       setQueued(false);
     };
@@ -114,9 +125,9 @@ export default function MemoryMatch() {
 
   useEffect(() => {
     fetch(`${API}/api/decks`)
-      .then(r => r.json())
-      .then(list => {
-        const found = Array.isArray(list) && list.find(d => d.id === deck);
+      .then((r) => r.json())
+      .then((list) => {
+        const found = Array.isArray(list) && list.find((d) => d.id === deck);
         if (found) setDeckLabel(found.label);
       })
       .catch(() => {});
@@ -126,32 +137,43 @@ export default function MemoryMatch() {
   // or still running old code — say so instead of spinning forever.
   useEffect(() => {
     if (mode === 'match' || mode === 'watch' || game || roomCode || error) return;
-    const id = setTimeout(() => setError(
-      'The arena server did not respond. Restart it ("npm start" in the server folder) so it runs the latest code.'
-    ), 6000);
+    const id = setTimeout(
+      () =>
+        setError(
+          'The arena server did not respond. Restart it ("npm start" in the server folder) so it runs the latest code.'
+        ),
+      6000
+    );
     return () => clearTimeout(id);
   }, [mode, game, roomCode, error]);
 
   useEffect(() => {
     document.title = 'Memory Match — Battle Arena';
-    return () => { document.title = 'Battle Arena'; };
+    return () => {
+      document.title = 'Battle Arena';
+    };
   }, []);
 
   // When watching, the left card follows the first player (seat X).
   const meAddr = watching && game ? game.players.X : wallet.address;
-  const mySeat = game ? (game.players.X === meAddr ? 'X' : game.players.O === meAddr ? 'O' : null) : null;
+  const mySeat = game
+    ? game.players.X === meAddr
+      ? 'X'
+      : game.players.O === meAddr
+        ? 'O'
+        : null
+    : null;
   const oppSeat = mySeat === 'X' ? 'O' : 'X';
-  const myName = mode === 'bot'
-    ? 'You'
-    : (room?.names?.[meAddr] || (watching && meAddr ? short(meAddr) : 'You'));
+  const myName =
+    mode === 'bot' ? 'You' : room?.names?.[meAddr] || (watching && meAddr ? short(meAddr) : 'You');
   const oppAddr = game ? game.players[oppSeat] : null;
   const oppName = room?.names?.[oppAddr] || (oppAddr ? short(oppAddr) : 'Opponent');
   const myTurn = !!game && !game.winner && game.players[game.turn] === meAddr;
   // Memory scores are keyed by wallet address, not by seat.
-  const myScore = game ? game.scores?.[meAddr] ?? 0 : 0;
-  const oppScore = game && oppAddr ? game.scores?.[oppAddr] ?? 0 : 0;
+  const myScore = game ? (game.scores?.[meAddr] ?? 0) : 0;
+  const oppScore = game && oppAddr ? (game.scores?.[oppAddr] ?? 0) : 0;
 
-  const flip = useCallback(index => {
+  const flip = useCallback((index) => {
     const r = roomRef.current;
     if (!r?.roomId) return;
     socket.emit('game:move', { roomId: r.roomId, index });
@@ -174,25 +196,38 @@ export default function MemoryMatch() {
 
   const iWon = receipt && receipt.winner === wallet.address;
   const isDraw = receipt && !receipt.winner;
-  const winnerName = receipt?.winner ? (room?.names?.[receipt.winner] || short(receipt.winner)) : '';
+  const winnerName = receipt?.winner ? room?.names?.[receipt.winner] || short(receipt.winner) : '';
 
   return (
     <div className="mem-page">
       <header className="mem-top">
-        <a className="mem-back" href="#hub">← Lobby</a>
+        <a className="mem-back" href="#hub">
+          ← Lobby
+        </a>
         <h1 className="mem-title">Memory Match</h1>
-        <span className="mem-deck">{deckLabel}{watching ? ' · Watching' : ''}</span>
+        <span className="mem-deck">
+          {deckLabel}
+          {watching ? ' · Watching' : ''}
+        </span>
       </header>
 
       <div className="mem-arena">
         <div className="mem-scores">
-       <ScoreCard name={myName} score={myScore} me active={myTurn} you={!watching} />
+          <ScoreCard name={myName} score={myScore} me active={myTurn} you={!watching} />
           <div className="mem-status">
             {receipt
-              ? isDraw ? 'Draw' : watching ? `${winnerName} wins` : iWon ? 'Victory' : 'Defeat'
+              ? isDraw
+                ? 'Draw'
+                : watching
+                  ? `${winnerName} wins`
+                  : iWon
+                    ? 'Victory'
+                    : 'Defeat'
               : watching
                 ? `${myTurn ? myName : oppName}'s turn`
-                : myTurn ? 'Your turn' : `${oppName}'s turn`}
+                : myTurn
+                  ? 'Your turn'
+                  : `${oppName}'s turn`}
           </div>
           <ScoreCard
             name={oppName}
@@ -213,10 +248,21 @@ export default function MemoryMatch() {
                     'mem-card',
                     card.matched ? 'matched' : card.flipped ? 'flipped' : '',
                     card.matched && card.content ? 'learned' : '',
-                  ].filter(Boolean).join(' ')}
-                  disabled={watching || !myTurn || card.matched || card.flipped || game.locked || !!game.winner}
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  disabled={
+                    watching ||
+                    !myTurn ||
+                    card.matched ||
+                    card.flipped ||
+                    game.locked ||
+                    !!game.winner
+                  }
                   onClick={() => flip(i)}
-                  aria-label={card.flipped || card.matched ? `Card: ${card.content}` : 'Hidden card'}
+                  aria-label={
+                    card.flipped || card.matched ? `Card: ${card.content}` : 'Hidden card'
+                  }
                 >
                   <span className="mem-card-inner">
                     {card.flipped || card.matched ? (
@@ -224,7 +270,9 @@ export default function MemoryMatch() {
                         {card.content}
                       </span>
                     ) : (
-                      <span className="mem-q" aria-hidden="true">?</span>
+                      <span className="mem-q" aria-hidden="true">
+                        ?
+                      </span>
                     )}
                   </span>
                 </button>
@@ -240,8 +288,12 @@ export default function MemoryMatch() {
                   : game.locked
                     ? 'Checking the pair…'
                     : myTurn
-                      ? (watching ? `${myName} is flipping…` : 'Flip two cards — a matching pair scores and keeps your turn.')
-                      : (watching ? `${oppName} is flipping…` : 'Waiting for your rival to flip…')}
+                      ? watching
+                        ? `${myName} is flipping…`
+                        : 'Flip two cards — a matching pair scores and keeps your turn.'
+                      : watching
+                        ? `${oppName} is flipping…`
+                        : 'Waiting for your rival to flip…'}
               </span>
               {game.moveCount !== undefined && (
                 <span className="mem-moves">{game.moveCount} flips</span>
@@ -261,7 +313,15 @@ export default function MemoryMatch() {
             <div className="mem-result-head">
               <span className="mem-result-icon">{iWon ? '🏆' : isDraw ? '🤝' : '⚔️'}</span>
               <div>
-                <h2>{isDraw ? 'It’s a draw!' : watching ? `${winnerName} wins!` : iWon ? 'You win!' : 'You lose this one'}</h2>
+                <h2>
+                  {isDraw
+                    ? 'It’s a draw!'
+                    : watching
+                      ? `${winnerName} wins!`
+                      : iWon
+                        ? 'You win!'
+                        : 'You lose this one'}
+                </h2>
                 <p>
                   {myScore} : {oppScore} pairs
                   {receipt?.gameType ? ` · ${receipt.gameType}` : ''}
@@ -272,7 +332,7 @@ export default function MemoryMatch() {
               <div className="rematch-difficulty">
                 <span className="diff-title">🤖 Bot Level:</span>
                 <div className="diff-selector" role="radiogroup" aria-label="Bot Difficulty">
-                  {['easy', 'medium', 'hard'].map(lvl => (
+                  {['easy', 'medium', 'hard'].map((lvl) => (
                     <button
                       key={lvl}
                       type="button"
@@ -301,9 +361,13 @@ export default function MemoryMatch() {
                 </span>
               )}
               {mode === 'bot' && (
-                <button type="button" className="mem-btn" onClick={() => playAgain(difficulty)}>Play again</button>
+                <button type="button" className="mem-btn" onClick={() => playAgain(difficulty)}>
+                  Play again
+                </button>
               )}
-              <button type="button" className="mem-btn ghost" onClick={leave}>Back to hub</button>
+              <button type="button" className="mem-btn ghost" onClick={leave}>
+                Back to hub
+              </button>
             </div>
           </div>
         )}
@@ -316,7 +380,9 @@ export default function MemoryMatch() {
             <h2>{error ? 'Match error' : WAITING_COPY[mode][0]}</h2>
             <p>{error || WAITING_COPY[mode][1]}</p>
             {!error && mode === 'create' && roomCode && <RoomCode code={roomCode} />}
-            <button type="button" className="mem-btn" onClick={leave}>{error ? 'Back to hub' : 'Cancel'}</button>
+            <button type="button" className="mem-btn" onClick={leave}>
+              {error ? 'Back to hub' : 'Cancel'}
+            </button>
           </div>
         </div>
       )}
@@ -332,11 +398,14 @@ function ScoreCard({ name, score, active, me, you, difficulty }) {
         <span className="mem-name">
           {name}
           {you && <span className="mem-you">YOU</span>}
-          {difficulty && <span className={`diff-tag diff-${difficulty}`}>{difficulty.toUpperCase()}</span>}
+          {difficulty && (
+            <span className={`diff-tag diff-${difficulty}`}>{difficulty.toUpperCase()}</span>
+          )}
         </span>
-        <span className="mem-pairs">{score} {score === 1 ? 'pair' : 'pairs'}</span>
+        <span className="mem-pairs">
+          {score} {score === 1 ? 'pair' : 'pairs'}
+        </span>
       </div>
     </div>
   );
 }
-

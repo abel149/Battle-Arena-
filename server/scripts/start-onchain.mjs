@@ -14,7 +14,8 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SERVER_DIR = path.resolve(__dirname, '..');
 const NODE_URL = process.env.NODE_HTTP_URL || 'http://127.0.0.1:8545';
-const LOCAL_PK = process.env.PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+const LOCAL_PK =
+  process.env.PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 
 /**
  * Probes the target JSON-RPC endpoint with eth_blockNumber to test responsiveness.
@@ -57,7 +58,7 @@ async function main() {
     });
     // Wait up to 12s for node to initialize
     for (let i = 0; i < 24; i++) {
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 500));
       if (await checkRpc()) {
         rpcOk = true;
         break;
@@ -121,19 +122,27 @@ async function main() {
 
   const cleanup = () => {
     if (hardhatNodeProc) {
-      try { hardhatNodeProc.kill(); } catch {}
+      try {
+        hardhatNodeProc.kill();
+      } catch {}
     }
   };
 
-  process.on('SIGINT', () => { cleanup(); process.exit(0); });
-  process.on('SIGTERM', () => { cleanup(); process.exit(0); });
+  process.on('SIGINT', () => {
+    cleanup();
+    process.exit(0);
+  });
+  process.on('SIGTERM', () => {
+    cleanup();
+    process.exit(0);
+  });
   proc.on('exit', (code) => {
     cleanup();
     process.exit(code || 0);
   });
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error(err);
   process.exit(1);
 });

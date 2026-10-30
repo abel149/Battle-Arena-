@@ -6,9 +6,9 @@ test('getChores seeds default chores for a kid', () => {
   const kid = '0xKid' + Math.random().toString(36).slice(2, 8);
   const chores = store.getChores(kid);
   assert.ok(chores.length >= 5);
-  const titles = chores.map(c => c.title);
-  assert.ok(titles.some(t => t.includes('bedroom')));
-  assert.ok(titles.some(t => t.includes('homework')));
+  const titles = chores.map((c) => c.title);
+  assert.ok(titles.some((t) => t.includes('bedroom')));
+  assert.ok(titles.some((t) => t.includes('homework')));
 });
 
 test('kid submits chore and parent verifies it on-chain/ledger', () => {
@@ -71,7 +71,7 @@ test('Battle Pass vouchers unlock and parent can redeem them', () => {
 
   const vouchers = store.getVouchers(kid);
   assert.ok(vouchers.length >= 2); // tier 3 and tier 5 vouchers
-  const pizzaVoucher = vouchers.find(v => v.type === 'pizza');
+  const pizzaVoucher = vouchers.find((v) => v.type === 'pizza');
   assert.ok(pizzaVoucher);
   assert.equal(pizzaVoucher.status, 'unlocked');
 
@@ -106,7 +106,7 @@ test('parent can create custom chore and view kid dashboard', () => {
   // Parent dashboard should show it in pending
   const dashboard = store.getParentKids(parent);
   assert.ok(dashboard.kids.length >= 1);
-  assert.ok(dashboard.pendingChores.some(p => p.id === customChore.id));
+  assert.ok(dashboard.pendingChores.some((p) => p.id === customChore.id));
 
   // Parent verifies
   const v = store.verifyChore(customChore.id, parent);

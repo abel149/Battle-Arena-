@@ -46,9 +46,8 @@ function persist() {
 export function recordMatch({ matchId, gameType, players, winner, moves }) {
   const timestamp = Date.now();
   const payload = { matchId, gameType, players, winner, moves, timestamp };
-  const resultHash = '0x' + crypto.createHash('sha256')
-    .update(JSON.stringify(payload))
-    .digest('hex');
+  const resultHash =
+    '0x' + crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex');
 
   // Simulated transaction hash — on a real chain this comes from tx.hash
   const txHash = '0x' + crypto.randomBytes(32).toString('hex');

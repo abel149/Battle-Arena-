@@ -20,7 +20,8 @@ export default function ChoreSubmitModal({ skin, kidAddress, onClose, onSuccess 
       const choresRes = await fetch(`${API}/api/chores/${kidAddress}`);
       const data = await choresRes.json();
       const chores = data.chores || [];
-      const chore = chores.find(c => c.id === skin.choreId || c.category === skin.choreCategory) || chores[0];
+      const chore =
+        chores.find((c) => c.id === skin.choreId || c.category === skin.choreCategory) || chores[0];
 
       if (!chore) {
         throw new Error('Chore not found for this skin');
@@ -49,18 +50,25 @@ export default function ChoreSubmitModal({ skin, kidAddress, onClose, onSuccess 
 
   return (
     <div className="skin-modal-overlay" onClick={onClose}>
-      <div className="skin-modal-dialog" onClick={e => e.stopPropagation()}>
+      <div className="skin-modal-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="skin-modal-header">
-          <div className="skin-modal-badge" style={{ borderColor: skin.primaryColor, color: skin.primaryColor }}>
+          <div
+            className="skin-modal-badge"
+            style={{ borderColor: skin.primaryColor, color: skin.primaryColor }}
+          >
             ⚡ Chore Unlock Request
           </div>
-          <button type="button" className="skin-modal-close" onClick={onClose}>×</button>
+          <button type="button" className="skin-modal-close" onClick={onClose}>
+            ×
+          </button>
         </div>
 
         <div className="chore-submit-body">
           <div className="chore-skin-target">
             <span className="target-label">Unlocks Skin:</span>
-            <span className="target-name" style={{ color: skin.primaryColor }}>{skin.name}</span>
+            <span className="target-name" style={{ color: skin.primaryColor }}>
+              {skin.name}
+            </span>
           </div>
 
           <div className="chore-target-box">
@@ -76,7 +84,7 @@ export default function ChoreSubmitModal({ skin, kidAddress, onClose, onSuccess 
                 rows={3}
                 placeholder="e.g., I vacuumed the floor, made my bed neatly, and put my toys in the bin!"
                 value={notes}
-                onChange={e => setNotes(e.target.value)}
+                onChange={(e) => setNotes(e.target.value)}
                 autoFocus
               />
             </label>
@@ -87,7 +95,9 @@ export default function ChoreSubmitModal({ skin, kidAddress, onClose, onSuccess 
               <button
                 type="submit"
                 className="btn-submit-chore"
-                style={{ background: `linear-gradient(135deg, ${skin.primaryColor}, ${skin.accentColor})` }}
+                style={{
+                  background: `linear-gradient(135deg, ${skin.primaryColor}, ${skin.accentColor})`,
+                }}
                 disabled={submitting}
               >
                 {submitting ? 'Submitting...' : '🚀 Submit to Parents for Approval'}

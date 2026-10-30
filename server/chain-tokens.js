@@ -53,13 +53,17 @@ function readDeployment() {
 }
 
 const deployment = readDeployment();
-const localDeployment = ['hardhat', 'hardhat-local', 'localhost'].includes(deployment?.network)
-  || Number(deployment?.chainId) === 31337;
-const tokenAddress = process.env.ARENA_TOKEN_ADDRESS || (localDeployment ? null : deployment?.arenaToken);
-const badgesAddress = process.env.ARENA_BADGES_ADDRESS || (localDeployment ? null : deployment?.arenaBadges);
-const configuredTokenMatchesDeployment = tokenAddress?.toLowerCase() === deployment?.arenaToken?.toLowerCase();
-const expectedChainId = process.env.ARENA_CHAIN_ID
-  || (configuredTokenMatchesDeployment ? deployment?.chainId : null);
+const localDeployment =
+  ['hardhat', 'hardhat-local', 'localhost'].includes(deployment?.network) ||
+  Number(deployment?.chainId) === 31337;
+const tokenAddress =
+  process.env.ARENA_TOKEN_ADDRESS || (localDeployment ? null : deployment?.arenaToken);
+const badgesAddress =
+  process.env.ARENA_BADGES_ADDRESS || (localDeployment ? null : deployment?.arenaBadges);
+const configuredTokenMatchesDeployment =
+  tokenAddress?.toLowerCase() === deployment?.arenaToken?.toLowerCase();
+const expectedChainId =
+  process.env.ARENA_CHAIN_ID || (configuredTokenMatchesDeployment ? deployment?.chainId : null);
 const USE_TOKENS_ONCHAIN = Boolean(tokenAddress && badgesAddress);
 
 let provider, signer, tokenContract, badgesContract;
@@ -76,7 +80,8 @@ async function ensureContracts() {
   if (tokenContract) return { tokenContract, badgesContract };
   if (!USE_TOKENS_ONCHAIN) return null;
 
-  if (!process.env.NODE_HTTP_URL) throw new Error('NODE_HTTP_URL is required when on-chain rewards are enabled');
+  if (!process.env.NODE_HTTP_URL)
+    throw new Error('NODE_HTTP_URL is required when on-chain rewards are enabled');
   if (!process.env.PRIVATE_KEY) throw new Error('PRIVATE_KEY is required to mint on-chain rewards');
 
   provider = getProvider();
@@ -84,9 +89,13 @@ async function ensureContracts() {
   if (expectedChainId && network.chainId !== BigInt(expectedChainId)) {
     throw new Error(`Connected to chain ${network.chainId}, expected ${expectedChainId}`);
   }
-  for (const [label, address] of [['ArenaToken', tokenAddress], ['ArenaBadges', badgesAddress]]) {
+  for (const [label, address] of [
+    ['ArenaToken', tokenAddress],
+    ['ArenaBadges', badgesAddress],
+  ]) {
     const code = await provider.getCode(address);
-    if (code === '0x') throw new Error(`No contract deployed at ${address} (${label}) on chain ${network.chainId}`);
+    if (code === '0x')
+      throw new Error(`No contract deployed at ${address} (${label}) on chain ${network.chainId}`);
   }
 
   // NonceManager avoids the automining nonce race: two sequential sends can
@@ -141,7 +150,7 @@ export async function tokenBalance(address) {
  * @param {string} a - Ethereum address.
  * @returns {string} Lowercase address string.
  */
-const hexAddress = a => String(a).toLowerCase();
+const hexAddress = (a) => String(a).toLowerCase();
 
 /**
  * Converts a whole ARENA token amount to 18-decimal wei integer BigInt.
@@ -150,7 +159,7 @@ const hexAddress = a => String(a).toLowerCase();
  * @param {number|string} whole - Whole ARENA token units.
  * @returns {bigint} Token amount in 10^18 units.
  */
-const amountFor = whole => BigInt(whole) * 10n ** 18n;
+const amountFor = (whole) => BigInt(whole) * 10n ** 18n;
 
 /**
  * Distributes match rewards (ERC-20 ARENA tokens and ERC-1155 badges) on-chain.
@@ -164,11 +173,16 @@ const amountFor = whole => BigInt(whole) * 10n ** 18n;
 export async function distributeRewards(rewards) {
   if (!USE_TOKENS_ONCHAIN) {
     // Simulated fallback — same shape, no tx hashes.
-    return Object.fromEntries(rewards.map(r => [r.address, {
-      tokens: r.tokens,
-      tokenTx: null,
-      badges: (r.badges || []).map(b => ({ id: b.id, label: b.label, tx: null })),
-    }]));
+    return Object.fromEntries(
+      rewards.map((r) => [
+        r.address,
+        {
+          tokens: r.tokens,
+          tokenTx: null,
+          badges: (r.badges || []).map((b) => ({ id: b.id, label: b.label, tx: null })),
+        },
+      ])
+    );
   }
 
   const c = await ensureContracts();

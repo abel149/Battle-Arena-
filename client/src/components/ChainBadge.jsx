@@ -18,7 +18,11 @@ export default function ChainBadge({ status }) {
   if (!status) return null;
 
   if (status.offline) {
-    return <span className="chain-badge off" title="Cannot reach the arena server">⛓ Server offline</span>;
+    return (
+      <span className="chain-badge off" title="Cannot reach the arena server">
+        ⛓ Server offline
+      </span>
+    );
   }
   if (!status.onchain) {
     return (
@@ -31,7 +35,11 @@ export default function ChainBadge({ status }) {
     );
   }
   if (status.error) {
-    return <span className="chain-badge err" title={status.error}>⚠ Chain unreachable</span>;
+    return (
+      <span className="chain-badge err" title={status.error}>
+        ⚠ Chain unreachable
+      </span>
+    );
   }
   return (
     <span

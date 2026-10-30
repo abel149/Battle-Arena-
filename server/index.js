@@ -8,13 +8,39 @@ import cors from 'cors';
 import { Server } from 'socket.io';
 import crypto from 'crypto';
 import {
-  verifyAuthSignature, generateAuthNonce, requireSession, same, canAdminister, isParentUnlocked, unlockParent,
-  corsOptions, isAllowedOrigin, securityHeaders, rateLimit,
+  verifyAuthSignature,
+  generateAuthNonce,
+  requireSession,
+  same,
+  canAdminister,
+  isParentUnlocked,
+  unlockParent,
+  corsOptions,
+  isAllowedOrigin,
+  securityHeaders,
+  rateLimit,
 } from './security.js';
 import { ENGINES, DECKS, dailyDeckId } from './games/index.js';
-import { recordMatch, getLedger, isOnchain, chainInfo, normalizeLedgerEntry, ONCHAIN_LABELS } from './chain-onchain.js';
-import { distributeRewards, isTokensOnchain, tokenAddresses, tokenBalance } from './chain-tokens.js';
-import { recordChoreVerification, verifyParentAttestation, getChoreLedger, isChoreOnchain } from './chain-chore.js';
+import {
+  recordMatch,
+  getLedger,
+  isOnchain,
+  chainInfo,
+  normalizeLedgerEntry,
+  ONCHAIN_LABELS,
+} from './chain-onchain.js';
+import {
+  distributeRewards,
+  isTokensOnchain,
+  tokenAddresses,
+  tokenBalance,
+} from './chain-tokens.js';
+import {
+  recordChoreVerification,
+  verifyParentAttestation,
+  getChoreLedger,
+  isChoreOnchain,
+} from './chain-chore.js';
 import * as store from './store.js';
 
 const PORT = process.env.PORT || 3001;
@@ -23,7 +49,8 @@ const BOT_STEP_MS = 700;
 const ROOM_RETENTION_MS = 10 * 60 * 1000; // finished rooms expire after 10 min
 
 // Kid safety: profanity filtering & preset moderation pattern
-const PROFANITY_PATTERN = /\b(fuck|shit|bitch|ass|asshole|dick|pussy|cunt|bastard|damn|crap|whore|slut|nigger|nigga|faggot|retard|idiot|stupid|kill|die)\b/i;
+const PROFANITY_PATTERN =
+  /\b(fuck|shit|bitch|ass|asshole|dick|pussy|cunt|bastard|damn|crap|whore|slut|nigger|nigga|faggot|retard|idiot|stupid|kill|die)\b/i;
 
 /**
  * Moderates user chat text, sanitizing profanity and limiting message length to 100 characters.
@@ -55,9 +82,9 @@ const io = new Server(server, {
 });
 
 // ---- In-memory runtime state ----
-const rooms = new Map();          // roomId -> room
-const queue = [];                 // { socketId, gameType } waiting for a match
-const socketPlayer = new Map();   // socketId -> address
+const rooms = new Map(); // roomId -> room
+const queue = []; // { socketId, gameType } waiting for a match
+const socketPlayer = new Map(); // socketId -> address
 
 /**
  * Broadcasts an event and payload to all connected sockets belonging to an Ethereum wallet address.
@@ -76,10 +103,16 @@ function notifyPlayer(address, event, payload) {
     }
   }
 }
-const liveListeners = new Set();  // socketIds in the lobby (for rooms:live push)
-const pendingRooms = new Map();   // room code -> host waiting for a friend to join
+const liveListeners = new Set(); // socketIds in the lobby (for rooms:live push)
+const pendingRooms = new Map(); // room code -> host waiting for a friend to join
 const lobbyChat = [
-  { from: 'ArenaBot', address: '0xB07000000000000000000000000000000000000B', text: '👋 Welcome to Battle Arena! Challenge a rival or cheer on live matches.', t: Date.now() - 30000, time: Date.now() - 30000 },
+  {
+    from: 'ArenaBot',
+    address: '0xB07000000000000000000000000000000000000B',
+    text: '👋 Welcome to Battle Arena! Challenge a rival or cheer on live matches.',
+    t: Date.now() - 30000,
+    time: Date.now() - 30000,
+  },
 ];
 
 const PENDING_ROOM_MS = 10 * 60 * 1000;
@@ -94,7 +127,10 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I lookalik
 function makeRoomCode() {
   let code;
   do {
-    code = Array.from({ length: 5 }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join('');
+    code = Array.from(
+      { length: 5 },
+      () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]
+    ).join('');
   } while (pendingRooms.has(code));
   return code;
 }
@@ -144,7 +180,8 @@ app.get('/api/tournament', (_req, res) => {
       { rank: 2, arenaReward: 150, badge: 'Silver Arena Duelist', xp: 300 },
       { rank: 3, arenaReward: 100, badge: 'Bronze Arena Contender', xp: 150 },
     ],
-    rules: 'Top 3 players on the weekly leaderboard at Sunday 23:59 UTC receive ARENA token mints and exclusive on-chain championship badges.',
+    rules:
+      'Top 3 players on the weekly leaderboard at Sunday 23:59 UTC receive ARENA token mints and exclusive on-chain championship badges.',
     standings: topPlayers,
     totalContenders: standings.length,
   });
@@ -161,7 +198,12 @@ app.get('/api/replay/:matchId', (req, res) => {
 
 app.get('/api/wallet/:address/tokens', async (req, res) => {
   try {
-    if (!isTokensOnchain()) return res.json({ onchain: false, symbol: 'ARENA', balance: store.safeProfile(req.params.address)?.tokens ?? 0 });
+    if (!isTokensOnchain())
+      return res.json({
+        onchain: false,
+        symbol: 'ARENA',
+        balance: store.safeProfile(req.params.address)?.tokens ?? 0,
+      });
     const balance = await tokenBalance(req.params.address);
     res.json({ onchain: true, symbol: 'ARENA', balance, addresses: tokenAddresses() });
   } catch (err) {
@@ -200,7 +242,7 @@ app.get('/api/verify/:matchId', async (req, res) => {
     // On-chain entries are normalized by chain-onchain.js; when a deployment cannot
     // recover the original matchId, matchIdRaw is the exact bytes32 stored on-chain.
     const entry = ledger.find(
-      e => e.matchId === requestedMatchId || e.matchIdRaw === requestedMatchId
+      (e) => e.matchId === requestedMatchId || e.matchIdRaw === requestedMatchId
     );
     entry ? res.json({ valid: true, entry }) : res.status(404).json({ valid: false });
   } catch (err) {
@@ -210,12 +252,14 @@ app.get('/api/verify/:matchId', async (req, res) => {
 });
 app.get('/api/decks', (_req, res) => {
   const daily = dailyDeckId();
-  res.json(Object.entries(DECKS).map(([id, d]) => ({
-    id,
-    label: d.label,
-    pairs: d.pairs.length,
-    daily: id === daily,
-  })));
+  res.json(
+    Object.entries(DECKS).map(([id, d]) => ({
+      id,
+      label: d.label,
+      pairs: d.pairs.length,
+      daily: id === daily,
+    }))
+  );
 });
 
 app.get('/api/auth/nonce', (req, res) => {
@@ -233,7 +277,9 @@ app.post('/api/register', async (req, res) => {
   if (!address) return res.status(400).json({ error: 'address is required' });
   // Wallet ownership must be proven with a valid signature.
   if (!signature) {
-    return res.status(401).json({ error: 'Signature required: prove wallet ownership to register' });
+    return res
+      .status(401)
+      .json({ error: 'Signature required: prove wallet ownership to register' });
   }
   if (!verifyAuthSignature(signature, address, issuedAt)) {
     return res.status(401).json({ error: 'Invalid or expired wallet signature' });
@@ -258,7 +304,8 @@ app.post('/api/login', async (req, res) => {
   }
 
   // 2) By wallet address: require signature verification OR password
-  if (!address) return res.status(400).json({ error: 'address is required when not using username+password' });
+  if (!address)
+    return res.status(400).json({ error: 'address is required when not using username+password' });
 
   let signatureVerified = false;
   if (signature) {
@@ -270,7 +317,9 @@ app.post('/api/login', async (req, res) => {
 
   // If neither valid signature nor password is provided, reject immediately
   if (!signatureVerified && !password) {
-    return res.status(401).json({ error: 'Authentication required: provide a valid wallet signature or password' });
+    return res
+      .status(401)
+      .json({ error: 'Authentication required: provide a valid wallet signature or password' });
   }
 
   const result = await store.loginPlayer(address, { username, name, password, signatureVerified });
@@ -297,7 +346,8 @@ app.get('/api/battlepass/tiers', (_req, res) => {
 app.get('/api/chores/:address', requireSession, (req, res) => {
   const address = req.params.address;
   const isParentOf = same(store.getPlayer(address)?.parentAddress, req.auth.address);
-  if (!same(address, req.auth.address) && !isParentOf) return res.status(403).json({ error: 'Not your account' });
+  if (!same(address, req.auth.address) && !isParentOf)
+    return res.status(403).json({ error: 'Not your account' });
   const p = store.getPlayer(address) || store.upsertPlayer(address);
   const chores = store.getChores(address);
   const vouchers = store.getVouchers(address);
@@ -316,8 +366,10 @@ app.get('/api/chores/:address', requireSession, (req, res) => {
 
 app.post('/api/chores/submit', requireSession, (req, res) => {
   const { kidAddress, choreId, notes } = req.body || {};
-  if (!kidAddress || !choreId) return res.status(400).json({ error: 'kidAddress and choreId required' });
-  if (!same(kidAddress, req.auth.address)) return res.status(403).json({ error: 'You can only submit your own chores' });
+  if (!kidAddress || !choreId)
+    return res.status(400).json({ error: 'kidAddress and choreId required' });
+  if (!same(kidAddress, req.auth.address))
+    return res.status(403).json({ error: 'You can only submit your own chores' });
   const result = store.submitChore(kidAddress, choreId, notes);
   if (result.error) return res.status(400).json(result);
   const p = store.getPlayer(kidAddress);
@@ -330,13 +382,18 @@ app.post('/api/chores/submit', requireSession, (req, res) => {
 
 app.post('/api/chores/verify', requireSession, async (req, res) => {
   const { choreId, parentAddress, signature, message } = req.body || {};
-  if (!choreId || !parentAddress) return res.status(400).json({ error: 'choreId and parentAddress required' });
+  if (!choreId || !parentAddress)
+    return res.status(400).json({ error: 'choreId and parentAddress required' });
 
   // Only the linked parent account, or the kid's session after the Parent PIN, may approve.
   const target = store.getChoreById(choreId);
   if (!target) return res.status(404).json({ error: 'Chore not found' });
   if (!canAdminister(req.auth, target.kidAddress)) {
-    return res.status(403).json({ error: 'Parent approval required (link a parent account or unlock with the Parent PIN)' });
+    return res
+      .status(403)
+      .json({
+        error: 'Parent approval required (link a parent account or unlock with the Parent PIN)',
+      });
   }
 
   // If signed attestation provided, verify it
@@ -381,15 +438,23 @@ app.post('/api/chores/verify', requireSession, async (req, res) => {
 });
 
 app.post('/api/chores/create', requireSession, (req, res) => {
-  const { kidAddress, parentAddress, title, category, energyReward, xpReward, allowanceReward } = req.body || {};
-  if (!kidAddress || !title) return res.status(400).json({ error: 'kidAddress and title required' });
-  if (!canAdminister(req.auth, kidAddress)) return res.status(403).json({ error: 'Parent approval required' });
+  const { kidAddress, parentAddress, title, category, energyReward, xpReward, allowanceReward } =
+    req.body || {};
+  if (!kidAddress || !title)
+    return res.status(400).json({ error: 'kidAddress and title required' });
+  if (!canAdminister(req.auth, kidAddress))
+    return res.status(403).json({ error: 'Parent approval required' });
   const cleanTitle = String(title).trim().slice(0, 100);
   if (!cleanTitle) return res.status(400).json({ error: 'Valid title required' });
-  const cleanCategory = String(category || 'custom').trim().slice(0, 30);
+  const cleanCategory = String(category || 'custom')
+    .trim()
+    .slice(0, 30);
   const safeEnergy = Math.max(1, Math.min(5, Math.floor(Number(energyReward) || 2)));
   const safeXp = Math.max(10, Math.min(100, Math.floor(Number(xpReward) || 40)));
-  const safeAllowance = Math.max(0, Math.min(20, Math.round((Number(allowanceReward) || 5) * 100) / 100));
+  const safeAllowance = Math.max(
+    0,
+    Math.min(20, Math.round((Number(allowanceReward) || 5) * 100) / 100)
+  );
 
   const chore = store.createCustomChore({
     kidAddress,
@@ -407,8 +472,10 @@ app.post('/api/chores/create', requireSession, (req, res) => {
 app.post('/api/chores/quiz-complete', requireSession, (req, res) => {
   const { kidAddress, score } = req.body || {};
   if (!kidAddress) return res.status(400).json({ error: 'kidAddress required' });
-  if (!same(kidAddress, req.auth.address)) return res.status(403).json({ error: 'Not your account' });
-  if (score < 4) return res.status(400).json({ error: 'Need at least 4/5 correct answers to pass' });
+  if (!same(kidAddress, req.auth.address))
+    return res.status(403).json({ error: 'Not your account' });
+  if (score < 4)
+    return res.status(400).json({ error: 'Need at least 4/5 correct answers to pass' });
   const result = store.completeBrainQuiz(kidAddress);
   if (result.error) return res.status(400).json(result);
   const updated = store.getPlayer(kidAddress);
@@ -420,7 +487,8 @@ app.post('/api/chores/quiz-complete', requireSession, (req, res) => {
 
 app.post('/api/parent/link', requireSession, (req, res) => {
   const { kidAddress, parentAddress } = req.body || {};
-  if (!kidAddress || !parentAddress) return res.status(400).json({ error: 'kidAddress and parentAddress required' });
+  if (!kidAddress || !parentAddress)
+    return res.status(400).json({ error: 'kidAddress and parentAddress required' });
   // Either the kid links their parent, or a parent claims a kid that has no parent yet.
   const kidSelf = same(kidAddress, req.auth.address);
   const parentSelf = same(parentAddress, req.auth.address);
@@ -440,8 +508,8 @@ app.get('/api/parent/:parentAddress/dashboard', requireSession, (req, res) => {
   // Only return kids/chores this session may administer, whatever address was asked for.
   const data = store.getParentKids(req.params.parentAddress);
   res.json({
-    kids: data.kids.filter(k => canAdminister(req.auth, k.address)),
-    pendingChores: data.pendingChores.filter(c => canAdminister(req.auth, c.kidAddress)),
+    kids: data.kids.filter((k) => canAdminister(req.auth, k.address)),
+    pendingChores: data.pendingChores.filter((c) => canAdminister(req.auth, c.kidAddress)),
   });
 });
 
@@ -450,7 +518,8 @@ app.post('/api/vouchers/redeem', requireSession, (req, res) => {
   if (!voucherId) return res.status(400).json({ error: 'voucherId required' });
   const voucher = store.getVoucherById(voucherId);
   if (!voucher) return res.status(404).json({ error: 'Voucher not found' });
-  if (!canAdminister(req.auth, voucher.kidAddress)) return res.status(403).json({ error: 'Parent approval required' });
+  if (!canAdminister(req.auth, voucher.kidAddress))
+    return res.status(403).json({ error: 'Parent approval required' });
   const result = store.redeemVoucher(voucherId, parentAddress);
   if (result.error) return res.status(400).json(result);
   res.json(result);
@@ -493,7 +562,11 @@ app.post('/api/parent/set-pin', (req, res) => {
   // Verify authorization: valid session token, valid wallet signature, or verified current PIN
   let authorized = false;
   if (effectiveToken && sessionAddress && same(sessionAddress, targetAddress)) {
-    if (!store.hasParentPin(targetAddress) || isParentUnlocked(effectiveToken) || (currentPin && store.verifyParentPin(targetAddress, currentPin).ok)) {
+    if (
+      !store.hasParentPin(targetAddress) ||
+      isParentUnlocked(effectiveToken) ||
+      (currentPin && store.verifyParentPin(targetAddress, currentPin).ok)
+    ) {
       authorized = true;
     }
   } else if (signature && verifyAuthSignature(signature, targetAddress)) {
@@ -503,7 +576,12 @@ app.post('/api/parent/set-pin', (req, res) => {
   }
 
   if (!authorized) {
-    return res.status(401).json({ error: 'Authentication required: provide correct current PIN, session token, or wallet signature' });
+    return res
+      .status(401)
+      .json({
+        error:
+          'Authentication required: provide correct current PIN, session token, or wallet signature',
+      });
   }
 
   const result = store.setParentPin(targetAddress, pin);
@@ -579,8 +657,13 @@ function armRoundTimer(room) {
 function broadcastLiveRooms() {
   if (!liveListeners.size) return;
   const list = [...rooms.values()]
-    .filter(r => !r.game.winner && !r.private)
-    .map(r => ({ roomId: r.id, gameType: r.gameType, players: r.names, spectators: r.spectators.size }));
+    .filter((r) => !r.game.winner && !r.private)
+    .map((r) => ({
+      roomId: r.id,
+      gameType: r.gameType,
+      players: r.names,
+      spectators: r.spectators.size,
+    }));
   for (const sid of liveListeners) io.to(sid).emit('rooms:list', list);
 }
 
@@ -649,12 +732,12 @@ async function finishRoom(room) {
       address: addr,
       tokens: profile.tokens - (before?.tokens ?? 0),
       badges: profile.badges
-        .filter(b => !beforeBadges.some(x => x.id === b.id))
-        .map(b => ({ id: store.badgeNumericId(b.id), label: b.label }))
-        .filter(b => b.id != null),
+        .filter((b) => !beforeBadges.some((x) => x.id === b.id))
+        .map((b) => ({ id: store.badgeNumericId(b.id), label: b.label }))
+        .filter((b) => b.id != null),
     });
     const sid = room.sockets[addr];
-    if (sid)    io.to(sid).emit('player:update', profile);
+    if (sid) io.to(sid).emit('player:update', profile);
     // DB-only update: profile, stats, badges. The on-chain reward is handled
     // separately by distributeRewards().
   }
@@ -666,9 +749,10 @@ async function finishRoom(room) {
     deck: room.game.deck || null,
     players: { X: addrX, O: addrO },
     names: room.names,
-    layout: room.gameType === 'memory'
-      ? room.game.cards.map(c => ({ pairId: c.pairId, content: c.content }))
-      : null,
+    layout:
+      room.gameType === 'memory'
+        ? room.game.cards.map((c) => ({ pairId: c.pairId, content: c.content }))
+        : null,
     result: game.winner,
     winner: winnerAddr,
     moves: game.moves,
@@ -746,7 +830,8 @@ function afterEngineMove(room, res) {
   // Turn-based games: move when it is the bot's turn. Simultaneous games
   // (Math Arena): the bot can lock its answer at any point in the round.
   const botHasTurn = room.game.players[room.game.turn] === BOT;
-  const botUnanswered = !!room.game.answered && room.game.players.O === BOT && !room.game.answered.O;
+  const botUnanswered =
+    !!room.game.answered && room.game.players.O === BOT && !room.game.answered.O;
   if (botHasTurn || botUnanswered) {
     setTimeout(() => botStep(room.id), BOT_STEP_MS);
   }
@@ -762,7 +847,8 @@ function botStep(roomId) {
   const room = rooms.get(roomId);
   if (!room || room.game.winner) return;
   const botHasTurn = room.game.players[room.game.turn] === BOT;
-  const botUnanswered = !!room.game.answered && room.game.players.O === BOT && !room.game.answered.O;
+  const botUnanswered =
+    !!room.game.answered && room.game.players.O === BOT && !room.game.answered.O;
   if (!botHasTurn && !botUnanswered) return;
   const res = room.engine.applyMove(room.game, BOT, room.engine.botMove(room.game));
   broadcastState(room);
@@ -791,7 +877,10 @@ function createRoom(gameType, addrX, addrO, getSocket, opts = {}) {
   const botName = `ArenaBot (${diffLabel})`;
 
   const skinX = store.getEquippedSkin(addrX)?.id || 'neon-striker';
-  const skinO = (addrO === BOT) ? (opts?.skinO || 'crimson-phoenix') : (store.getEquippedSkin(addrO)?.id || 'neon-striker');
+  const skinO =
+    addrO === BOT
+      ? opts?.skinO || 'crimson-phoenix'
+      : store.getEquippedSkin(addrO)?.id || 'neon-striker';
 
   const room = {
     id,
@@ -836,7 +925,9 @@ function createRoom(gameType, addrX, addrO, getSocket, opts = {}) {
         if (bMove) room.engine.applyMove(room.game, BOT, bMove);
       }
       room.engine.tick(room.game, 40);
-      const tickData = room.engine.serializeTick ? room.engine.serializeTick(room.game) : room.engine.serialize(room.game);
+      const tickData = room.engine.serializeTick
+        ? room.engine.serializeTick(room.game)
+        : room.engine.serialize(room.game);
       io.to(room.id).emit('blaster:tick', tickData);
       if (room.game.winner) {
         clearInterval(room.tickInterval);
@@ -865,7 +956,7 @@ function createRoom(gameType, addrX, addrO, getSocket, opts = {}) {
 function maybeForfeit(socket) {
   for (const room of rooms.values()) {
     if (room.game.winner) continue;
-    const addr = Object.keys(room.sockets).find(a => room.sockets[a] === socket.id);
+    const addr = Object.keys(room.sockets).find((a) => room.sockets[a] === socket.id);
     if (!addr) continue;
     const seat = room.game.players.X === addr ? 'X' : room.game.players.O === addr ? 'O' : null;
     if (!seat) continue;
@@ -893,7 +984,10 @@ function maybeForfeit(socket) {
 function accountOf(socket) {
   const address = socketPlayer.get(socket.id);
   if (address && store.isRegistered(address)) return address;
-  socket.emit('player:error', { error: 'Log in or create an account to play.', code: 'AUTH_REQUIRED' });
+  socket.emit('player:error', {
+    error: 'Log in or create an account to play.',
+    code: 'AUTH_REQUIRED',
+  });
   return null;
 }
 
@@ -912,7 +1006,11 @@ function bindIdentity(socket, address) {
   const registered = store.isRegistered(address);
   socket.emit('player:registered', registered);
   if (registered) {
-    socket.emit('player:registered:user', { address, username: profile.username, name: profile.name });
+    socket.emit('player:registered:user', {
+      address,
+      username: profile.username,
+      name: profile.name,
+    });
   }
 }
 
@@ -920,14 +1018,18 @@ function bindIdentity(socket, address) {
 const LOGIN_WINDOW_MS = 10 * 60 * 1000;
 const LOGIN_MAX_FAILS = 8;
 const loginFails = new Map(); // ip -> { count, resetAt }
-const loginBlocked = ip => {
+const loginBlocked = (ip) => {
   const f = loginFails.get(ip);
-  if (!f || Date.now() > f.resetAt) { loginFails.delete(ip); return false; }
+  if (!f || Date.now() > f.resetAt) {
+    loginFails.delete(ip);
+    return false;
+  }
   return f.count >= LOGIN_MAX_FAILS;
 };
-const noteLoginFail = ip => {
+const noteLoginFail = (ip) => {
   const f = loginFails.get(ip);
-  if (!f || Date.now() > f.resetAt) loginFails.set(ip, { count: 1, resetAt: Date.now() + LOGIN_WINDOW_MS });
+  if (!f || Date.now() > f.resetAt)
+    loginFails.set(ip, { count: 1, resetAt: Date.now() + LOGIN_WINDOW_MS });
   else f.count += 1;
 };
 
@@ -969,7 +1071,10 @@ io.on('connection', (socket) => {
       bindIdentity(socket, sessionAddress);
       // Auto-resume active match on reconnect/refresh/restart
       for (const room of rooms.values()) {
-        if (!room.game.winner && (room.game.players.X === sessionAddress || room.game.players.O === sessionAddress)) {
+        if (
+          !room.game.winner &&
+          (room.game.players.X === sessionAddress || room.game.players.O === sessionAddress)
+        ) {
           room.sockets[sessionAddress] = socket.id;
           socket.join(room.id);
           socket.emit('match:resumed', serializeRoom(room));
@@ -979,14 +1084,20 @@ io.on('connection', (socket) => {
       }
       return;
     }
-    if (!address) return socket.emit('player:error', { error: 'Not identified: no address provided' });
-    if (!signature || typeof signature !== 'string' || !signature.trim()) return socket.emit('player:error', { error: 'Not identified: signature required' });
-    if (!verifyAuthSignature(signature, address, issuedAt)) return socket.emit('player:error', { error: 'Not identified: invalid or expired signature' });
+    if (!address)
+      return socket.emit('player:error', { error: 'Not identified: no address provided' });
+    if (!signature || typeof signature !== 'string' || !signature.trim())
+      return socket.emit('player:error', { error: 'Not identified: signature required' });
+    if (!verifyAuthSignature(signature, address, issuedAt))
+      return socket.emit('player:error', { error: 'Not identified: invalid or expired signature' });
     bindIdentity(socket, address);
 
     // Auto-resume active match on reconnect/refresh/restart
     for (const room of rooms.values()) {
-      if (!room.game.winner && (room.game.players.X === address || room.game.players.O === address)) {
+      if (
+        !room.game.winner &&
+        (room.game.players.X === address || room.game.players.O === address)
+      ) {
         room.sockets[address] = socket.id;
         socket.join(room.id);
         socket.emit('match:resumed', serializeRoom(room));
@@ -998,7 +1109,12 @@ io.on('connection', (socket) => {
 
   const authSuccess = (result) => {
     const token = store.createSession(result.address);
-    socket.emit('auth:success', { address: result.address, username: result.username, name: result.name, token });
+    socket.emit('auth:success', {
+      address: result.address,
+      username: result.username,
+      name: result.name,
+      token,
+    });
   };
 
   // Register a new player identity (wallet + username + password + optional email)
@@ -1006,7 +1122,8 @@ io.on('connection', (socket) => {
     const address = socketPlayer.get(socket.id);
     if (!address) return socket.emit('player:error', { error: 'Not identified' });
     const result = await store.registerPlayer(address, { name, username, email, password });
-    if (result.error) return socket.emit('player:error', { error: result.error, conflict: result.conflict });
+    if (result.error)
+      return socket.emit('player:error', { error: result.error, conflict: result.conflict });
     bindIdentity(socket, result.address);
     authSuccess(result);
   });
@@ -1014,7 +1131,10 @@ io.on('connection', (socket) => {
   // Log in by username + password (wallet resolved from the username index).
   socket.on('player:loginByCredentials', async ({ username, password } = {}) => {
     const ip = socket.handshake.address;
-    if (loginBlocked(ip)) return socket.emit('player:error', { error: 'Too many failed attempts. Try again in a few minutes.' });
+    if (loginBlocked(ip))
+      return socket.emit('player:error', {
+        error: 'Too many failed attempts. Try again in a few minutes.',
+      });
     const result = await store.loginPlayerByCredentials({ username, password });
     if (result.error) {
       noteLoginFail(ip);
@@ -1029,7 +1149,7 @@ io.on('connection', (socket) => {
     store.deleteSession(token);
     socketPlayer.delete(socket.id);
     dropPendingFor(socket.id);
-    const i = queue.findIndex(q => q.socketId === socket.id);
+    const i = queue.findIndex((q) => q.socketId === socket.id);
     if (i !== -1) queue.splice(i, 1);
     socket.emit('player:registered', false);
   });
@@ -1045,14 +1165,18 @@ io.on('connection', (socket) => {
     if (result.error) return socket.emit('player:error', { error: result.error });
     socket.emit('player:update', store.withoutPassword(result));
     socket.emit('player:registered', !!result.registered);
-    socket.emit('player:registered:user', { address: result.address, username: result.username, name: result.name });
+    socket.emit('player:registered:user', {
+      address: result.address,
+      username: result.username,
+      name: result.name,
+    });
   });
 
   socket.on('queue:join', ({ gameType, deck, inviteCode } = {}) => {
     const address = accountOf(socket);
     if (!address) return;
     const type = ENGINES[gameType] ? gameType : 'memory';
-    if (!address || queue.some(q => q.socketId === socket.id)) return;
+    if (!address || queue.some((q) => q.socketId === socket.id)) return;
     const p = store.getPlayer(address) || store.upsertPlayer(address);
     if ((p.energy ?? 5) <= 0) {
       return socket.emit('match:error', {
@@ -1066,7 +1190,9 @@ io.on('connection', (socket) => {
     socket.emit('queue:waiting', { gameType: type, inviteCode: cleanInvite });
 
     // Pair the first two players waiting for the same game & invite code
-    const peers = queue.filter(q => q.gameType === type && (cleanInvite ? q.inviteCode === cleanInvite : !q.inviteCode));
+    const peers = queue.filter(
+      (q) => q.gameType === type && (cleanInvite ? q.inviteCode === cleanInvite : !q.inviteCode)
+    );
     if (peers.length >= 2) {
       const [a, b] = peers;
       const addrA = socketPlayer.get(a.socketId);
@@ -1076,13 +1202,15 @@ io.on('connection', (socket) => {
       if ((pA?.energy ?? 5) <= 0) {
         queue.splice(queue.indexOf(a), 1);
         const sockA = io.sockets.sockets.get(a.socketId);
-        if (sockA) sockA.emit('match:error', { error: '⚡ Out of Arena Energy!', needsEnergy: true });
+        if (sockA)
+          sockA.emit('match:error', { error: '⚡ Out of Arena Energy!', needsEnergy: true });
         return;
       }
       if ((pB?.energy ?? 5) <= 0) {
         queue.splice(queue.indexOf(b), 1);
         const sockB = io.sockets.sockets.get(b.socketId);
-        if (sockB) sockB.emit('match:error', { error: '⚡ Out of Arena Energy!', needsEnergy: true });
+        if (sockB)
+          sockB.emit('match:error', { error: '⚡ Out of Arena Energy!', needsEnergy: true });
         return;
       }
       for (const p of peers.slice(0, 2)) {
@@ -1095,15 +1223,15 @@ io.on('connection', (socket) => {
         type,
         addrA,
         addrB,
-        addr => [sockA, sockB].find(s => socketPlayer.get(s.id) === addr),
-        { deck: a.deck },
+        (addr) => [sockA, sockB].find((s) => socketPlayer.get(s.id) === addr),
+        { deck: a.deck }
       );
     }
   });
 
   // Also cancels a waiting private room — pages emit this when the player leaves.
   socket.on('queue:leave', () => {
-    const i = queue.findIndex(q => q.socketId === socket.id);
+    const i = queue.findIndex((q) => q.socketId === socket.id);
     if (i !== -1) queue.splice(i, 1);
     dropPendingFor(socket.id);
   });
@@ -1113,7 +1241,7 @@ io.on('connection', (socket) => {
     const address = accountOf(socket);
     if (!address) return;
     const type = ENGINES[gameType] ? gameType : 'memory';
-    const qi = queue.findIndex(q => q.socketId === socket.id);
+    const qi = queue.findIndex((q) => q.socketId === socket.id);
     if (qi !== -1) queue.splice(qi, 1);
     dropPendingFor(socket.id); // one waiting room per player
     const code = makeRoomCode();
@@ -1121,32 +1249,48 @@ io.on('connection', (socket) => {
       pendingRooms.delete(code);
       io.to(socket.id).emit('room:expired', { code });
     }, PENDING_ROOM_MS);
-    pendingRooms.set(code, { code, gameType: type, deck, pairs, hostSocketId: socket.id, hostAddr: address, timer });
+    pendingRooms.set(code, {
+      code,
+      gameType: type,
+      deck,
+      pairs,
+      hostSocketId: socket.id,
+      hostAddr: address,
+      timer,
+    });
     socket.emit('room:waiting', { code, gameType: type });
   });
 
   socket.on('room:join', ({ code } = {}) => {
     const address = accountOf(socket);
     if (!address) return;
-    const key = String(code || '').trim().toUpperCase();
+    const key = String(code || '')
+      .trim()
+      .toUpperCase();
     const pending = pendingRooms.get(key);
-    if (!pending) return socket.emit('player:error', { error: 'Room not found. Check the code and try again.' });
-    if (pending.hostAddr === address) return socket.emit('player:error', { error: 'That is your own room — share the code with a friend.' });
+    if (!pending)
+      return socket.emit('player:error', {
+        error: 'Room not found. Check the code and try again.',
+      });
+    if (pending.hostAddr === address)
+      return socket.emit('player:error', {
+        error: 'That is your own room — share the code with a friend.',
+      });
     const hostSocket = io.sockets.sockets.get(pending.hostSocketId);
     if (!hostSocket) {
       dropPendingRoom(key);
       return socket.emit('player:error', { error: 'The host has left this room.' });
     }
     dropPendingRoom(key);
-    const qi = queue.findIndex(q => q.socketId === socket.id);
+    const qi = queue.findIndex((q) => q.socketId === socket.id);
     if (qi !== -1) queue.splice(qi, 1);
     dropPendingFor(socket.id);
     createRoom(
       pending.gameType,
       pending.hostAddr,
       address,
-      addr => [hostSocket, socket].find(s => socketPlayer.get(s.id) === addr),
-      { deck: pending.deck, pairs: pending.pairs, private: true },
+      (addr) => [hostSocket, socket].find((s) => socketPlayer.get(s.id) === addr),
+      { deck: pending.deck, pairs: pending.pairs, private: true }
     );
   });
 
@@ -1162,8 +1306,11 @@ io.on('connection', (socket) => {
       });
     }
     const diff = ['easy', 'medium', 'hard'].includes(difficulty) ? difficulty : 'medium';
-    const room = createRoom(type, address, BOT,
-      addr => (addr === address ? socket : null), { deck, pairs, difficulty: diff });
+    const room = createRoom(type, address, BOT, (addr) => (addr === address ? socket : null), {
+      deck,
+      pairs,
+      difficulty: diff,
+    });
     // If the bot ever has the first turn, drive it
     afterEngineMove(room);
   });
@@ -1251,7 +1398,9 @@ io.on('connection', (socket) => {
     const address = socketPlayer.get(socket.id);
     if (!address || !text?.trim()) return;
     if (isChatRateLimited(socket.id)) {
-      return socket.emit('chat:rate_limited', { error: 'Please wait a moment before sending another message.' });
+      return socket.emit('chat:rate_limited', {
+        error: 'Please wait a moment before sending another message.',
+      });
     }
     const cleanText = sanitizeChatMessage(text);
     if (!cleanText) return;
@@ -1273,7 +1422,9 @@ io.on('connection', (socket) => {
     const address = socketPlayer.get(socket.id);
     if (!address || !text?.trim()) return;
     if (isChatRateLimited(socket.id)) {
-      return socket.emit('chat:rate_limited', { error: 'Please wait a moment before sending another message.' });
+      return socket.emit('chat:rate_limited', {
+        error: 'Please wait a moment before sending another message.',
+      });
     }
     const cleanText = sanitizeChatMessage(text);
     if (!cleanText) return;
@@ -1335,7 +1486,7 @@ io.on('connection', (socket) => {
   socket.on('rooms:list', () => broadcastLiveRooms());
 
   socket.on('disconnect', () => {
-    const i = queue.findIndex(q => q.socketId === socket.id);
+    const i = queue.findIndex((q) => q.socketId === socket.id);
     if (i !== -1) queue.splice(i, 1);
     dropPendingFor(socket.id);
     maybeForfeit(socket);
@@ -1384,7 +1535,9 @@ function restoreActiveRooms() {
           if (bMove) room.engine.applyMove(room.game, BOT, bMove);
         }
         room.engine.tick(room.game, 40);
-        const tickData = room.engine.serializeTick ? room.engine.serializeTick(room.game) : room.engine.serialize(room.game);
+        const tickData = room.engine.serializeTick
+          ? room.engine.serializeTick(room.game)
+          : room.engine.serialize(room.game);
         io.to(room.id).emit('blaster:tick', tickData);
         if (room.game.winner) {
           clearInterval(room.tickInterval);
@@ -1404,8 +1557,14 @@ function restoreActiveRooms() {
 
 restoreActiveRooms();
 
-if (process.env.NODE_ENV !== 'test' && process.env.REQUIRE_ONCHAIN === 'true' && (!isOnchain() || !isTokensOnchain())) {
-  console.error('\nReal blockchain required. Start with `npm start` (deploys contracts and sets\nMATCH_RESULT_ADDRESS / ARENA_TOKEN_ADDRESS / ARENA_BADGES_ADDRESS / NODE_HTTP_URL / PRIVATE_KEY).\n');
+if (
+  process.env.NODE_ENV !== 'test' &&
+  process.env.REQUIRE_ONCHAIN === 'true' &&
+  (!isOnchain() || !isTokensOnchain())
+) {
+  console.error(
+    '\nReal blockchain required. Start with `npm start` (deploys contracts and sets\nMATCH_RESULT_ADDRESS / ARENA_TOKEN_ADDRESS / ARENA_BADGES_ADDRESS / NODE_HTTP_URL / PRIVATE_KEY).\n'
+  );
   process.exit(1);
 }
 
@@ -1419,12 +1578,15 @@ if (process.env.NODE_ENV !== 'test') {
     }
     if (isTokensOnchain()) {
       const { arenaToken, arenaBadges } = tokenAddresses();
-      console.log(`On-chain rewards ENABLED — ArenaToken ${arenaToken}, ArenaBadges ${arenaBadges}`);
+      console.log(
+        `On-chain rewards ENABLED — ArenaToken ${arenaToken}, ArenaBadges ${arenaBadges}`
+      );
     } else {
-      console.log('Rewards: simulated only (set ARENA_TOKEN_ADDRESS/ARENA_BADGES_ADDRESS to enable)');
+      console.log(
+        'Rewards: simulated only (set ARENA_TOKEN_ADDRESS/ARENA_BADGES_ADDRESS to enable)'
+      );
     }
   });
 }
 
 export { server, app, io };
-

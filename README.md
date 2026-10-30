@@ -57,7 +57,7 @@ cd Battle-Arena-
 npm install
 ```
 
-*(Alternatively, you can manually run `npm --prefix server install` and `npm --prefix client install`).*
+_(Alternatively, you can manually run `npm --prefix server install` and `npm --prefix client install`)._
 
 ### 2. Start the Blockchain Node & Game Server
 
@@ -68,6 +68,7 @@ npm start
 ```
 
 > **What `npm start` does automatically:**
+>
 > 1. Detects if a local blockchain node is running on `http://127.0.0.1:8545`. If not, it automatically boots a local **Hardhat node**.
 > 2. Automatically compiles and deploys the smart contracts:
 >    - `MatchResult.sol` (on-chain immutable match receipts, protected by `onlyOwner`)
@@ -128,7 +129,7 @@ Now open **http://localhost:5173** in your web browser!
    lsof -ti :3001,8545,5173 | xargs kill -9
    ```
 3. **Local Network Permission**:
-   When macOS prompts *"Node wants to find and connect to devices on your local network"*, click **Allow** so multiplayer works across LAN devices.
+   When macOS prompts _"Node wants to find and connect to devices on your local network"_, click **Allow** so multiplayer works across LAN devices.
 
 ---
 
@@ -144,11 +145,13 @@ Now open **http://localhost:5173** in your web browser!
 
 2. **PowerShell Script Execution Policy**:
    If PowerShell throws `File ... cannot be loaded because running scripts is disabled on this system`:
+
    ```powershell
    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
    ```
 
 3. **Running the App**:
+
    ```powershell
    # Terminal 1: Starts blockchain + game server
    npm start
@@ -171,7 +174,7 @@ Battle Arena supports playing between two separate laptops, tablets, or phones c
 1. **Find the host machine's Local IP address:**
    - **Linux**: Run `hostname -I` (e.g. `192.168.1.8`)
    - **macOS**: Run `ipconfig getifaddr en0`
-   - **Windows**: Run `ipconfig` (look for *IPv4 Address* under your active Wi-Fi adapter)
+   - **Windows**: Run `ipconfig` (look for _IPv4 Address_ under your active Wi-Fi adapter)
 2. **Start the server and client on the host machine:**
    ```bash
    npm start        # Terminal 1
@@ -182,7 +185,7 @@ Battle Arena supports playing between two separate laptops, tablets, or phones c
    ```
    http://<HOST_IP>:5173     (e.g., http://192.168.1.8:5173)
    ```
-   *The client automatically resolves Socket.IO connections to `http://<HOST_IP>:3001`.*
+   _The client automatically resolves Socket.IO connections to `http://<HOST_IP>:3001`._
 
 ---
 
@@ -305,20 +308,26 @@ Battle-Arena-/
 ## ❓ Troubleshooting & FAQs
 
 ### 1. `Error: listen EADDRINUSE: address already in use :::3001` or `8545`
+
 Another instance of the backend or Hardhat is running in the background.
+
 - **Linux/macOS**: `fuser -k 3001/tcp 8545/tcp 5173/tcp`
 - **Windows**: `npx kill-port 3001 8545 5173`
 
 ### 2. "Arena server offline — start it with 'cd server && npm start'"
+
 Your frontend cannot connect to port 3001. Ensure `npm start` is running in your first terminal.
 
 ### 3. Native module compilation errors (`better-sqlite3`)
+
 - **Linux**: Run `sudo apt install build-essential python3`
 - **macOS**: Run `xcode-select --install`
 - **Windows**: Run `npm install --global windows-build-tools` (or install Visual Studio Community Desktop C++).
 
 ### 4. How do I reset player data, tokens, and match history?
+
 Delete the SQLite database file in `server/`:
+
 ```bash
 # Linux / macOS:
 rm server/data.sqlite
@@ -326,10 +335,13 @@ rm server/data.sqlite
 # Windows (PowerShell):
 Remove-Item server/data.sqlite
 ```
+
 The server will automatically generate a fresh schema on next boot.
 
 ### 5. MetaMask Nonce Desync on Localhost
+
 If you restart the local Hardhat node, transaction nonces reset to 0. In MetaMask:
+
 - Go to **Settings** → **Advanced** → **Clear activity and nonce data** (or Reset Account).
 - Ensure your network RPC is set to `http://127.0.0.1:8545` with Chain ID `31337`.
 

@@ -2,6 +2,7 @@
   "name": "battle-arena",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "install:all": "npm --prefix server install && npm --prefix client install",
     "postinstall": "npm --prefix server install && npm --prefix client install",
@@ -10,6 +11,17 @@
     "client": "npm --prefix client dev",
     "dev": "npm --prefix server start",
     "test": "npm --prefix server test",
-    "build": "npm --prefix client run build"
+    "build": "npm --prefix client run build",
+    "lint": "eslint server/ client/src/",
+    "lint:fix": "eslint --fix server/ client/src/",
+    "format": "prettier --write \"server/**/*.{js,mjs}\" \"client/src/**/*.{js,jsx}\" \"*.{js,json,md}\"",
+    "format:check": "prettier --check \"server/**/*.{js,mjs}\" \"client/src/**/*.{js,jsx}\" \"*.{js,json,md}\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.14.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10"
   }
 }

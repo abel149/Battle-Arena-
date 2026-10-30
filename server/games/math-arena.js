@@ -43,13 +43,21 @@ function makeQuestion() {
   const op = OPERATORS[rand(0, OPERATORS.length - 1)];
   let a, b, answer;
   if (op === '+') {
-    a = rand(12, 89); b = rand(12, 89); answer = a + b;
+    a = rand(12, 89);
+    b = rand(12, 89);
+    answer = a + b;
   } else if (op === '−') {
-    a = rand(40, 99); b = rand(11, 39); answer = a - b;
+    a = rand(40, 99);
+    b = rand(11, 39);
+    answer = a - b;
   } else if (op === '×') {
-    a = rand(3, 12); b = rand(3, 12); answer = a * b;
+    a = rand(3, 12);
+    b = rand(3, 12);
+    answer = a * b;
   } else {
-    b = rand(3, 12); answer = rand(3, 12); a = b * answer;
+    b = rand(3, 12);
+    answer = rand(3, 12);
+    a = b * answer;
   }
 
   const options = new Set([answer]);
@@ -154,14 +162,11 @@ function resolveRound(game) {
  */
 export function applyMove(game, address, move) {
   if (game.winner) return { error: 'Game is over' };
-  const seat =
-    game.players.X === address ? 'X' :
-    game.players.O === address ? 'O' : null;
+  const seat = game.players.X === address ? 'X' : game.players.O === address ? 'O' : null;
   if (!seat) return { error: 'Not a player in this game' };
   if (game.answered[seat]) return { error: 'Answer already locked' };
-  const index = Number.isInteger(move?.index) && move.index >= 0 && move.index < 4
-    ? move.index
-    : null;
+  const index =
+    Number.isInteger(move?.index) && move.index >= 0 && move.index < 4 ? move.index : null;
 
   game.answered[seat] = true;
   game.picks[seat] = index;
@@ -187,7 +192,13 @@ export function timeoutRound(game) {
     if (!game.answered[seat]) {
       game.answered[seat] = true;
       game.picks[seat] = null;
-      game.moves.push({ round: game.round, index: null, address: game.players[seat], t: Date.now(), timeout: true });
+      game.moves.push({
+        round: game.round,
+        index: null,
+        address: game.players[seat],
+        t: Date.now(),
+        timeout: true,
+      });
       timedOut = true;
     }
   }
@@ -215,12 +226,10 @@ export const timeoutMove = timeoutRound;
 export function botMove(game, difficulty = game.difficulty || 'medium') {
   const q = game.questions[game.round];
   if (!q) return { index: 0 };
-  const accuracy =
-    difficulty === 'easy' ? 0.35 :
-    difficulty === 'hard' ? 0.95 : 0.70;
+  const accuracy = difficulty === 'easy' ? 0.35 : difficulty === 'hard' ? 0.95 : 0.7;
 
   if (Math.random() < accuracy) return { index: q.correct };
-  const wrong = [0, 1, 2, 3].filter(i => i !== q.correct);
+  const wrong = [0, 1, 2, 3].filter((i) => i !== q.correct);
   return { index: wrong[Math.floor(Math.random() * wrong.length)] };
 }
 

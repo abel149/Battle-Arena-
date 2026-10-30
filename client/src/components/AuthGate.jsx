@@ -34,7 +34,9 @@ export default function AuthGate({ status }) {
         {wallet.source === 'metamask' ? ' (MetaMask)' : ''}
       </span>
       {wallet.source !== 'metamask' && (
-        <button type="button" onClick={useMetaMask}>Use my MetaMask wallet</button>
+        <button type="button" onClick={useMetaMask}>
+          Use my MetaMask wallet
+        </button>
       )}
       {walletError && <em>{walletError}</em>}
     </div>
@@ -45,7 +47,8 @@ export default function AuthGate({ status }) {
       <div className="hub-glow" aria-hidden="true" />
       {status === 'offline' && (
         <div className="hub-alert">
-          Cannot reach the arena server. Start it with "cd server &amp;&amp; npm start" — this page reconnects automatically.
+          Cannot reach the arena server. Start it with "cd server &amp;&amp; npm start" — this page
+          reconnects automatically.
         </div>
       )}
       <AuthModal gate extra={walletBox} />

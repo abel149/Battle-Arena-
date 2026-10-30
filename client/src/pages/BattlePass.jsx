@@ -121,10 +121,7 @@ export default function BattlePass() {
 
   const refreshAll = useCallback(async () => {
     setLoading(true);
-    await Promise.all([
-      loadKidData(wallet.address),
-      loadParentDashboard(wallet.address),
-    ]);
+    await Promise.all([loadKidData(wallet.address), loadParentDashboard(wallet.address)]);
     setLoading(false);
   }, [loadKidData, loadParentDashboard, wallet.address]);
 
@@ -135,7 +132,10 @@ export default function BattlePass() {
   // Real-time socket events for proof-of-chore & energy updates
   useEffect(() => {
     const onChoreVerified = (payload) => {
-      showToast(`🎉 Chore verified on-chain! +${payload?.chore?.energyReward || 2} ⚡ Energy added!`, 'success');
+      showToast(
+        `🎉 Chore verified on-chain! +${payload?.chore?.energyReward || 2} ⚡ Energy added!`,
+        'success'
+      );
       refreshAll();
     };
     const onChoreUpdated = () => refreshAll();
@@ -203,7 +203,10 @@ export default function BattlePass() {
           });
         } catch {
           // If MetaMask rejected signature, notify
-          showToast('MetaMask signature cancelled. Attestation will proceed via server oracle.', 'info');
+          showToast(
+            'MetaMask signature cancelled. Attestation will proceed via server oracle.',
+            'info'
+          );
         }
       } else if (wallet.privateKey) {
         // Sign with local wallet key
@@ -223,7 +226,10 @@ export default function BattlePass() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Verification failed');
-      showToast(`Verified! Recorded on-chain (${json.onchainRecord?.txHash?.slice(0, 10) || 'simulated'}...). Kid received ⚡ energy & allowance.`, 'success');
+      showToast(
+        `Verified! Recorded on-chain (${json.onchainRecord?.txHash?.slice(0, 10) || 'simulated'}...). Kid received ⚡ energy & allowance.`,
+        'success'
+      );
       refreshAll();
     } catch (err) {
       showToast(err.message, 'error');
@@ -253,7 +259,13 @@ export default function BattlePass() {
       if (!res.ok) throw new Error(json.error || 'Failed to create chore');
       showToast('Custom chore bounty created!', 'success');
       setShowCustomChore(false);
-      setNewChore({ title: '', category: 'study', energyReward: 2, xpReward: 50, allowanceReward: 2.0 });
+      setNewChore({
+        title: '',
+        category: 'study',
+        energyReward: 2,
+        xpReward: 50,
+        allowanceReward: 2.0,
+      });
       refreshAll();
     } catch (err) {
       showToast(err.message, 'error');
@@ -305,7 +317,8 @@ export default function BattlePass() {
     e.preventDefault();
     setPinError(null);
     try {
-      const parentTarget = data?.parentAddress || profile?.parentAddress || wallet.address || 'default';
+      const parentTarget =
+        data?.parentAddress || profile?.parentAddress || wallet.address || 'default';
       const res = await fetch(`${API}/api/parent/verify-pin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -337,14 +350,15 @@ export default function BattlePass() {
       return;
     }
     try {
-      const parentTarget = data?.parentAddress || profile?.parentAddress || wallet.address || 'default';
+      const parentTarget =
+        data?.parentAddress || profile?.parentAddress || wallet.address || 'default';
       const res = await fetch(`${API}/api/parent/set-pin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           address: parentTarget,
           pin: newPin.trim(),
-          currentPin: parentPinInput.trim(),
+          currentPin: parentPin.trim(),
         }),
       });
       const resData = await res.json();
@@ -361,7 +375,7 @@ export default function BattlePass() {
   const currentXp = data?.battlePassXp ?? profile?.battlePassXp ?? 0;
   const allowance = data?.allowanceBalance ?? profile?.allowanceBalance ?? 0;
   const tiers = data?.tiers || [];
-  const nextTierObj = tiers.find(t => t.tier === currentTier + 1);
+  const nextTierObj = tiers.find((t) => t.tier === currentTier + 1);
   const nextTierXp = nextTierObj ? nextTierObj.xpRequired : 5000;
   const xpProgressPercent = Math.min(100, Math.round((currentXp / nextTierXp) * 100));
 
@@ -372,11 +386,7 @@ export default function BattlePass() {
       <div className="bp-glow" aria-hidden="true" />
 
       {/* Toast Alert */}
-      {toast && (
-        <div className={`bp-toast toast-${toast.type}`}>
-          {toast.msg}
-        </div>
-      )}
+      {toast && <div className={`bp-toast toast-${toast.type}`}>{toast.msg}</div>}
 
       {/* Top Navbar */}
       <header className="bp-topbar">
@@ -419,7 +429,8 @@ export default function BattlePass() {
         <div className="hook-content">
           <div className="hook-headline">Earn Energy & Quests</div>
           <div className="hook-sub">
-            Finish real-world chores or answer quick quiz questions to earn Energy, unlock season tiers, and save allowance tokens.
+            Finish real-world chores or answer quick quiz questions to earn Energy, unlock season
+            tiers, and save allowance tokens.
           </div>
         </div>
         <div className="hook-cta">
@@ -444,7 +455,9 @@ export default function BattlePass() {
           <div className="stat-icon">🏆</div>
           <div className="stat-details">
             <div className="stat-num">Tier {currentTier}</div>
-            <div className="stat-name">{currentXp} / {nextTierXp} XP</div>
+            <div className="stat-name">
+              {currentXp} / {nextTierXp} XP
+            </div>
           </div>
           <div className="xp-bar-outer">
             <div className="xp-bar-inner" style={{ width: `${xpProgressPercent}%` }} />
@@ -463,7 +476,9 @@ export default function BattlePass() {
         <div className="stat-card parent-link-stat">
           <div className="stat-icon">🔗</div>
           <div className="stat-details">
-            <div className="stat-num">{data?.parentAddress ? short(data.parentAddress) : 'Unlinked'}</div>
+            <div className="stat-num">
+              {data?.parentAddress ? short(data.parentAddress) : 'Unlinked'}
+            </div>
             <div className="stat-name">Parent Oracle</div>
           </div>
           <div className="stat-note">
@@ -507,10 +522,15 @@ export default function BattlePass() {
                 <div>
                   <h2 className="section-title">Daily Chore Bounties</h2>
                   <p className="section-sub">
-                    Pick a chore, complete it in the real world, and click "I Did This!" for your parent to verify on-chain.
+                    Pick a chore, complete it in the real world, and click "I Did This!" for your
+                    parent to verify on-chain.
                   </p>
                 </div>
-                <button type="button" className="btn-take-quiz-pill" onClick={() => setShowQuiz(true)}>
+                <button
+                  type="button"
+                  className="btn-take-quiz-pill"
+                  onClick={() => setShowQuiz(true)}
+                >
                   🧠 Instant Energy: Brain Quiz
                 </button>
               </div>
@@ -522,21 +542,23 @@ export default function BattlePass() {
                   return (
                     <div key={c.id} className={`chore-card status-${c.status}`}>
                       <div className="chore-card-top">
-                        <span className="category-chip">{categoryIcon(c.category)} {c.category}</span>
+                        <span className="category-chip">
+                          {categoryIcon(c.category)} {c.category}
+                        </span>
                         <span className={`status-chip status-${c.status}`}>
-                          {isVerified ? '✅ Verified On-Chain' : isPending ? '⏳ Pending Approval' : 'Ready'}
+                          {isVerified
+                            ? '✅ Verified On-Chain'
+                            : isPending
+                              ? '⏳ Pending Approval'
+                              : 'Ready'}
                         </span>
                       </div>
 
                       <h3 className="chore-title">{c.title}</h3>
 
                       <div className="chore-bounties">
-                        <span className="bounty-item energy">
-                          ⚡ +{c.energyReward} Energy
-                        </span>
-                        <span className="bounty-item xp">
-                          ⭐ +{c.xpReward} XP
-                        </span>
+                        <span className="bounty-item energy">⚡ +{c.energyReward} Energy</span>
+                        <span className="bounty-item xp">⭐ +{c.xpReward} XP</span>
                         <span className="bounty-item allowance">
                           💵 +${c.allowanceReward?.toFixed(2)}
                         </span>
@@ -548,9 +570,7 @@ export default function BattlePass() {
                             Verified by Parent Oracle! Rewards claimed.
                           </div>
                         ) : isPending ? (
-                          <div className="pending-note">
-                            Waiting for parent attestation...
-                          </div>
+                          <div className="pending-note">Waiting for parent attestation...</div>
                         ) : (
                           <button
                             type="button"
@@ -578,7 +598,8 @@ export default function BattlePass() {
                 <div>
                   <h2 className="section-title">Season 1 Battle Pass Track</h2>
                   <p className="section-sub">
-                    Earn Battle Pass XP from Chores and Arena Matches to unlock exclusive vouchers & ARENA tokens!
+                    Earn Battle Pass XP from Chores and Arena Matches to unlock exclusive vouchers &
+                    ARENA tokens!
                   </p>
                 </div>
                 <div className="roadmap-progress-badge">
@@ -595,9 +616,7 @@ export default function BattlePass() {
                       key={t.tier}
                       className={`tier-card ${isUnlocked ? 'unlocked' : 'locked'} ${isCurrent ? 'current' : ''}`}
                     >
-                      <div className="tier-num-badge">
-                        {isUnlocked ? '✓' : `T${t.tier}`}
-                      </div>
+                      <div className="tier-num-badge">{isUnlocked ? '✓' : `T${t.tier}`}</div>
                       <div className="tier-xp-req">{t.xpRequired} XP</div>
                       <div className="tier-title">{t.title}</div>
 
@@ -631,17 +650,24 @@ export default function BattlePass() {
                 <div>
                   <h2 className="section-title">My Real-World Vouchers</h2>
                   <p className="section-sub">
-                    Show these vouchers to your parent in real life to claim your screen time, pizza party, or toy store reward!
+                    Show these vouchers to your parent in real life to claim your screen time, pizza
+                    party, or toy store reward!
                   </p>
                 </div>
               </div>
 
-              {(!data?.vouchers || data.vouchers.length === 0) ? (
+              {!data?.vouchers || data.vouchers.length === 0 ? (
                 <div className="no-vouchers-card">
                   <div className="no-icon">🎟️</div>
                   <h3>No vouchers unlocked yet</h3>
-                  <p>Reach higher Battle Pass tiers by completing chores and winning arena matches!</p>
-                  <button type="button" className="btn-take-quiz" onClick={() => setActiveKidTab('chores')}>
+                  <p>
+                    Reach higher Battle Pass tiers by completing chores and winning arena matches!
+                  </p>
+                  <button
+                    type="button"
+                    className="btn-take-quiz"
+                    onClick={() => setActiveKidTab('chores')}
+                  >
                     Go to Chore Board
                   </button>
                 </div>
@@ -650,7 +676,10 @@ export default function BattlePass() {
                   {data.vouchers.map((v) => {
                     const isRedeemed = v.status === 'redeemed';
                     return (
-                      <div key={v.id} className={`voucher-card ${isRedeemed ? 'redeemed' : 'active'}`}>
+                      <div
+                        key={v.id}
+                        className={`voucher-card ${isRedeemed ? 'redeemed' : 'active'}`}
+                      >
                         <div className="voucher-header">
                           <span className="voucher-tier">Tier {v.tier} Reward</span>
                           <span className={`voucher-status-chip ${v.status}`}>
@@ -661,7 +690,9 @@ export default function BattlePass() {
                         <p className="voucher-desc">{v.description}</p>
                         <div className="voucher-footer">
                           {isRedeemed ? (
-                            <span className="redeemed-label">Redeemed by parent on {new Date(v.redeemedAt).toLocaleDateString()}</span>
+                            <span className="redeemed-label">
+                              Redeemed by parent on {new Date(v.redeemedAt).toLocaleDateString()}
+                            </span>
                           ) : (
                             <span className="claim-prompt">Show to Mom or Dad to claim!</span>
                           )}
@@ -683,7 +714,8 @@ export default function BattlePass() {
             <div className="parent-gate-icon">🔒</div>
             <h2>Enter Parent PIN</h2>
             <p>
-              The Parent Oracle is protected to prevent kids from self-approving chores and granting themselves infinite energy.
+              The Parent Oracle is protected to prevent kids from self-approving chores and granting
+              themselves infinite energy.
             </p>
             <form onSubmit={handleVerifyPin} className="parent-pin-form">
               <input
@@ -694,7 +726,7 @@ export default function BattlePass() {
                 className="parent-pin-input"
                 placeholder="1234"
                 value={parentPin}
-                onChange={e => setParentPin(e.target.value)}
+                onChange={(e) => setParentPin(e.target.value)}
                 autoFocus
                 aria-label="Parent PIN"
               />
@@ -721,7 +753,8 @@ export default function BattlePass() {
             </div>
             <h2>Parent Verification & Allowance Hub</h2>
             <p>
-              Verify your child's real-world tasks on-chain, issue custom chore bounties, and manage allowance rewards.
+              Verify your child's real-world tasks on-chain, issue custom chore bounties, and manage
+              allowance rewards.
             </p>
             <div className="parent-banner-actions">
               <div className="parent-wallet-info">
@@ -758,13 +791,17 @@ export default function BattlePass() {
                     maxLength={6}
                     placeholder="New 4-6 digit PIN"
                     value={newPin}
-                    onChange={e => setNewPin(e.target.value)}
+                    onChange={(e) => setNewPin(e.target.value)}
                     className="pin-change-input"
                   />
-                  <button type="submit" className="btn-save-pin">Save PIN</button>
+                  <button type="submit" className="btn-save-pin">
+                    Save PIN
+                  </button>
                 </div>
                 {pinChangeMsg?.error && <div className="pin-error-text">{pinChangeMsg.error}</div>}
-                {pinChangeMsg?.success && <div className="pin-success-text">{pinChangeMsg.success}</div>}
+                {pinChangeMsg?.success && (
+                  <div className="pin-success-text">{pinChangeMsg.success}</div>
+                )}
               </form>
             )}
           </div>
@@ -790,7 +827,9 @@ export default function BattlePass() {
                       <div key={p.id} className="pending-card">
                         <div className="pending-top">
                           <span className="kid-tag">👤 {short(p.kidAddress)}</span>
-                          <span className="category-chip">{categoryIcon(p.category)} {p.category}</span>
+                          <span className="category-chip">
+                            {categoryIcon(p.category)} {p.category}
+                          </span>
                         </div>
                         <h4 className="pending-chore-title">{p.title}</h4>
                         {p.notes && (
@@ -821,33 +860,37 @@ export default function BattlePass() {
                 <div className="panel-head">
                   <h3>🎟️ Child Vouchers to Redeem</h3>
                 </div>
-                {(!parentDashboard?.kids || parentDashboard.kids.length === 0) ? (
+                {!parentDashboard?.kids || parentDashboard.kids.length === 0 ? (
                   <p className="empty-text">No kids linked yet.</p>
                 ) : (
                   <div className="kids-vouchers-list">
-                    {parentDashboard.kids.map(kid => (
+                    {parentDashboard.kids.map((kid) => (
                       <div key={kid.address} className="kid-vouchers-group">
                         <div className="kid-subhead">
-                          <strong>{kid.name || short(kid.address)}</strong> — Allowance: ${kid.allowanceBalance?.toFixed(2) || '0.00'}
+                          <strong>{kid.name || short(kid.address)}</strong> — Allowance: $
+                          {kid.allowanceBalance?.toFixed(2) || '0.00'}
                         </div>
-                        {(!kid.vouchers || kid.vouchers.filter(v => v.status === 'active').length === 0) ? (
+                        {!kid.vouchers ||
+                        kid.vouchers.filter((v) => v.status === 'active').length === 0 ? (
                           <div className="no-active-vouchers">No pending active vouchers</div>
                         ) : (
-                          kid.vouchers.filter(v => v.status === 'active').map(v => (
-                            <div key={v.id} className="parent-voucher-row">
-                              <div>
-                                <strong>{v.title}</strong>
-                                <div className="sm-desc">{v.description}</div>
+                          kid.vouchers
+                            .filter((v) => v.status === 'active')
+                            .map((v) => (
+                              <div key={v.id} className="parent-voucher-row">
+                                <div>
+                                  <strong>{v.title}</strong>
+                                  <div className="sm-desc">{v.description}</div>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="btn-redeem-sm"
+                                  onClick={() => handleRedeemVoucher(v.id)}
+                                >
+                                  Mark Redeemed
+                                </button>
                               </div>
-                              <button
-                                type="button"
-                                className="btn-redeem-sm"
-                                onClick={() => handleRedeemVoucher(v.id)}
-                              >
-                                Mark Redeemed
-                              </button>
-                            </div>
-                          ))
+                            ))
                         )}
                       </div>
                     ))}
@@ -881,10 +924,12 @@ export default function BattlePass() {
                   <div className="linked-kids-list">
                     <h4>Linked Children:</h4>
                     <ul>
-                      {parentDashboard.kids.map(k => (
+                      {parentDashboard.kids.map((k) => (
                         <li key={k.address}>
                           <span>{k.name || short(k.address)}</span>
-                          <span className="kid-stat-mini">⚡ {k.energy ?? 5} | ${k.allowanceBalance?.toFixed(2) || '0.00'}</span>
+                          <span className="kid-stat-mini">
+                            ⚡ {k.energy ?? 5} | ${k.allowanceBalance?.toFixed(2) || '0.00'}
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -903,7 +948,7 @@ export default function BattlePass() {
                     type="text"
                     placeholder="e.g. Practice piano for 20 mins"
                     value={newChore.title}
-                    onChange={e => setNewChore({ ...newChore, title: e.target.value })}
+                    onChange={(e) => setNewChore({ ...newChore, title: e.target.value })}
                     required
                   />
 
@@ -912,7 +957,7 @@ export default function BattlePass() {
                       <label>Category</label>
                       <select
                         value={newChore.category}
-                        onChange={e => setNewChore({ ...newChore, category: e.target.value })}
+                        onChange={(e) => setNewChore({ ...newChore, category: e.target.value })}
                       >
                         <option value="cleaning">🧹 Cleaning</option>
                         <option value="homework">📝 Homework</option>
@@ -930,7 +975,7 @@ export default function BattlePass() {
                         min="1"
                         max="10"
                         value={newChore.energyReward}
-                        onChange={e => setNewChore({ ...newChore, energyReward: e.target.value })}
+                        onChange={(e) => setNewChore({ ...newChore, energyReward: e.target.value })}
                       />
                     </div>
                   </div>
@@ -943,7 +988,7 @@ export default function BattlePass() {
                         min="10"
                         max="200"
                         value={newChore.xpReward}
-                        onChange={e => setNewChore({ ...newChore, xpReward: e.target.value })}
+                        onChange={(e) => setNewChore({ ...newChore, xpReward: e.target.value })}
                       />
                     </div>
 
@@ -955,7 +1000,9 @@ export default function BattlePass() {
                         min="0"
                         max="50"
                         value={newChore.allowanceReward}
-                        onChange={e => setNewChore({ ...newChore, allowanceReward: e.target.value })}
+                        onChange={(e) =>
+                          setNewChore({ ...newChore, allowanceReward: e.target.value })
+                        }
                       />
                     </div>
                   </div>
@@ -973,10 +1020,12 @@ export default function BattlePass() {
       {/* ================= MODAL: SUBMIT CHORE ================= */}
       {submittingChore && (
         <div className="modal-overlay" onClick={() => setSubmittingChore(null)}>
-          <div className="bp-modal" onClick={e => e.stopPropagation()}>
+          <div className="bp-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Submit Chore for Proof</h3>
-              <button type="button" className="close-btn" onClick={() => setSubmittingChore(null)}>×</button>
+              <button type="button" className="close-btn" onClick={() => setSubmittingChore(null)}>
+                ×
+              </button>
             </div>
             <form onSubmit={handleSubmitChore} className="submit-chore-form">
               <div className="modal-chore-summary">
@@ -993,11 +1042,15 @@ export default function BattlePass() {
                 rows="3"
                 placeholder="e.g. Put all toys away and vacuumed the rug!"
                 value={choreNote}
-                onChange={e => setChoreNote(e.target.value)}
+                onChange={(e) => setChoreNote(e.target.value)}
               />
 
               <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setSubmittingChore(null)}>
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() => setSubmittingChore(null)}
+                >
                   Cancel
                 </button>
                 <button type="submit" className="btn-submit-confirm">
@@ -1095,16 +1148,20 @@ function BrainQuizModal({ onClose, wallet, onSuccess }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="bp-modal quiz-modal" onClick={e => e.stopPropagation()}>
+      <div className="bp-modal quiz-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>🧠 5-Question Brain Quiz</h3>
-          <button type="button" className="close-btn" onClick={onClose}>×</button>
+          <button type="button" className="close-btn" onClick={onClose}>
+            ×
+          </button>
         </div>
 
         {!submitted ? (
           <div className="quiz-body">
             <div className="quiz-progress-bar">
-              <span className="quiz-badge">Question {currentIndex + 1} of {questions.length}</span>
+              <span className="quiz-badge">
+                Question {currentIndex + 1} of {questions.length}
+              </span>
               <span className="quiz-rule">Score 4/5 or 5/5 to earn +2 ⚡ Energy</span>
             </div>
 
@@ -1167,14 +1224,26 @@ function BrainQuizModal({ onClose, wallet, onSuccess }) {
               <div className="result-pass">
                 <div className="result-icon">🏆</div>
                 <h3>Quiz Passed!</h3>
-                <p>You scored <strong>{finalScore} / {questions.length}</strong>!</p>
+                <p>
+                  You scored{' '}
+                  <strong>
+                    {finalScore} / {questions.length}
+                  </strong>
+                  !
+                </p>
                 <div className="energy-reward-badge">+2 ⚡ Arena Energy Unlocked</div>
               </div>
             ) : (
               <div className="result-fail">
                 <div className="result-icon">💪</div>
                 <h3>Nice Try!</h3>
-                <p>You scored <strong>{finalScore} / {questions.length}</strong> (need 4 to pass).</p>
+                <p>
+                  You scored{' '}
+                  <strong>
+                    {finalScore} / {questions.length}
+                  </strong>{' '}
+                  (need 4 to pass).
+                </p>
                 <p>Try again or complete a real-world chore to earn Energy!</p>
                 <button
                   type="button"
@@ -1199,12 +1268,19 @@ function BrainQuizModal({ onClose, wallet, onSuccess }) {
 
 function categoryIcon(cat) {
   switch (cat) {
-    case 'cleaning': return '🧹';
-    case 'homework': return '📝';
-    case 'reading': return '📚';
-    case 'study': return '🧠';
-    case 'fitness': return '🏃';
-    case 'pets': return '🐕';
-    default: return '⭐';
+    case 'cleaning':
+      return '🧹';
+    case 'homework':
+      return '📝';
+    case 'reading':
+      return '📚';
+    case 'study':
+      return '🧠';
+    case 'fitness':
+      return '🏃';
+    case 'pets':
+      return '🐕';
+    default:
+      return '⭐';
   }
 }

@@ -24,13 +24,14 @@ export const AUTH_WINDOW_MS = 5 * 60 * 1000;
  * @param {number|string} issuedAt - Issue epoch timestamp in milliseconds.
  * @returns {string} Plaintext challenge message to sign.
  */
-export const AUTH_MESSAGE = (address, issuedAt) => `Battle Arena login for ${address}\nIssued: ${issuedAt}`;
+export const AUTH_MESSAGE = (address, issuedAt) =>
+  `Battle Arena login for ${address}\nIssued: ${issuedAt}`;
 
 /** @type {Map<string, number>} Cache of consumed signatures to enforce single-use replay protection */
 const usedSignatures = new Map(); // signature -> expiry (ms)
 
 /** @type {Map<string, {nonce: string, expiresAt: number}>} Single-use authentication nonces keyed by lowercase address */
-const authNonces = new Map();     // address.toLowerCase() -> { nonce, expiresAt }
+const authNonces = new Map(); // address.toLowerCase() -> { nonce, expiresAt }
 
 /**
  * Generates and stores a cryptographic single-use authentication nonce for an address.
@@ -60,7 +61,8 @@ export function generateAuthNonce(address) {
  * @returns {boolean} True if signature is cryptographically valid and unconsumed.
  */
 export function verifyAuthSignature(signature, address, issuedAt) {
-  if (!signature || typeof signature !== 'string' || !address || typeof address !== 'string') return false;
+  if (!signature || typeof signature !== 'string' || !address || typeof address !== 'string')
+    return false;
   const cleanSig = signature.trim();
   const normalizedAddr = address.toLowerCase();
 
@@ -157,7 +159,7 @@ const parentUnlocks = new Map(); // token -> expiry (ms)
  * @function unlockParent
  * @param {string} token - Session authorization token.
  */
-export const unlockParent = token => parentUnlocks.set(token, Date.now() + PARENT_UNLOCK_MS);
+export const unlockParent = (token) => parentUnlocks.set(token, Date.now() + PARENT_UNLOCK_MS);
 
 /**
  * Revokes Parent Mode authorization for a session token.
@@ -165,7 +167,7 @@ export const unlockParent = token => parentUnlocks.set(token, Date.now() + PAREN
  * @function lockParent
  * @param {string} token - Session authorization token.
  */
-export const lockParent = token => parentUnlocks.delete(token);
+export const lockParent = (token) => parentUnlocks.delete(token);
 
 /**
  * Checks whether a session token currently has active Parent Mode authorization.
@@ -177,7 +179,10 @@ export const lockParent = token => parentUnlocks.delete(token);
 export function isParentUnlocked(token) {
   const exp = parentUnlocks.get(token);
   if (!exp) return false;
-  if (exp < Date.now()) { parentUnlocks.delete(token); return false; }
+  if (exp < Date.now()) {
+    parentUnlocks.delete(token);
+    return false;
+  }
   return true;
 }
 
@@ -204,10 +209,14 @@ export function canAdminister(auth, kidAddress) {
 // (comma-separated, e.g. your deployed site). Random websites are rejected.
 
 const EXTRA_ORIGINS = [
-  ...(process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean),
+  ...(process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
   process.env.CLIENT_ORIGIN,
 ].filter(Boolean);
-const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|10(\.\d{1,3}){3}|192\.168(\.\d{1,3}){2}|172\.(1[6-9]|2\d|3[01])(\.\d{1,3}){2})(:\d+)?$/;
+const LOCAL_ORIGIN =
+  /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|10(\.\d{1,3}){3}|192\.168(\.\d{1,3}){2}|172\.(1[6-9]|2\d|3[01])(\.\d{1,3}){2})(:\d+)?$/;
 
 /**
  * Validates whether an incoming HTTP Origin header is authorized for CORS access.
@@ -270,7 +279,10 @@ export function rateLimit({ windowMs = 60_000, max = 300 } = {}) {
     const now = Date.now();
     const ip = req.ip || req.socket?.remoteAddress || 'unknown';
     let h = hits.get(ip);
-    if (!h || h.resetAt < now) { h = { count: 0, resetAt: now + windowMs }; hits.set(ip, h); }
+    if (!h || h.resetAt < now) {
+      h = { count: 0, resetAt: now + windowMs };
+      hits.set(ip, h);
+    }
     if (++h.count > max) {
       res.setHeader('Retry-After', Math.ceil((h.resetAt - now) / 1000));
       return res.status(429).json({ error: 'Too many requests. Slow down.' });

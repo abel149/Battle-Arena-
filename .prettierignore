@@ -1,0 +1,15 @@
+node_modules
+dist
+cache
+artifacts
+data.json
+data.sqlite
+data.sqlite-journal
+ledger.json
+chore-ledger.json
+match-result-address.json
+token-address.json
+.git
+.freebuff
+package-lock.json
+*.log

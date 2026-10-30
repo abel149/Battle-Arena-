@@ -35,9 +35,13 @@ export function useChainStatus() {
     let alive = true;
     const load = () =>
       fetch(`${API}/api/chain/status`)
-        .then(r => r.json())
-        .then(s => { if (alive) setStatus(s); })
-        .catch(() => { if (alive) setStatus({ offline: true }); });
+        .then((r) => r.json())
+        .then((s) => {
+          if (alive) setStatus(s);
+        })
+        .catch(() => {
+          if (alive) setStatus({ offline: true });
+        });
     load();
     const id = setInterval(load, 15000);
     socket.on('match:end', load); // a finished match adds a block
@@ -75,8 +79,10 @@ export function useChainBalance(address, refreshKey = 0) {
     let alive = true;
     const load = () =>
       fetch(`${API}/api/wallet/${address}/tokens`)
-        .then(r => r.json())
-        .then(d => { if (alive && typeof d?.balance === 'number') setInfo(d); })
+        .then((r) => r.json())
+        .then((d) => {
+          if (alive && typeof d?.balance === 'number') setInfo(d);
+        })
         .catch(() => {});
     load();
     // match:end is emitted AFTER the server mints rewards, so it is the right moment to re-read.
@@ -98,5 +104,5 @@ export function useChainBalance(address, refreshKey = 0) {
  * @param {number | string | null | undefined} n - Raw token amount.
  * @returns {string} Formatted token string.
  */
-export const formatArena = n =>
+export const formatArena = (n) =>
   Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });

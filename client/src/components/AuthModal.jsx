@@ -17,12 +17,17 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    const onOk = () => { setBusy(false); onClose?.(); };
+    const onOk = () => {
+      setBusy(false);
+      onClose?.();
+    };
     const onErr = ({ error: msg } = {}) => {
       setBusy(false);
       setError(msg || 'Something went wrong. Try again.');
     };
-    const onKey = e => { if (e.key === 'Escape') onClose?.(); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose?.();
+    };
     socket.on('auth:success', onOk);
     socket.on('player:error', onErr);
     window.addEventListener('keydown', onKey);
@@ -42,7 +47,8 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
     e.preventDefault();
     setError(null);
     const u = username.trim();
-    if (!USERNAME_RE.test(u)) return setError('Username must be 3–20 letters, numbers or underscores.');
+    if (!USERNAME_RE.test(u))
+      return setError('Username must be 3–20 letters, numbers or underscores.');
     if (password.length < 8) return setError('Password must be at least 8 characters.');
     if (tab === 'register' && password !== confirm) return setError('Passwords do not match.');
     if (!socket.connected) return setError('Cannot reach the server. Is it running?');
@@ -63,8 +69,12 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
   const isRegister = tab === 'register';
 
   return (
-    <div className={`auth-overlay ${gate ? 'gate' : ''}`}
-      onMouseDown={e => { if (e.target === e.currentTarget) onClose?.(); }}>
+    <div
+      className={`auth-overlay ${gate ? 'gate' : ''}`}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose?.();
+      }}
+    >
       <form className="auth-card" onSubmit={submit}>
         {gate && (
           <div className="auth-brand">
@@ -73,10 +83,24 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
           </div>
         )}
         <div className="auth-tabs" role="tablist">
-          <button type="button" role="tab" aria-selected={!isRegister}
-            className={!isRegister ? 'on' : ''} onClick={() => switchTab('login')}>Log in</button>
-          <button type="button" role="tab" aria-selected={isRegister}
-            className={isRegister ? 'on' : ''} onClick={() => switchTab('register')}>Create account</button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!isRegister}
+            className={!isRegister ? 'on' : ''}
+            onClick={() => switchTab('login')}
+          >
+            Log in
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={isRegister}
+            className={isRegister ? 'on' : ''}
+            onClick={() => switchTab('register')}
+          >
+            Create account
+          </button>
         </div>
 
         <p className="auth-note">
@@ -87,19 +111,29 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
 
         <label>
           <span>Username</span>
-          <input value={username} onChange={e => setUsername(e.target.value)}
-            autoComplete="username" autoFocus required />
+          <input
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            autoComplete="username"
+            autoFocus
+            required
+          />
         </label>
 
         {isRegister && (
           <>
             <label>
               <span>Display name (optional)</span>
-              <input value={name} onChange={e => setName(e.target.value)} />
+              <input value={name} onChange={(e) => setName(e.target.value)} />
             </label>
             <label>
               <span>Email (optional)</span>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+              />
             </label>
           </>
         )}
@@ -107,27 +141,46 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
         <label>
           <span>Password</span>
           <div className="auth-pw">
-            <input type={showPw ? 'text' : 'password'} value={password}
-              onChange={e => setPassword(e.target.value)}
-              autoComplete={isRegister ? 'new-password' : 'current-password'} required />
-            <button type="button" onClick={() => setShowPw(v => !v)}>{showPw ? 'Hide' : 'Show'}</button>
+            <input
+              type={showPw ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete={isRegister ? 'new-password' : 'current-password'}
+              required
+            />
+            <button type="button" onClick={() => setShowPw((v) => !v)}>
+              {showPw ? 'Hide' : 'Show'}
+            </button>
           </div>
         </label>
 
         {isRegister && (
           <label>
             <span>Repeat password</span>
-            <input type={showPw ? 'text' : 'password'} value={confirm}
-              onChange={e => setConfirm(e.target.value)} autoComplete="new-password" required />
+            <input
+              type={showPw ? 'text' : 'password'}
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              autoComplete="new-password"
+              required
+            />
           </label>
         )}
 
-        {error && <div className="auth-error" role="alert">{error}</div>}
+        {error && (
+          <div className="auth-error" role="alert">
+            {error}
+          </div>
+        )}
 
         {isRegister && extra}
 
         <div className="auth-actions">
-          {onClose && <button type="button" className="auth-cancel" onClick={onClose}>Cancel</button>}
+          {onClose && (
+            <button type="button" className="auth-cancel" onClick={onClose}>
+              Cancel
+            </button>
+          )}
           <button type="submit" className="auth-submit" disabled={busy}>
             {busy ? 'Please wait…' : isRegister ? 'Create account' : 'Log in'}
           </button>
