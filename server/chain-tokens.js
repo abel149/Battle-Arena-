@@ -4,7 +4,7 @@
 // (or when a token-address.json deployment file exists for the local node).
 // Requires NODE_HTTP_URL and PRIVATE_KEY so the server wallet can mint.
 // When not configured, this module falls back to a simulated receipt
-// (txHash: null) so local dev works without a blockchain — same pattern as
+// (txHash: null) so local dev works without a blockchain â€” same pattern as
 // chain-onchain.js.
 //
 // The canonical badge ids are fixed in store.js BADGE_DEFS order (id = index
@@ -13,8 +13,8 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { JsonRpcProvider, Wallet, Contract, NonceManager, formatUnits } from 'ethers';
-import { getSharedSigner } from './chain-signer.js';
+import { Contract, formatUnits } from 'ethers';
+import { getProvider, getSigner } from './signer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TOKEN_ADDRESS_FILE = path.join(__dirname, 'token-address.json');
@@ -62,8 +62,7 @@ async function ensureContracts() {
   if (!process.env.NODE_HTTP_URL) throw new Error('NODE_HTTP_URL is required when on-chain rewards are enabled');
   if (!process.env.PRIVATE_KEY) throw new Error('PRIVATE_KEY is required to mint on-chain rewards');
 
-  const shared = getSharedSigner();
-  provider = shared.provider;
+  provider = getProvider();
   const network = await provider.getNetwork();
   if (expectedChainId && network.chainId !== BigInt(expectedChainId)) {
     throw new Error(`Connected to chain ${network.chainId}, expected ${expectedChainId}`);
@@ -75,7 +74,7 @@ async function ensureContracts() {
 
   // NonceManager avoids the automining nonce race: two sequential sends can
   // otherwise both read the same pending nonce (ensure/twin mints in one award).
-  signer = shared.signer; // same NonceManager as chain-onchain.js
+  signer = getSigner();
   tokenContract = new Contract(tokenAddress, ARENA_TOKEN_ABI, signer);
   badgesContract = new Contract(badgesAddress, ARENA_BADGES_ABI, signer);
   return { tokenContract, badgesContract };
@@ -98,7 +97,7 @@ export async function tokenBalance(address) {
 // Small helpers ------------------------------------------------------------
 
 // Lowercase hex addresses are always valid for ethers calls; avoids checksum
-// complaints for internal bot addresses like 0xB070…00B.
+// complaints for internal bot addresses like 0xB070â€¦00B.
 const hexAddress = a => String(a).toLowerCase();
 
 // ARENA has 18 decimals; store.js counts whole ARENA units (10 / 3 / 1 ...).
@@ -107,14 +106,14 @@ const amountFor = whole => BigInt(whole) * 10n ** 18n;
 /**
  * Distribute match rewards on-chain.
  * rewards: [{ address, tokens, badges: [{ id, label }] }]
- * Returns: { address: { tokens: n, tokenTx: '0x…' | null,
- *                       badges: [{ id, label, tx: '0x…' | null }] } }
+ * Returns: { address: { tokens: n, tokenTx: '0xâ€¦' | null,
+ *                       badges: [{ id, label, tx: '0xâ€¦' | null }] } }
  * Per-award errors are captured in `.error` so one bad address cannot
  * block the other player's payout.
  */
 export async function distributeRewards(rewards) {
   if (!USE_TOKENS_ONCHAIN) {
-    // Simulated fallback — same shape, no tx hashes.
+    // Simulated fallback â€” same shape, no tx hashes.
     return Object.fromEntries(rewards.map(r => [r.address, {
       tokens: r.tokens,
       tokenTx: null,

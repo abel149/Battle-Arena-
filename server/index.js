@@ -7,67 +7,10 @@ import http from 'http';
 import cors from 'cors';
 import { Server } from 'socket.io';
 import crypto from 'crypto';
-import { ethers } from 'ethers';
-
-// Wallet signature verification & replay protection helpers
-const authNonces = new Map(); // address.toLowerCase() -> { nonce, expiresAt }
-const usedSignatures = new Map(); // signature -> expiresAt (for replay prevention)
-
-function cleanupAuthNonces() {
-  const now = Date.now();
-  for (const [addr, data] of authNonces.entries()) {
-    if (data.expiresAt < now) authNonces.delete(addr);
-  }
-  for (const [sig, exp] of usedSignatures.entries()) {
-    if (exp < now) usedSignatures.delete(sig);
-  }
-}
-
-export function generateAuthNonce(address) {
-  cleanupAuthNonces();
-  const nonce = crypto.randomBytes(16).toString('hex');
-  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 min TTL
-  authNonces.set(address.toLowerCase(), { nonce, expiresAt });
-  return nonce;
-}
-
-function verifyAuthSignature(signature, address) {
-  if (!signature || typeof signature !== 'string' || !address) return false;
-  const cleanSig = signature.trim();
-  const normalizedAddr = address.toLowerCase();
-
-  // Replay prevention: check if this signature was already consumed recently
-  if (usedSignatures.has(cleanSig)) {
-    console.log('verifyAuthSignature rejected: signature replay detected');
-    return false;
-  }
-
-  try {
-    // 1. Check if matching a single-use nonced message
-    const storedNonce = authNonces.get(normalizedAddr);
-    if (storedNonce && storedNonce.expiresAt > Date.now()) {
-      const noncedMsg = `Battle Arena login for ${address} [nonce: ${storedNonce.nonce}]`;
-      const recoveredNonce = ethers.verifyMessage(noncedMsg, cleanSig);
-      if (recoveredNonce.toLowerCase() === normalizedAddr) {
-        authNonces.delete(normalizedAddr); // single-use consumed
-        usedSignatures.set(cleanSig, Date.now() + 24 * 60 * 60 * 1000);
-        return true;
-      }
-    }
-
-    // 2. Standard EIP-191 auth message
-    const recovered = ethers.verifyMessage(AUTH_MESSAGE(address), cleanSig);
-    if (recovered.toLowerCase() === normalizedAddr) {
-      usedSignatures.set(cleanSig, Date.now() + 24 * 60 * 60 * 1000);
-      return true;
-    }
-    return false;
-  } catch (e) {
-    console.log('verifyAuthSignature failed: ' + e.message);
-    return false;
-  }
-}
-
+import {
+  verifyAuthSignature, generateAuthNonce, requireSession, same, canAdminister, isParentUnlocked, unlockParent,
+  corsOptions, isAllowedOrigin, securityHeaders, rateLimit,
+} from './security.js';
 import { ENGINES, DECKS, dailyDeckId } from './games/index.js';
 import { recordMatch, getLedger, isOnchain, chainInfo, normalizeLedgerEntry, ONCHAIN_LABELS } from './chain-onchain.js';
 import { distributeRewards, isTokensOnchain, tokenAddresses, tokenBalance } from './chain-tokens.js';
@@ -78,10 +21,6 @@ const PORT = process.env.PORT || 3001;
 const BOT = '0xB07000000000000000000000000000000000000B';
 const BOT_STEP_MS = 700;
 const ROOM_RETENTION_MS = 10 * 60 * 1000; // finished rooms expire after 10 min
-
-// Shared auth message: client (MetaMask personal_sign or local key) must sign
-// exactly this string; verification is standard EIP-191 via ethers.verifyMessage.
-const AUTH_MESSAGE = a => `Battle Arena login for ${a}`;
 
 // Kid safety: profanity filtering & preset moderation pattern
 const PROFANITY_PATTERN = /\b(fuck|shit|bitch|ass|asshole|dick|pussy|cunt|bastard|damn|crap|whore|slut|nigger|nigga|faggot|retard|idiot|stupid|kill|die)\b/i;
@@ -95,39 +34,18 @@ function sanitizeChatMessage(raw) {
   return trimmed.slice(0, 100);
 }
 
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
-const allowedOriginChecker = (origin, callback) => {
-  // Allow requests with no origin (curl, mobile/desktop shells, server-to-server)
-  if (!origin) return callback(null, true);
-  if (
-    origin === CLIENT_ORIGIN ||
-    origin === 'http://localhost:5173' ||
-    origin === 'http://127.0.0.1:5173' ||
-    origin === 'http://localhost:3000' ||
-    origin === 'http://127.0.0.1:3000' ||
-    /^http:\/\/localhost:[0-9]+$/.test(origin) ||
-    /^http:\/\/127\.0\.0\.1:[0-9]+$/.test(origin)
-  ) {
-    return callback(null, true);
-  }
-  return callback(new Error('CORS policy: origin not allowed'));
-};
-
 const app = express();
-app.use(cors({ origin: allowedOriginChecker, credentials: true }));
-app.use(express.json());
-
-// Standard security headers (X-Content-Type-Options, X-Frame-Options, Referrer-Policy)
-app.use((_req, res, next) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  next();
-});
+app.disable('x-powered-by');
+app.use(securityHeaders);
+app.use(cors(corsOptions));
+app.use('/api', rateLimit({ windowMs: 60_000, max: 300 }));
+app.use(express.json({ limit: '100kb' }));
 
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: allowedOriginChecker, credentials: true } });
+const io = new Server(server, {
+  cors: corsOptions,
+  allowRequest: (req, cb) => cb(null, isAllowedOrigin(req.headers.origin)),
+});
 
 // ---- In-memory runtime state ----
 const rooms = new Map();          // roomId -> room
@@ -218,6 +136,7 @@ app.get('/api/wallet/:address/tokens', async (req, res) => {
     res.status(500).json({ error: 'Failed to read token balance' });
   }
 });
+
 app.get('/api/chain/status', async (_req, res) => {
   const info = await chainInfo();
   res.json({ ...info, tokens: { onchain: isTokensOnchain(), addresses: tokenAddresses() } });
@@ -277,14 +196,14 @@ app.get('/api/auth/nonce', (req, res) => {
 
 // Registration / login over REST (address = wallet, passed in body)
 app.post('/api/register', async (req, res) => {
-  const { address, username, name, email, password, signature } = req.body || {};
+  const { address, username, name, email, password, signature, issuedAt } = req.body || {};
   if (!address) return res.status(400).json({ error: 'address is required' });
-  // Cryptographic proof of wallet ownership is strictly required
+  // Wallet ownership must be proven with a valid signature.
   if (!signature) {
     return res.status(401).json({ error: 'Signature required: prove wallet ownership to register' });
   }
-  if (!verifyAuthSignature(signature, address)) {
-    return res.status(401).json({ error: 'Invalid wallet signature' });
+  if (!verifyAuthSignature(signature, address, issuedAt)) {
+    return res.status(401).json({ error: 'Invalid or expired wallet signature' });
   }
   const usernameErr = store.validateUsername(username);
   if (usernameErr) return res.status(400).json({ error: usernameErr });
@@ -295,7 +214,7 @@ app.post('/api/register', async (req, res) => {
 });
 
 app.post('/api/login', async (req, res) => {
-  const { address, username, name, password, signature } = req.body || {};
+  const { address, username, name, password, signature, issuedAt } = req.body || {};
   // 1) By credentials: username + password (wallet resolved from username index).
   if (username && password) {
     const result = await store.loginPlayerByCredentials({ username, password });
@@ -310,8 +229,8 @@ app.post('/api/login', async (req, res) => {
 
   let signatureVerified = false;
   if (signature) {
-    if (!verifyAuthSignature(signature, address)) {
-      return res.status(401).json({ error: 'Invalid wallet signature' });
+    if (!verifyAuthSignature(signature, address, issuedAt)) {
+      return res.status(401).json({ error: 'Invalid or expired wallet signature' });
     }
     signatureVerified = true;
   }
@@ -342,8 +261,10 @@ app.get('/api/battlepass/tiers', (_req, res) => {
   res.json(store.BATTLE_PASS_TIERS);
 });
 
-app.get('/api/chores/:address', (req, res) => {
+app.get('/api/chores/:address', requireSession, (req, res) => {
   const address = req.params.address;
+  const isParentOf = same(store.getPlayer(address)?.parentAddress, req.auth.address);
+  if (!same(address, req.auth.address) && !isParentOf) return res.status(403).json({ error: 'Not your account' });
   const p = store.getPlayer(address) || store.upsertPlayer(address);
   const chores = store.getChores(address);
   const vouchers = store.getVouchers(address);
@@ -360,9 +281,10 @@ app.get('/api/chores/:address', (req, res) => {
   });
 });
 
-app.post('/api/chores/submit', (req, res) => {
+app.post('/api/chores/submit', requireSession, (req, res) => {
   const { kidAddress, choreId, notes } = req.body || {};
   if (!kidAddress || !choreId) return res.status(400).json({ error: 'kidAddress and choreId required' });
+  if (!same(kidAddress, req.auth.address)) return res.status(403).json({ error: 'You can only submit your own chores' });
   const result = store.submitChore(kidAddress, choreId, notes);
   if (result.error) return res.status(400).json(result);
   const p = store.getPlayer(kidAddress);
@@ -373,9 +295,16 @@ app.post('/api/chores/submit', (req, res) => {
   res.json(result);
 });
 
-app.post('/api/chores/verify', async (req, res) => {
+app.post('/api/chores/verify', requireSession, async (req, res) => {
   const { choreId, parentAddress, signature, message } = req.body || {};
   if (!choreId || !parentAddress) return res.status(400).json({ error: 'choreId and parentAddress required' });
+
+  // Only the linked parent account, or the kid's session after the Parent PIN, may approve.
+  const target = store.getChoreById(choreId);
+  if (!target) return res.status(404).json({ error: 'Chore not found' });
+  if (!canAdminister(req.auth, target.kidAddress)) {
+    return res.status(403).json({ error: 'Parent approval required (link a parent account or unlock with the Parent PIN)' });
+  }
 
   // If signed attestation provided, verify it
   if (signature && message) {
@@ -418,9 +347,10 @@ app.post('/api/chores/verify', async (req, res) => {
   res.json({ ...result, onchainRecord });
 });
 
-app.post('/api/chores/create', (req, res) => {
+app.post('/api/chores/create', requireSession, (req, res) => {
   const { kidAddress, parentAddress, title, category, energyReward, xpReward, allowanceReward } = req.body || {};
   if (!kidAddress || !title) return res.status(400).json({ error: 'kidAddress and title required' });
+  if (!canAdminister(req.auth, kidAddress)) return res.status(403).json({ error: 'Parent approval required' });
   const cleanTitle = String(title).trim().slice(0, 100);
   if (!cleanTitle) return res.status(400).json({ error: 'Valid title required' });
   const cleanCategory = String(category || 'custom').trim().slice(0, 30);
@@ -441,9 +371,10 @@ app.post('/api/chores/create', (req, res) => {
   res.json(chore);
 });
 
-app.post('/api/chores/quiz-complete', (req, res) => {
+app.post('/api/chores/quiz-complete', requireSession, (req, res) => {
   const { kidAddress, score } = req.body || {};
   if (!kidAddress) return res.status(400).json({ error: 'kidAddress required' });
+  if (!same(kidAddress, req.auth.address)) return res.status(403).json({ error: 'Not your account' });
   if (score < 4) return res.status(400).json({ error: 'Need at least 4/5 correct answers to pass' });
   const result = store.completeBrainQuiz(kidAddress);
   if (result.error) return res.status(400).json(result);
@@ -454,9 +385,16 @@ app.post('/api/chores/quiz-complete', (req, res) => {
   res.json(result);
 });
 
-app.post('/api/parent/link', (req, res) => {
+app.post('/api/parent/link', requireSession, (req, res) => {
   const { kidAddress, parentAddress } = req.body || {};
   if (!kidAddress || !parentAddress) return res.status(400).json({ error: 'kidAddress and parentAddress required' });
+  // Either the kid links their parent, or a parent claims a kid that has no parent yet.
+  const kidSelf = same(kidAddress, req.auth.address);
+  const parentSelf = same(parentAddress, req.auth.address);
+  const existing = store.getPlayer(kidAddress);
+  if (!kidSelf && !(parentSelf && existing && !existing.parentAddress)) {
+    return res.status(403).json({ error: 'Cannot link this account' });
+  }
   const kid = store.linkParent(kidAddress, parentAddress);
   if (kid) {
     notifyPlayer(kid.address, 'player:update', store.withoutPassword(kid));
@@ -465,15 +403,21 @@ app.post('/api/parent/link', (req, res) => {
   res.json(store.withoutPassword(kid));
 });
 
-app.get('/api/parent/:parentAddress/dashboard', (req, res) => {
-  const parentAddress = req.params.parentAddress;
-  const data = store.getParentKids(parentAddress);
-  res.json(data);
+app.get('/api/parent/:parentAddress/dashboard', requireSession, (req, res) => {
+  // Only return kids/chores this session may administer, whatever address was asked for.
+  const data = store.getParentKids(req.params.parentAddress);
+  res.json({
+    kids: data.kids.filter(k => canAdminister(req.auth, k.address)),
+    pendingChores: data.pendingChores.filter(c => canAdminister(req.auth, c.kidAddress)),
+  });
 });
 
-app.post('/api/vouchers/redeem', (req, res) => {
+app.post('/api/vouchers/redeem', requireSession, (req, res) => {
   const { voucherId, parentAddress } = req.body || {};
   if (!voucherId) return res.status(400).json({ error: 'voucherId required' });
+  const voucher = store.getVoucherById(voucherId);
+  if (!voucher) return res.status(404).json({ error: 'Voucher not found' });
+  if (!canAdminister(req.auth, voucher.kidAddress)) return res.status(403).json({ error: 'Parent approval required' });
   const result = store.redeemVoucher(voucherId, parentAddress);
   if (result.error) return res.status(400).json(result);
   res.json(result);
@@ -486,31 +430,42 @@ app.get('/api/skins/:address', (req, res) => {
   res.json(skins);
 });
 
-app.post('/api/skins/equip', (req, res) => {
+app.post('/api/skins/equip', requireSession, (req, res) => {
   const { address, skinId } = req.body || {};
   if (!address || !skinId) return res.status(400).json({ error: 'address and skinId required' });
+  if (!same(address, req.auth.address)) return res.status(403).json({ error: 'Not your account' });
   const result = store.equipSkin(address, skinId);
   if (result.error) return res.status(400).json(result);
   res.json(result);
 });
 
-app.post('/api/parent/verify-pin', (req, res) => {
-  const { address, pin } = req.body || {};
-  const result = store.verifyParentPin(address, pin);
+// The Parent PIN belongs to the logged-in account (never a shared "default"), and a
+// correct PIN unlocks parent actions for this login session for 15 minutes.
+app.post('/api/parent/verify-pin', requireSession, (req, res) => {
+  const result = store.verifyParentPin(req.auth.address, req.body?.pin);
+  if (result.ok) unlockParent(req.auth.token);
   res.json(result);
 });
 
 app.post('/api/parent/set-pin', (req, res) => {
+  const header = req.headers.authorization || '';
+  const bearerToken = header.startsWith('Bearer ') ? header.slice(7).trim() : null;
   const { address, pin, signature, token, currentPin } = req.body || {};
-  if (!address || !pin) return res.status(400).json({ error: 'address and pin required' });
+  const effectiveToken = bearerToken || token;
+  const sessionAddress = effectiveToken ? store.addressForSession(effectiveToken) : null;
+  const targetAddress = sessionAddress || address;
+
+  if (!targetAddress || !pin) return res.status(400).json({ error: 'address and pin required' });
 
   // Verify authorization: valid session token, valid wallet signature, or verified current PIN
   let authorized = false;
-  if (token && store.addressForSession(token)?.toLowerCase() === address.toLowerCase()) {
+  if (effectiveToken && sessionAddress && same(sessionAddress, targetAddress)) {
+    if (!store.hasParentPin(targetAddress) || isParentUnlocked(effectiveToken) || (currentPin && store.verifyParentPin(targetAddress, currentPin).ok)) {
+      authorized = true;
+    }
+  } else if (signature && verifyAuthSignature(signature, targetAddress)) {
     authorized = true;
-  } else if (signature && verifyAuthSignature(signature, address)) {
-    authorized = true;
-  } else if (currentPin && store.verifyParentPin(address, currentPin).ok) {
+  } else if (currentPin && store.verifyParentPin(targetAddress, currentPin).ok) {
     authorized = true;
   }
 
@@ -518,8 +473,10 @@ app.post('/api/parent/set-pin', (req, res) => {
     return res.status(401).json({ error: 'Authentication required: provide correct current PIN, session token, or wallet signature' });
   }
 
-  const result = store.setParentPin(address, pin);
+  const result = store.setParentPin(targetAddress, pin);
   if (result.error) return res.status(400).json(result);
+  if (req.auth?.token) unlockParent(req.auth.token);
+  else if (effectiveToken) unlockParent(effectiveToken);
   res.json(result);
 });
 
@@ -595,26 +552,17 @@ async function finishRoom(room) {
       moves: game.moves,
     });
   } catch (err) {
-    console.warn('On-chain match recording failed, falling back to simulated ledger:', err.message);
-    try {
-      const { recordMatchSimulated, normalizeLedgerEntry } = await import('./chain-onchain.js');
-      receipt = normalizeLedgerEntry(recordMatchSimulated({
-        matchId: room.id,
-        gameType: room.gameType,
-        players: { X: addrX, O: addrO },
-        winner: winnerAddr || 'draw',
-        moves: game.moves,
-      }));
-    } catch {
-      receipt = {
-        matchId: room.id,
-        gameType: room.gameType,
-        players: { X: addrX, O: addrO },
-        winner: winnerAddr || 'draw',
-        timestamp: Date.now(),
-        error: err.message,
-      };
-    }
+    // Real blockchain only: no simulated fallback. The match still ends for the
+    // players, but the receipt carries the error and has no txHash.
+    console.error('ON-CHAIN RECORDING FAILED for', room.id, '-', err.shortMessage || err.message);
+    receipt = {
+      matchId: room.id,
+      gameType: room.gameType,
+      players: { X: addrX, O: addrO },
+      winner: winnerAddr || 'draw',
+      timestamp: Date.now(),
+      error: err.shortMessage || err.message,
+    };
   }
 
   // Update stats for human players and compute on-chain reward deltas
@@ -673,7 +621,7 @@ async function finishRoom(room) {
     roomId: room.id,
     winner: winnerAddr,
     result: game.winner,
-    receipt: { ...receipt, onchain: isOnchain() && !receipt?.error, rewards: rewardReceipts }, // { matchId, matchIdRaw?, winner, timestamp, resultHash, txHash, onchain, rewards? }
+    receipt: { ...receipt, onchain: isOnchain() && !receipt?.error, rewards: rewardReceipts },
   });
   // Clean up persisted active room and memory
   store.removeActiveRoom(room.id);
@@ -890,7 +838,7 @@ io.on('connection', (socket) => {
 
   // Two ways to identify: a session token (after login/registration, works from
   // any browser) or a wallet signature (guest wallets, MetaMask).
-  socket.on('identify', ({ address, signature, token } = {}) => {
+  socket.on('identify', ({ address, signature, issuedAt, token } = {}) => {
     if (token) {
       const sessionAddress = store.addressForSession(token);
       if (!sessionAddress) return socket.emit('auth:expired');
@@ -909,7 +857,7 @@ io.on('connection', (socket) => {
     }
     if (!address) return socket.emit('player:error', { error: 'Not identified: no address provided' });
     if (!signature || typeof signature !== 'string' || !signature.trim()) return socket.emit('player:error', { error: 'Not identified: signature required' });
-    if (!verifyAuthSignature(signature, address)) return socket.emit('player:error', { error: 'Not identified: invalid signature' });
+    if (!verifyAuthSignature(signature, address, issuedAt)) return socket.emit('player:error', { error: 'Not identified: invalid or expired signature' });
     bindIdentity(socket, address);
 
     // Auto-resume active match on reconnect/refresh/restart
@@ -1326,18 +1274,27 @@ function restoreActiveRooms() {
 
 restoreActiveRooms();
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Battle Arena server on http://localhost:${PORT}`);
-  console.log(isOnchain()
-    ? 'On-chain match recording ENABLED (MatchResult.sol)'
-    : 'Match recording: simulated ledger (chain.js)');
-  if (isTokensOnchain()) {
-    const { arenaToken, arenaBadges } = tokenAddresses();
-    console.log(`On-chain rewards ENABLED — ArenaToken ${arenaToken}, ArenaBadges ${arenaBadges}`);
-  } else {
-    console.log('Rewards: simulated only (set ARENA_TOKEN_ADDRESS/ARENA_BADGES_ADDRESS to enable)');
-  }
-});
+if (process.env.NODE_ENV !== 'test' && process.env.REQUIRE_ONCHAIN === 'true' && (!isOnchain() || !isTokensOnchain())) {
+  console.error('\nReal blockchain required. Start with `npm start` (deploys contracts and sets\nMATCH_RESULT_ADDRESS / ARENA_TOKEN_ADDRESS / ARENA_BADGES_ADDRESS / NODE_HTTP_URL / PRIVATE_KEY).\n');
+  process.exit(1);
+}
+
+if (process.env.NODE_ENV !== 'test') {
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Battle Arena server on http://localhost:${PORT}`);
+    if (isOnchain()) {
+      console.log('On-chain match recording ENABLED (MatchResult.sol)');
+    } else {
+      console.log('Match recording: simulated ledger (chain.js)');
+    }
+    if (isTokensOnchain()) {
+      const { arenaToken, arenaBadges } = tokenAddresses();
+      console.log(`On-chain rewards ENABLED — ArenaToken ${arenaToken}, ArenaBadges ${arenaBadges}`);
+    } else {
+      console.log('Rewards: simulated only (set ARENA_TOKEN_ADDRESS/ARENA_BADGES_ADDRESS to enable)');
+    }
+  });
+}
 
 export { server, app, io };
 

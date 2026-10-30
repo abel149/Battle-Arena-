@@ -1270,6 +1270,21 @@ export function verifyParentPin(address, pin) {
   };
 }
 
+export function hasParentPin(address) {
+  open();
+  return !!prepared.getParentPin.get(address || 'default');
+}
+
+export function getChoreById(id) {
+  open();
+  return prepared.getChoreById.get(id) || null;
+}
+
+export function getVoucherById(id) {
+  open();
+  return prepared.getVoucherById.get(id) || null;
+}
+
 export function setParentPin(address, newPin) {
   open();
   const clean = String(newPin || '').trim();

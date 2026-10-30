@@ -12,8 +12,9 @@ let moves = 0;
 
 socket.on('connect', async () => {
   console.log('connected');
-  const sig = await signer.signMessage(`Battle Arena login for ${me}`);
-  socket.emit('identify', { address: me, name: 'SmokeTest', signature: sig });
+  const issuedAt = Date.now();
+  const sig = await signer.signMessage(`Battle Arena login for ${me}\nIssued: ${issuedAt}`);
+  socket.emit('identify', { address: me, name: 'SmokeTest', signature: sig, issuedAt });
 });
 
 socket.on('match:start', (d) => {

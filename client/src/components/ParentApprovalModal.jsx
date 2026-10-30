@@ -12,23 +12,43 @@ export default function ParentApprovalModal({ parentAddress, onClose, onChoreApp
   const [showPinChange, setShowPinChange] = useState(false);
   const [newPin, setNewPin] = useState('');
   const [pinChangeMsg, setPinChangeMsg] = useState(null);
+  const [setupMode, setSetupMode] = useState(false);
 
-  // Authenticate parent with PIN
+  // Authenticate parent with PIN (the first time, the typed PIN becomes the Parent PIN)
   async function handlePinSubmit(e) {
     e.preventDefault();
     setPinError(null);
+    const clean = pin.trim();
     try {
+      if (setupMode) {
+        if (!/^\d{4,6}$/.test(clean)) return setPinError('PIN must be 4 to 6 digits.');
+        const created = await fetch(`${API}/api/parent/set-pin`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: clean }),
+        });
+        const createdData = await created.json();
+        if (createdData.error) return setPinError(createdData.error);
+        setSetupMode(false);
+        setAuthenticated(true);
+        loadPendingChores();
+        return;
+      }
       const res = await fetch(`${API}/api/parent/verify-pin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: parentAddress || 'default', pin: pin.trim() }),
+        body: JSON.stringify({ pin: clean }),
       });
       const data = await res.json();
       if (data.ok) {
         setAuthenticated(true);
         loadPendingChores();
+      } else if (data.needsSetup) {
+        setSetupMode(true);
+        setPin('');
+        setPinError(null);
       } else {
-        setPinError('Incorrect Parent PIN. (Default PIN is 1234)');
+        setPinError(data.error || 'Incorrect Parent PIN.');
       }
     } catch {
       setPinError('Failed to verify PIN. Try again.');
@@ -112,8 +132,10 @@ export default function ParentApprovalModal({ parentAddress, onClose, onChoreApp
         {!authenticated ? (
           <div className="parent-pin-gate">
             <div className="parent-gate-icon">🔒</div>
-            <h3>Enter Parent PIN</h3>
-            <p>Protected area for parents to approve chores and unlock arena skins.</p>
+            <h3>{setupMode ? 'Create Your Parent PIN' : 'Enter Parent PIN'}</h3>
+            <p>{setupMode
+              ? 'No Parent PIN is set yet. Choose a 4-6 digit PIN that only a parent knows.'
+              : 'Protected area for parents to approve chores and unlock arena skins.'}</p>
             <form onSubmit={handlePinSubmit} className="parent-pin-form">
               <input
                 type="password"
@@ -121,17 +143,17 @@ export default function ParentApprovalModal({ parentAddress, onClose, onChoreApp
                 pattern="[0-9]*"
                 inputMode="numeric"
                 className="parent-pin-input"
-                placeholder="1234"
+                placeholder={setupMode ? 'New PIN' : 'PIN'}
                 value={pin}
                 onChange={e => setPin(e.target.value)}
                 autoFocus
               />
               {pinError && <div className="pin-error-text">{pinError}</div>}
               <button type="submit" className="btn-pin-submit">
-                Unlock Parent Portal →
+                {setupMode ? 'Create PIN & Unlock →' : 'Unlock Parent Portal →'}
               </button>
             </form>
-            <div className="pin-hint">💡 First time? Default family PIN is <strong>1234</strong>.</div>
+            <div className="pin-hint">💡 First time? You will be asked to create a PIN.</div>
           </div>
         ) : (
           <div className="parent-dashboard-body">

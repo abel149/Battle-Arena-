@@ -119,8 +119,9 @@ async function playMatch() {
   const socket = io(SERVER_URL, { reconnection: false, timeout: 10000 });
   try {
     await onceConnected(socket);
-    const sig = await signer.signMessage(`Battle Arena login for ${wallet}`);
-    socket.emit('identify', { address: wallet, name: 'OnchainTest', signature: sig });
+    const issuedAt = Date.now();
+    const sig = await signer.signMessage(`Battle Arena login for ${wallet}\nIssued: ${issuedAt}`);
+    socket.emit('identify', { address: wallet, name: 'OnchainTest', signature: sig, issuedAt });
     const start = waitFor(socket, 'match:start');
     socket.emit('match:bot', { gameType: 'memory', deck: 'flags', pairs: 2 });
     const match = await start;

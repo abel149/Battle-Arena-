@@ -23,8 +23,8 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { JsonRpcProvider, Wallet, Contract, NonceManager, getAddress, ZeroAddress, encodeBytes32String, decodeBytes32String } from 'ethers';
-import { getSharedSigner } from './chain-signer.js';
+import { Contract, getAddress, ZeroAddress, encodeBytes32String, decodeBytes32String } from 'ethers';
+import { getProvider, getSigner } from './signer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ADDRESS_FILE = path.join(__dirname, 'match-result-address.json');
@@ -57,8 +57,7 @@ async function ensureContract() {
   if (!address) throw new Error('Set MATCH_RESULT_ADDRESS to enable on-chain recording');
   if (!process.env.NODE_HTTP_URL) throw new Error('NODE_HTTP_URL is required when on-chain recording is enabled');
 
-  const shared = getSharedSigner();
-  provider = shared.provider;
+  provider = getProvider();
   const network = await provider.getNetwork();
   if (expectedChainId && network.chainId !== BigInt(expectedChainId)) {
     throw new Error(`Connected to chain ${network.chainId}, expected ${expectedChainId}`);
@@ -66,7 +65,8 @@ async function ensureContract() {
   const code = await provider.getCode(address);
   if (code === '0x') throw new Error(`No contract deployed at ${address} on chain ${network.chainId}`);
 
-  signer = shared.signer || provider;
+  // Shared NonceManager (signer.js) â€” must be the same instance chain-tokens.js uses.
+  signer = getSigner() || provider;
   contract = new Contract(address, MATCH_RESULT_ABI, signer);
   return contract;
 }
@@ -126,7 +126,6 @@ function normalizeMatch(match) {
 export function isOnchain() {
   return USE_ONCHAIN;
 }
-
 // Human-readable chain info for the front end (GET /api/chain/status).
 const CHAIN_NAMES = {
   31337: 'Local Hardhat',
@@ -163,7 +162,6 @@ export async function chainInfo() {
     return { onchain: true, error: err.message, network: 'Chain unreachable', chainId: null, blockNumber: null, contract: configuredAddress, explorerTx: null };
   }
 }
-
 /// Record a completed match on-chain. Returns the receipt entry.
 export async function recordMatch({ matchId, gameType, players, winner, moves }) {
   if (!USE_ONCHAIN) {

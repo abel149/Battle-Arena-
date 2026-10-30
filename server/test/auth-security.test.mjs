@@ -98,13 +98,13 @@ test('Security SEC-01 & SEC-02: rejecting unauthenticated login and registration
   // 7. Brain Quiz cooldown check (SEC-11)
   const quiz1 = await fetch(`${serverUrl}/api/chores/quiz-complete`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${legitJson.token}` },
     body: JSON.stringify({ kidAddress: legitWallet.address, score: 5 }),
   });
   assert.equal(quiz1.status, 200);
   const quiz2 = await fetch(`${serverUrl}/api/chores/quiz-complete`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${legitJson.token}` },
     body: JSON.stringify({ kidAddress: legitWallet.address, score: 5 }),
   });
   assert.equal(quiz2.status, 400, 'Immediate duplicate quiz must trigger cooldown');
@@ -121,7 +121,7 @@ test('Security SEC-01 & SEC-02: rejecting unauthenticated login and registration
 
   const pinAuth = await fetch(`${serverUrl}/api/parent/set-pin`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${legitJson.token}` },
     body: JSON.stringify({ address: legitWallet.address, pin: '9999', currentPin: '1234' }),
   });
   assert.equal(pinAuth.status, 200, 'Setting PIN with verified current PIN succeeds');
@@ -129,7 +129,7 @@ test('Security SEC-01 & SEC-02: rejecting unauthenticated login and registration
   // 9. Chore reward capping check (SEC-16)
   const choreRes = await fetch(`${serverUrl}/api/chores/create`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${legitJson.token}` },
     body: JSON.stringify({
       kidAddress: legitWallet.address,
       title: 'Exploit test',
