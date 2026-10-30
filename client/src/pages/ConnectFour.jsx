@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { API, socket, signAndIdentify } from '../socket.js';
+import { API, socket, signAndIdentify, CONNECT_FOUR } from '../socket.js';
 import { navigate, useRoute } from '../lib/router.js';
 import { short, useProfile } from '../lib/session.js';
 import RoomCode from '../components/RoomCode.jsx';
 import MatchChat from '../components/MatchChat.jsx';
 import './connectfour.css';
 
-const COLS = 7;
-const ROWS = 6;
+const { COLS, ROWS } = CONNECT_FOUR;
 
 export default function ConnectFour() {
   const route = useRoute();

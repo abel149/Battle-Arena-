@@ -9,6 +9,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { ENERGY_CONFIG, REWARD_CONFIG } from '../shared/constants.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_FILE = process.env.ARENA_DB_PATH || path.join(__dirname, 'data.sqlite');
@@ -1131,28 +1132,35 @@ export function applyResult(address, result, ctx = {}) {
   p.matches += 1;
   if (result === 'win') {
     p.wins += 1;
-    p.tokens += 10;
-    p.xp += 50;
+    p.tokens += REWARD_CONFIG.WIN_TOKENS;
+    p.xp += REWARD_CONFIG.WIN_XP;
     p.streak += 1;
   }
   if (result === 'draw') {
     p.draws += 1;
-    p.tokens += 3;
-    p.xp += 20;
+    p.tokens += REWARD_CONFIG.DRAW_TOKENS;
+    p.xp += REWARD_CONFIG.DRAW_XP;
     p.streak = 0;
   }
   if (result === 'loss') {
     p.losses += 1;
-    p.tokens += 1;
-    p.xp += 10;
+    p.tokens += REWARD_CONFIG.LOSS_TOKENS;
+    p.xp += REWARD_CONFIG.LOSS_XP;
     p.streak = 0;
   }
   p.bestStreak = Math.max(p.bestStreak, p.streak);
-  if (ctx.daily) p.xp += 15;
+  if (ctx.daily) p.xp += REWARD_CONFIG.DAILY_BONUS_XP;
   p.level = levelFor(p.xp);
 
   // Weekly leaderboard points mirror the ARENA earned this match.
-  const earned = result === 'win' ? 10 : result === 'draw' ? 3 : result === 'loss' ? 1 : 0;
+  const earned =
+    result === 'win'
+      ? REWARD_CONFIG.WIN_TOKENS
+      : result === 'draw'
+        ? REWARD_CONFIG.DRAW_TOKENS
+        : result === 'loss'
+          ? REWARD_CONFIG.LOSS_TOKENS
+          : 0;
   if (earned > 0) {
     prepared.weeklyUpsert.run({
       week: weekStartFor(),
@@ -1163,8 +1171,11 @@ export function applyResult(address, result, ctx = {}) {
   }
 
   // Battle pass progression: every finished match awards +25 Battle Pass XP
-  p.battlePassXp = (p.battlePassXp || 0) + 25;
-  p.battlePassTier = Math.min(10, Math.floor(p.battlePassXp / 100) + 1);
+  p.battlePassXp = (p.battlePassXp || 0) + REWARD_CONFIG.BATTLE_PASS_MATCH_XP;
+  p.battlePassTier = Math.min(
+    REWARD_CONFIG.MAX_BATTLE_PASS_TIER,
+    Math.floor(p.battlePassXp / REWARD_CONFIG.BATTLE_PASS_TIER_XP) + 1
+  );
   syncBattlePassVouchers(address, p.battlePassTier, p.parentAddress);
 
   if (ctx.gameType === 'memory' && ctx.deck) {
@@ -1626,7 +1637,7 @@ export function redeemVoucher(voucherId, parentAddress) {
  * @param {number} [amount=1] - Amount of energy to consume.
  * @returns {{ok?: boolean, energy?: number, error?: string}} Outcome and remaining energy.
  */
-export function consumeEnergy(kidAddress, amount = 1) {
+export function consumeEnergy(kidAddress, amount = ENERGY_CONFIG.MATCH_COST) {
   open();
   const p = getPlayer(kidAddress);
   if (!p) return { error: 'Player not found' };
@@ -1646,7 +1657,7 @@ export function consumeEnergy(kidAddress, amount = 1) {
  * @param {number} [amount=2] - Amount of energy to add.
  * @returns {{ok?: boolean, energy?: number, error?: string}} Outcome and updated energy.
  */
-export function addEnergy(kidAddress, amount = 2) {
+export function addEnergy(kidAddress, amount = ENERGY_CONFIG.CHORE_REFILL_ENERGY) {
   open();
   const p = getPlayer(kidAddress);
   if (!p) return { error: 'Player not found' };

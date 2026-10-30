@@ -7,6 +7,7 @@
 
 import { io } from 'socket.io-client';
 import { ethers } from 'ethers';
+export * from '../../shared/constants.js';
 
 const defaultServer =
   typeof window !== 'undefined' && window.location?.hostname

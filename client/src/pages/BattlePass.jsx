@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { API, socket, signAndIdentify } from '../socket.js';
+import { API, socket, ENERGY_CONFIG } from '../socket.js';
 import { navigate, useRoute } from '../lib/router.js';
 import { short, useProfile } from '../lib/session.js';
 import { ethers } from 'ethers';
@@ -370,7 +370,7 @@ export default function BattlePass() {
     }
   }
 
-  const currentEnergy = data?.energy ?? profile?.energy ?? 5;
+  const currentEnergy = data?.energy ?? profile?.energy ?? ENERGY_CONFIG.DEFAULT_MAX_ENERGY;
   const currentTier = data?.battlePassTier ?? profile?.battlePassTier ?? 1;
   const currentXp = data?.battlePassXp ?? profile?.battlePassXp ?? 0;
   const allowance = data?.allowanceBalance ?? profile?.allowanceBalance ?? 0;

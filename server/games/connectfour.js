@@ -6,11 +6,9 @@
  * The first player to connect four discs horizontally, vertically, or diagonally wins the match.
  */
 
-/** @constant {number} Number of columns in Connect Four board */
-const COLS = 7;
+import { CONNECT_FOUR } from '../../shared/constants.js';
 
-/** @constant {number} Number of rows in Connect Four board */
-const ROWS = 6;
+const { COLS, ROWS, WIN_LENGTH } = CONNECT_FOUR;
 
 /**
  * Creates and initializes a Connect Four game session.
@@ -136,7 +134,7 @@ function checkWin(grid, r, c, sym) {
       } else break;
     }
 
-    if (cells.length >= 4) return cells.slice(0, 4);
+    if (cells.length >= WIN_LENGTH) return cells.slice(0, WIN_LENGTH);
   }
   return null;
 }

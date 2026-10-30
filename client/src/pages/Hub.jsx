@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { API, socket, logout } from '../socket.js';
+import { API, socket, logout, ENERGY_CONFIG } from '../socket.js';
 import { navigate } from '../lib/router.js';
 import { saveWallet, short, useProfile, clearWalletSession } from '../lib/session.js';
 import ArenaPreview3D from '../components/ArenaPreview3D.jsx';
-import AuthModal from '../components/AuthModal.jsx';
 import SkinLockerModal from '../components/SkinLockerModal.jsx';
 import ParentApprovalModal from '../components/ParentApprovalModal.jsx';
 import ReplayModal from '../components/ReplayModal.jsx';
@@ -46,7 +45,7 @@ export default function Hub() {
   const [verifyId, setVerifyId] = useState(null);
 
   function tryPlay(path) {
-    if ((profile?.energy ?? 5) <= 0) {
+    if ((profile?.energy ?? ENERGY_CONFIG.DEFAULT_MAX_ENERGY) <= 0) {
       setShowEnergyModal(true);
       return;
     }
@@ -172,15 +171,21 @@ export default function Hub() {
             title="Arena Energy — Refill by completing chores or quizzes"
           >
             <span className="energy-meter-title">ENERGY</span>
-            <div className="energy-meter-cells" aria-label={`${profile?.energy ?? 5} of 5 energy`}>
+            <div
+              className="energy-meter-cells"
+              aria-label={`${profile?.energy ?? ENERGY_CONFIG.DEFAULT_MAX_ENERGY} of ${ENERGY_CONFIG.DEFAULT_MAX_ENERGY} energy`}
+            >
               {[1, 2, 3, 4, 5].map((i) => (
                 <span
                   key={i}
-                  className={`energy-cell ${i <= (profile?.energy ?? 5) ? 'active' : ''}`}
+                  className={`energy-cell ${i <= (profile?.energy ?? ENERGY_CONFIG.DEFAULT_MAX_ENERGY) ? 'active' : ''}`}
                 />
               ))}
             </div>
-            <span className="energy-meter-val">{profile?.energy ?? 5}/5</span>
+            <span className="energy-meter-val">
+              {profile?.energy ?? ENERGY_CONFIG.DEFAULT_MAX_ENERGY}/
+              {ENERGY_CONFIG.DEFAULT_MAX_ENERGY}
+            </span>
           </a>
 
           {/* Chain Connection Badge */}

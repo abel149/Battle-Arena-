@@ -21,27 +21,16 @@ import {
   rateLimit,
 } from './security.js';
 import { ENGINES, DECKS, dailyDeckId } from './games/index.js';
-import {
-  recordMatch,
-  getLedger,
-  isOnchain,
-  chainInfo,
-  normalizeLedgerEntry,
-  ONCHAIN_LABELS,
-} from './chain-onchain.js';
+import { recordMatch, getLedger, isOnchain, chainInfo } from './chain-onchain.js';
 import {
   distributeRewards,
   isTokensOnchain,
   tokenAddresses,
   tokenBalance,
 } from './chain-tokens.js';
-import {
-  recordChoreVerification,
-  verifyParentAttestation,
-  getChoreLedger,
-  isChoreOnchain,
-} from './chain-chore.js';
+import { recordChoreVerification, verifyParentAttestation } from './chain-chore.js';
 import * as store from './store.js';
+import { SOCKET_EVENTS, GAME_TYPES, ENERGY_CONFIG } from '../shared/constants.js';
 
 const PORT = process.env.PORT || 3001;
 const BOT = '0xB07000000000000000000000000000000000000B';
@@ -389,11 +378,9 @@ app.post('/api/chores/verify', requireSession, async (req, res) => {
   const target = store.getChoreById(choreId);
   if (!target) return res.status(404).json({ error: 'Chore not found' });
   if (!canAdminister(req.auth, target.kidAddress)) {
-    return res
-      .status(403)
-      .json({
-        error: 'Parent approval required (link a parent account or unlock with the Parent PIN)',
-      });
+    return res.status(403).json({
+      error: 'Parent approval required (link a parent account or unlock with the Parent PIN)',
+    });
   }
 
   // If signed attestation provided, verify it
@@ -576,12 +563,10 @@ app.post('/api/parent/set-pin', (req, res) => {
   }
 
   if (!authorized) {
-    return res
-      .status(401)
-      .json({
-        error:
-          'Authentication required: provide correct current PIN, session token, or wallet signature',
-      });
+    return res.status(401).json({
+      error:
+        'Authentication required: provide correct current PIN, session token, or wallet signature',
+    });
   }
 
   const result = store.setParentPin(targetAddress, pin);
@@ -898,7 +883,7 @@ function createRoom(gameType, addrX, addrO, getSocket, opts = {}) {
   store.saveActiveRoom(room);
   for (const addr of [addrX, addrO]) {
     if (addr && addr !== BOT) {
-      store.consumeEnergy(addr, 1);
+      store.consumeEnergy(addr, ENERGY_CONFIG.MATCH_COST);
     }
     const s = getSocket(addr);
     if (s) {
