@@ -1,3 +1,11 @@
+/**
+ * @file deploy-match-result.js
+ * @description Standalone deployment script for MatchResult.sol.
+ * Connects to the target JSON-RPC network (e.g. local Hardhat node or Base Sepolia testnet),
+ * deploys the MatchResult smart contract using compiled bytecode artifacts, and records
+ * the resulting contract address, network name, and chain ID to match-result-address.json.
+ */
+
 import { ethers } from 'ethers';
 import fs from 'fs';
 import path from 'path';
@@ -13,6 +21,13 @@ const MATCH_RESULT_ABI = [
   'event MatchRecorded(bytes32 matchId, string gameType, address winner, address playerA, address playerB, uint256 moves, uint64 timestamp)',
 ];
 
+/**
+ * Main deployment routine for MatchResult contract.
+ *
+ * @async
+ * @function main
+ * @throws {Error} If chain ID does not match requested network or required credentials are missing.
+ */
 async function main() {
   const nodeUrl = process.env.NODE_HTTP_URL
     || process.env.BASE_SEPOLIA_RPC_URL

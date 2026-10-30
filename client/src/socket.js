@@ -1,3 +1,10 @@
+/**
+ * @file socket.js
+ * @description WebSocket client connection, EIP-191 message signing, and session token management.
+ * Provides unified authentication transport supporting both Web3 wallet signatures (MetaMask / embedded secp256k1)
+ * and bearer session tokens with global automatic authorization header injection for fetch requests.
+ */
+
 import { io } from 'socket.io-client';
 import { ethers } from 'ethers';
 
@@ -5,30 +12,58 @@ const defaultServer = typeof window !== 'undefined' && window.location?.hostname
   ? `${window.location.protocol}//${window.location.hostname}:3001`
   : 'http://localhost:3001';
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || defaultServer;
+
+/** @type {import('socket.io-client').Socket} Singleton WebSocket connection instance */
 export const socket = io(SERVER_URL, { autoConnect: true });
+
+/** @type {string} Base URL for backend HTTP API endpoints */
 export const API = SERVER_URL;
 
 const SESSION_KEY = 'arena_session';
 const WALLET_KEY = 'arena_wallet';
 
+/**
+ * Retrieves the current session Bearer token from localStorage.
+ *
+ * @function getSessionToken
+ * @returns {string | null} Stored session token or null.
+ */
 export const getSessionToken = () => localStorage.getItem(SESSION_KEY);
+
+/**
+ * Persists an authenticated session Bearer token into localStorage.
+ *
+ * @function saveSessionToken
+ * @param {string} token - Session token string.
+ */
 export const saveSessionToken = token => localStorage.setItem(SESSION_KEY, token);
+
+/**
+ * Clears the authenticated session token from localStorage.
+ *
+ * @function clearSessionToken
+ */
 export const clearSessionToken = () => localStorage.removeItem(SESSION_KEY);
 
 /**
- * The shared auth message. Must match server/index.js AUTH_MESSAGE exactly;
- * the server verifies it with standard EIP-191 (ethers.verifyMessage).
+ * Constructs the canonical EIP-191 challenge authentication message.
+ *
+ * @function authMessage
+ * @param {string} address - Player Ethereum wallet address.
+ * @param {number|string} issuedAt - Epoch timestamp in milliseconds.
+ * @returns {string} Plaintext authentication challenge string.
  */
 export function authMessage(address, issuedAt) {
   return `Battle Arena login for ${address}\nIssued: ${issuedAt}`;
 }
 
 /**
- * Sign the auth message as a human user would:
- *  - MetaMask-connected wallet → personal_sign via window.ethereum
- *  - Demo wallet (has a stored private key) → ethers Wallet.signMessage
- * The message carries an issue time, so the server rejects stale or reused signatures.
- * Returns { signature, issuedAt }, or null when no signer is available.
+ * Signs the authentication challenge message with MetaMask (personal_sign) or embedded private key.
+ *
+ * @async
+ * @function signAuth
+ * @param {Object} wallet - Wallet object containing address, source, and optional privateKey.
+ * @returns {Promise<{signature: string, issuedAt: number} | null>} Signature bundle or null.
  */
 export async function signAuth(wallet) {
   if (!wallet?.address) return null;
@@ -46,8 +81,11 @@ export async function signAuth(wallet) {
 }
 
 /**
- * Emit `identify`. A saved login session (token) is used when present — it works
- * from any browser and never opens a MetaMask popup. Otherwise the wallet signs.
+ * Emits the `identify` WebSocket event using an existing session token or fresh wallet signature.
+ *
+ * @async
+ * @function signAndIdentify
+ * @param {Object} wallet - Wallet instance to identify.
  */
 export async function signAndIdentify(wallet) {
   const token = getSessionToken();
@@ -71,7 +109,11 @@ if (typeof window !== 'undefined' && !window.__arenaFetchPatched) {
   };
 }
 
-/** End the login session on the server and this browser, then reload to the sign-in screen. */
+/**
+ * Logs the player out: invalidates server session, clears local storage, and reloads page.
+ *
+ * @function logout
+ */
 export function logout() {
   socket.emit('auth:logout', { token: getSessionToken() });
   clearSessionToken();
@@ -80,7 +122,12 @@ export function logout() {
 }
 
 /**
- * Sign a message with a known private key (for e2e tests / debug scripts).
+ * Cryptographically signs a plaintext message using a known hex private key.
+ *
+ * @function signMessage
+ * @param {string} privateKeyHex - 64-char hex private key.
+ * @param {string} message - Plaintext message to sign.
+ * @returns {Promise<string>} Hex-encoded EIP-191 signature.
  */
 export function signMessage(privateKeyHex, message) {
   return new ethers.Wallet(privateKeyHex).signMessage(message);
@@ -98,16 +145,16 @@ socket.on('auth:success', ({ token } = {}) => {
 socket.on('player:registered:user', ({ address, name } = {}) => {
   if (!address) return;
   let w = null;
-  try { w = JSON.parse(localStorage.getItem(WALLET_KEY) || 'null'); } catch { /* ignore */ }
-  if (w?.address?.toLowerCase() === address.toLowerCase()) {
-    if (name && w.name !== name) localStorage.setItem(WALLET_KEY, JSON.stringify({ ...w, name }));
-    return;
+  try {
+    w = JSON.parse(localStorage.getItem(WALLET_KEY) || 'null');
+  } catch {}
+  if (!w || w.address?.toLowerCase() !== address.toLowerCase()) {
+    w = {
+      address,
+      name: name || address.slice(0, 8),
+      source: 'account',
+      createdAt: Date.now(),
+    };
+    localStorage.setItem(WALLET_KEY, JSON.stringify(w));
   }
-  localStorage.setItem(WALLET_KEY, JSON.stringify({ address, name: name || w?.name, source: 'account' }));
-});
-
-socket.on('auth:expired', () => {
-  clearSessionToken();
-  localStorage.removeItem(WALLET_KEY);
-  window.location.reload();
 });

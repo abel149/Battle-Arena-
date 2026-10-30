@@ -451,7 +451,15 @@ function prepare() {
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours (reduced from 30 days)
 const hashToken = token => crypto.createHash('sha256').update(String(token)).digest('hex');
 
-/** Create a login session for `address`; returns the opaque token for the client. */
+/**
+ * Creates an authenticated session for an Ethereum wallet address.
+ * Generates a 32-byte cryptographically secure random token, stores its SHA-256 hash
+ * with timestamp in the sessions table, and returns the plaintext token to the client.
+ *
+ * @function createSession
+ * @param {string} address - Player Ethereum wallet address.
+ * @returns {string} Plaintext opaque session token.
+ */
 export function createSession(address) {
   open();
   const token = crypto.randomBytes(32).toString('hex');
@@ -459,7 +467,14 @@ export function createSession(address) {
   return token;
 }
 
-/** Address a valid, unexpired session token belongs to — or null. */
+/**
+ * Resolves a Bearer session token to its owner wallet address if valid and unexpired.
+ * Automatically evicts expired sessions from SQLite.
+ *
+ * @function addressForSession
+ * @param {string} token - Plaintext session token.
+ * @returns {string | null} Owner wallet address or null if invalid/expired.
+ */
 export function addressForSession(token) {
   if (!token || typeof token !== 'string') return null;
   open();
@@ -472,6 +487,12 @@ export function addressForSession(token) {
   return row.address;
 }
 
+/**
+ * Invalidate and revoke an active session token.
+ *
+ * @function deleteSession
+ * @param {string} token - Plaintext session token to delete.
+ */
 export function deleteSession(token) {
   if (!token || typeof token !== 'string') return;
   open();
@@ -563,6 +584,14 @@ function createPlayer(address, name) {
 
 // ---- Public API (drop-in replacement for the JSON-file store) ----
 
+/**
+ * Inserts or updates a player record in SQLite, backfilling default stats and fields.
+ *
+ * @function upsertPlayer
+ * @param {string} address - Player Ethereum wallet address.
+ * @param {string} [name] - Optional display name.
+ * @returns {Object} Freshly loaded player profile object from database.
+ */
 export function upsertPlayer(address, name) {
   open();
   const existing = getPlayer(address);
@@ -591,6 +620,13 @@ export function upsertPlayer(address, name) {
   return getPlayer(address); // return fresh copy from DB
 }
 
+/**
+ * Retrieves a complete player record by wallet address.
+ *
+ * @function getPlayer
+ * @param {string} address - Player Ethereum address.
+ * @returns {Object | null} Player profile object or null if not found.
+ */
 export function getPlayer(address) {
   open();
   return rowToPlayer(prepared.getByAddress.get(address));
@@ -606,6 +642,13 @@ function usernameIndex() {
   return idx;
 }
 
+/**
+ * Validates a username against length and character requirements (3-20 alphanumeric or underscore).
+ *
+ * @function validateUsername
+ * @param {string} username - Candidate username string.
+ * @returns {string | null} Validation error description, or null if valid.
+ */
 export function validateUsername(username) {
   if (!username || !username.trim()) return 'Username is required';
   const n = username.trim();
@@ -613,21 +656,58 @@ export function validateUsername(username) {
   return null;
 }
 
+/**
+ * Validates password strength (minimum 8 characters).
+ *
+ * @function validatePassword
+ * @param {string} password - Candidate password string.
+ * @returns {string | null} Error description or null if valid.
+ */
 export function validatePassword(password) {
   if (!password) return 'Password is required';
   if (password.length < 8) return 'Password must be at least 8 characters';
   return null;
 }
 
+/**
+ * Asynchronously hashes a password using bcrypt with cost factor 10.
+ *
+ * @async
+ * @function hashPassword
+ * @param {string} password - Plaintext password.
+ * @returns {Promise<string>} Bcrypt hash string.
+ */
 export async function hashPassword(password) {
   return bcrypt.hash(password, 10);
 }
 
+/**
+ * Verifies a candidate plaintext password against an existing bcrypt hash.
+ *
+ * @async
+ * @function verifyPassword
+ * @param {string} password - Candidate plaintext password.
+ * @param {string} hash - Bcrypt hash from database.
+ * @returns {Promise<boolean>} True if password matches hash.
+ */
 export async function verifyPassword(password, hash) {
   if (!hash) return false;
   return bcrypt.compare(password, hash);
 }
 
+/**
+ * Registers a new player identity linking wallet address with username and password.
+ *
+ * @async
+ * @function registerPlayer
+ * @param {string} address - Player wallet address.
+ * @param {Object} params - Registration attributes.
+ * @param {string} [params.name] - Display name.
+ * @param {string} params.username - Unique alphanumeric handle.
+ * @param {string} [params.email] - Optional contact email.
+ * @param {string} params.password - Account password.
+ * @returns {Promise<Object>} Created player record or error object `{ error }`.
+ */
 export async function registerPlayer(address, { name, username, email, password } = {}) {
   open();
   const existingPlayer = getPlayer(address);
@@ -664,6 +744,16 @@ export async function registerPlayer(address, { name, username, email, password 
   return getPlayer(address);
 }
 
+/**
+ * Authenticates a registered player using username and password credentials.
+ *
+ * @async
+ * @function loginPlayerByCredentials
+ * @param {Object} credentials - Login credentials.
+ * @param {string} credentials.username - Registered username.
+ * @param {string} credentials.password - Plaintext password.
+ * @returns {Promise<Object>} Authenticated player profile or error object `{ error }`.
+ */
 export async function loginPlayerByCredentials({ username, password } = {}) {
   open();
   const usernameErr = validateUsername(username);
@@ -680,6 +770,19 @@ export async function loginPlayerByCredentials({ username, password } = {}) {
   return p;
 }
 
+/**
+ * Dual-mode player login: supports password verification or cryptographic wallet signature authorization.
+ *
+ * @async
+ * @function loginPlayer
+ * @param {string} address - Player Ethereum wallet address.
+ * @param {Object} [params={}] - Login payload.
+ * @param {string} [params.username] - Optional handle for registration.
+ * @param {string} [params.name] - Optional display name.
+ * @param {string} [params.password] - Account password if using credential login.
+ * @param {boolean} [params.signatureVerified=false] - True if EIP-191 signature was validated.
+ * @returns {Promise<Object>} Authenticated player profile or error object `{ error }`.
+ */
 export async function loginPlayer(address, { username, name, password, signatureVerified = false } = {}) {
   open();
   const existingPlayer = getPlayer(address);
@@ -706,11 +809,25 @@ export async function loginPlayer(address, { username, name, password, signature
   return reg;
 }
 
+/**
+ * Checks whether an address has a registered account.
+ *
+ * @function isRegistered
+ * @param {string} address - Player wallet address.
+ * @returns {boolean} True if player is registered.
+ */
 export function isRegistered(address) {
   const p = getPlayer(address);
   return !!(p && p.registered);
 }
 
+/**
+ * Retrieves a player profile stripped of sensitive secrets (password and email).
+ *
+ * @function safeProfile
+ * @param {string} address - Player wallet address.
+ * @returns {Object | null} Sanitized player profile or null.
+ */
 export function safeProfile(address) {
   const p = getPlayer(address);
   if (!p) return null;
@@ -718,18 +835,38 @@ export function safeProfile(address) {
   return safe;
 }
 
+/**
+ * Lists all registered player usernames, addresses, and display names.
+ *
+ * @function usernames
+ * @returns {Array<{address: string, username: string, name: string}>} Username directory.
+ */
 export function usernames() {
   open();
   return db.prepare('SELECT address, username, name FROM players WHERE username IS NOT NULL').all()
     .map(p => ({ address: p.address, username: p.username, name: p.name }));
 }
 
+/**
+ * Strips password hash and email fields from a profile object.
+ *
+ * @function withoutPassword
+ * @param {Object} p - Raw player profile object.
+ * @returns {Object} Cleaned player profile.
+ */
 export function withoutPassword(p) {
   if (!p) return p;
   const { password, email, ...safe } = p;
   return safe;
 }
 
+/**
+ * Strips private account fields (password, email, parentAddress, allowanceBalance) for public endpoints.
+ *
+ * @function publicProfile
+ * @param {Object} p - Raw player profile object.
+ * @returns {Object} Publicly shareable player profile.
+ */
 export function publicProfile(p) {
   if (!p) return p;
   const { password, email, parentAddress, allowanceBalance, ...safe } = p;
@@ -749,10 +886,29 @@ const BADGE_DEFS = [
   { id: 'memory_king', label: 'Memory King', desc: 'Win 10 Memory matches', check: p => p.memoryWins >= 10 },
 ];
 
+/**
+ * Calculates player level from total accrued experience points (XP).
+ * Formula: Math.floor(xp / 100) + 1.
+ *
+ * @function levelFor
+ * @param {number} xp - Cumulative XP points.
+ * @returns {number} Level integer (>= 1).
+ */
 export function levelFor(xp) {
   return Math.floor(xp / 100) + 1;
 }
 
+/**
+ * Updates player statistics after a finished game match.
+ * Calculates token rewards, streak counters, weekly leaderboard points,
+ * battle pass progression (+25 BP XP), unlocks badges, and persists updates.
+ *
+ * @function applyResult
+ * @param {string} address - Player wallet address.
+ * @param {'win'|'loss'|'draw'} result - Match outcome.
+ * @param {Object} [ctx={}] - Match context (gameType, deck, daily challenge).
+ * @returns {{player: Object, newBadges: Array<Object>}} Updated profile and newly earned badges.
+ */
 export function applyResult(address, result, ctx = {}) {
   open();
   const p = getPlayer(address) || { address, name: 'Player-' + address.slice(2, 8), wins: 0, losses: 0, draws: 0, matches: 0, tokens: 0, xp: 0, level: 1, streak: 0, bestStreak: 0, memoryWins: 0, deckStats: {}, badges: [], registered: false };
@@ -795,6 +951,12 @@ export function applyResult(address, result, ctx = {}) {
   return getPlayer(address);
 }
 
+/**
+ * Retrieves the global all-time leaderboard ranked by total wins and ARENA tokens.
+ *
+ * @function leaderboard
+ * @returns {Array<Object>} Ranked array of public player profiles.
+ */
 export function leaderboard() {
   open();
   return prepared.leaderboard.all()
@@ -803,6 +965,21 @@ export function leaderboard() {
 
 // ---- Finished-match archive (for the replay feature) ----
 
+/**
+ * Persists a finished game match record into the matches archive table for replay playback.
+ *
+ * @function saveMatch
+ * @param {Object} params - Match archive data.
+ * @param {string} params.matchId - Unique match identifier.
+ * @param {string} params.gameType - Game identifier.
+ * @param {string} [params.deck] - Card deck identifier if memory match.
+ * @param {Object} params.players - Players mapping ({ X: address, O: address }).
+ * @param {Object} [params.names] - Display names mapping ({ X: name, O: name }).
+ * @param {Object} [params.layout] - Initial board layout or question set.
+ * @param {string} params.result - Terminal outcome ('win', 'draw', 'loss').
+ * @param {string} [params.winner] - Winner wallet address or 'draw'.
+ * @param {Array<Object>} [params.moves] - Complete sequence of executed moves.
+ */
 export function saveMatch({ matchId, gameType, deck, players, names, layout, result, winner, moves }) {
   open();
   prepared.saveMatch.run({
@@ -819,6 +996,13 @@ export function saveMatch({ matchId, gameType, deck, players, names, layout, res
   });
 }
 
+/**
+ * Retrieves full archived match state and move list for interactive match replay.
+ *
+ * @function getReplay
+ * @param {string} matchId - Match identifier to query.
+ * @returns {Object | null} Replay record with deserialized game layout and moves, or null.
+ */
 export function getReplay(matchId) {
   open();
   const row = db.prepare('SELECT * FROM matches WHERE matchId = ?').get(matchId);
@@ -839,8 +1023,13 @@ export function getReplay(matchId) {
 
 // ---- Weekly leaderboard ----
 
-// Monday (UTC) of the week containing `now` as an ISO date string.
-// Every key rotation is an implicit leaderboard reset.
+/**
+ * Computes Monday 00:00 UTC date string (YYYY-MM-DD) for weekly leaderboard partitioning.
+ *
+ * @function weekStartFor
+ * @param {Date} [now=new Date()] - Reference date.
+ * @returns {string} ISO date string (YYYY-MM-DD) for start of current week.
+ */
 export function weekStartFor(now = new Date()) {
   const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const day = (d.getUTCDay() + 6) % 7; // 0 = Monday
@@ -848,6 +1037,13 @@ export function weekStartFor(now = new Date()) {
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * Retrieves the competitive weekly leaderboard for the current 7-day tournament window.
+ *
+ * @function leaderboardWeekly
+ * @param {Date} [now=new Date()] - Reference date.
+ * @returns {Array<{rank: number, address: string, name: string, level: number, points: number, wins: number}>} Ranked player standings.
+ */
 export function leaderboardWeekly(now = new Date()) {
   open();
   const week = weekStartFor(now);
@@ -864,6 +1060,14 @@ export function leaderboardWeekly(now = new Date()) {
   });
 }
 
+/**
+ * Retrieves individual player's points and win tally for the active weekly tournament.
+ *
+ * @function weeklyStats
+ * @param {string} address - Player wallet address.
+ * @param {Date} [now=new Date()] - Reference date.
+ * @returns {{week: string, points: number, wins: number}} Weekly tournament statistics.
+ */
 export function weeklyStats(address, now = new Date()) {
   open();
   const row = prepared.weeklyGet.get(weekStartFor(now), address);
@@ -872,7 +1076,13 @@ export function weeklyStats(address, now = new Date()) {
 
 // ---- On-chain badge id mapping (ArenaBadges.sol) ----
 
-// Deterministic ERC-1155 token id for a badge: index in BADGE_DEFS + 1.
+/**
+ * Converts string badge ID into deterministic ERC-1155 uint256 token ID (index in BADGE_DEFS + 1).
+ *
+ * @function badgeNumericId
+ * @param {string} badgeId - Badge string identifier.
+ * @returns {number | null} Numeric token ID or null if uncataloged.
+ */
 export function badgeNumericId(badgeId) {
   const idx = BADGE_DEFS.findIndex(d => d.id === badgeId);
   return idx === -1 ? null : idx + 1;
@@ -884,6 +1094,14 @@ export { getPlayer as safeProfileForInternal };
 
 // ---- Proof-of-Chore & Battle Pass API ----
 
+/**
+ * Synchronizes real-world family reward vouchers for unlocked battle pass tiers.
+ *
+ * @function syncBattlePassVouchers
+ * @param {string} kidAddress - Child wallet address.
+ * @param {number} tier - Current unlocked battle pass tier.
+ * @param {string | null} [parentAddress=null] - Supervising parent address.
+ */
 export function syncBattlePassVouchers(kidAddress, tier, parentAddress = null) {
   open();
   for (const t of BATTLE_PASS_TIERS) {
@@ -905,6 +1123,13 @@ export function syncBattlePassVouchers(kidAddress, tier, parentAddress = null) {
   }
 }
 
+/**
+ * Fetches all available and submitted chores for a child player, seeding defaults if empty.
+ *
+ * @function getChores
+ * @param {string} kidAddress - Child wallet address.
+ * @returns {Array<Object>} List of chore task records.
+ */
 export function getChores(kidAddress) {
   open();
   upsertPlayer(kidAddress);
@@ -936,6 +1161,15 @@ export function getChores(kidAddress) {
   return chores;
 }
 
+/**
+ * Marks a chore task as completed by the child and awaiting parental verification.
+ *
+ * @function submitChore
+ * @param {string} kidAddress - Child wallet address.
+ * @param {string} choreId - Chore identifier.
+ * @param {string} [notes=''] - Optional completion notes or details from child.
+ * @returns {Object} Updated chore record or error object `{ error }`.
+ */
 export function submitChore(kidAddress, choreId, notes = '') {
   open();
   const chore = prepared.getChoreById.get(choreId);
@@ -956,6 +1190,16 @@ export function submitChore(kidAddress, choreId, notes = '') {
   return prepared.getChoreById.get(choreId);
 }
 
+/**
+ * Parent oracle verification of a submitted chore: unlocks game energy, awards battle pass XP,
+ * credits ARENA token allowance, and triggers skin unlocks if requirements are fulfilled.
+ *
+ * @function verifyChore
+ * @param {string} choreId - Chore identifier.
+ * @param {string} parentAddress - Supervising parent oracle address.
+ * @param {string | null} [proofHash=null] - Optional on-chain transaction or cryptographic proof hash.
+ * @returns {Object} Verification outcome `{ ok: true, chore, player, unlockedSkin }` or `{ error }`.
+ */
 export function verifyChore(choreId, parentAddress, proofHash = null) {
   open();
   const chore = prepared.getChoreById.get(choreId);
@@ -1003,6 +1247,20 @@ export function verifyChore(choreId, parentAddress, proofHash = null) {
   };
 }
 
+/**
+ * Creates a parent-configured custom task with custom game energy, XP, and allowance rewards.
+ *
+ * @function createCustomChore
+ * @param {Object} params - Custom chore attributes.
+ * @param {string} params.kidAddress - Target child wallet address.
+ * @param {string} params.parentAddress - Supervising parent address.
+ * @param {string} params.title - Chore task title.
+ * @param {string} params.category - Classification category.
+ * @param {number} [params.energyReward=2] - Energy tickets granted on completion.
+ * @param {number} [params.xpReward=40] - XP reward granted on completion.
+ * @param {number} [params.allowanceReward=5] - Token allowance units granted.
+ * @returns {Object} Newly created chore record.
+ */
 export function createCustomChore({ kidAddress, parentAddress, title, category, energyReward, xpReward, allowanceReward }) {
   open();
   const id = 'chore_' + crypto.randomBytes(8).toString('hex');
@@ -1025,6 +1283,14 @@ export function createCustomChore({ kidAddress, parentAddress, title, category, 
   return prepared.getChoreById.get(id);
 }
 
+/**
+ * Links a child account (by wallet address or @username) to a parent supervisor wallet.
+ *
+ * @function linkParent
+ * @param {string} kidIdentifier - Child wallet address or username.
+ * @param {string} parentAddress - Supervising parent wallet address.
+ * @returns {Object} Updated child profile.
+ */
 export function linkParent(kidIdentifier, parentAddress) {
   open();
   let kidAddress = String(kidIdentifier || '').trim();
@@ -1039,6 +1305,13 @@ export function linkParent(kidIdentifier, parentAddress) {
   return getPlayer(kidAddress);
 }
 
+/**
+ * Retrieves all linked children and pending verification tasks for a parent wallet.
+ *
+ * @function getParentKids
+ * @param {string} parentAddress - Parent wallet address.
+ * @returns {{kids: Array<Object>, pendingChores: Array<Object>}} Kids and pending chores list.
+ */
 export function getParentKids(parentAddress) {
   open();
   const kids = prepared.getKidsForParent.all(parentAddress).map(rowToPlayer);
@@ -1046,6 +1319,13 @@ export function getParentKids(parentAddress) {
   return { kids, pendingChores: pending };
 }
 
+/**
+ * Retrieves all family reward vouchers for a child player.
+ *
+ * @function getVouchers
+ * @param {string} kidAddress - Child wallet address.
+ * @returns {Array<Object>} List of family reward vouchers.
+ */
 export function getVouchers(kidAddress) {
   open();
   const p = getPlayer(kidAddress);
@@ -1053,6 +1333,14 @@ export function getVouchers(kidAddress) {
   return prepared.getVouchersForKid.all(kidAddress);
 }
 
+/**
+ * Redeems an unlocked real-world family reward voucher.
+ *
+ * @function redeemVoucher
+ * @param {string} voucherId - Voucher identifier.
+ * @param {string} parentAddress - Parent authorizing redemption.
+ * @returns {Object} Updated voucher record or error object `{ error }`.
+ */
 export function redeemVoucher(voucherId, parentAddress) {
   open();
   const v = prepared.getVoucherById.get(voucherId);
@@ -1067,6 +1355,14 @@ export function redeemVoucher(voucherId, parentAddress) {
   return prepared.getVoucherById.get(voucherId);
 }
 
+/**
+ * Consumes game match entry tickets (energy) from player account.
+ *
+ * @function consumeEnergy
+ * @param {string} kidAddress - Child wallet address.
+ * @param {number} [amount=1] - Amount of energy to consume.
+ * @returns {{ok?: boolean, energy?: number, error?: string}} Outcome and remaining energy.
+ */
 export function consumeEnergy(kidAddress, amount = 1) {
   open();
   const p = getPlayer(kidAddress);
@@ -1079,6 +1375,14 @@ export function consumeEnergy(kidAddress, amount = 1) {
   return { ok: true, energy: p.energy };
 }
 
+/**
+ * Grants game energy tickets to a player account.
+ *
+ * @function addEnergy
+ * @param {string} kidAddress - Child wallet address.
+ * @param {number} [amount=2] - Amount of energy to add.
+ * @returns {{ok?: boolean, energy?: number, error?: string}} Outcome and updated energy.
+ */
 export function addEnergy(kidAddress, amount = 2) {
   open();
   const p = getPlayer(kidAddress);
@@ -1090,6 +1394,14 @@ export function addEnergy(kidAddress, amount = 2) {
 
 export const QUIZ_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes cooldown between brain quizzes
 
+/**
+ * Records completion of the daily brain quiz, granting energy (+2), BP XP (+40), and tokens (+2),
+ * subject to a 5-minute anti-farming cooldown.
+ *
+ * @function completeBrainQuiz
+ * @param {string} kidAddress - Child wallet address.
+ * @returns {Object} Updated energy and XP stats, or error object `{ error }`.
+ */
 export function completeBrainQuiz(kidAddress) {
   open();
   const normalized = String(kidAddress || '').toLowerCase();
@@ -1110,6 +1422,13 @@ export function completeBrainQuiz(kidAddress) {
   return { ok: true, energy: p.energy, battlePassXp: p.battlePassXp, battlePassTier: p.battlePassTier };
 }
 
+/**
+ * Retrieves the hashed Parent PIN for an address or default account.
+ *
+ * @function getParentPin
+ * @param {string} address - Player or parent address.
+ * @returns {string | null} Bcrypt hash or null.
+ */
 export function getParentPin(address) {
   open();
   const row = prepared.getParentPin.get(address);
@@ -1118,6 +1437,14 @@ export function getParentPin(address) {
 
 // ---- Skin & Parent Approval System ----
 
+/**
+ * Unlocks a cosmetic skin item for a player wallet.
+ *
+ * @function unlockSkin
+ * @param {string} address - Player wallet address.
+ * @param {string} skinId - Skin identifier.
+ * @returns {{ok?: boolean, skinId?: string, error?: string}} Unlock outcome.
+ */
 export function unlockSkin(address, skinId) {
   open();
   const skin = SKINS.find(s => s.id === skinId);
@@ -1126,6 +1453,14 @@ export function unlockSkin(address, skinId) {
   return { ok: true, skinId };
 }
 
+/**
+ * Checks whether a specific skin is unlocked for a player account.
+ *
+ * @function isSkinUnlocked
+ * @param {string} address - Player wallet address.
+ * @param {string} skinId - Skin identifier.
+ * @returns {boolean} True if skin is accessible.
+ */
 export function isSkinUnlocked(address, skinId) {
   open();
   if (skinId === 'neon-striker') return true;
@@ -1134,6 +1469,14 @@ export function isSkinUnlocked(address, skinId) {
   return rows.some(r => r.skinId === skinId);
 }
 
+/**
+ * Retrieves the complete catalog of customizable blaster skins with user-specific unlock,
+ * equip, and chore fulfillment statuses.
+ *
+ * @function getSkins
+ * @param {string} [address] - Optional player wallet address.
+ * @returns {Array<Object>} Catalog of skins with dynamic player unlock state.
+ */
 export function getSkins(address) {
   open();
   const p = address ? getPlayer(address) : null;
@@ -1165,6 +1508,14 @@ export function getSkins(address) {
   });
 }
 
+/**
+ * Equips an unlocked skin for multiplayer matches.
+ *
+ * @function equipSkin
+ * @param {string} address - Player wallet address.
+ * @param {string} skinId - Target skin identifier.
+ * @returns {Object} Outcome `{ ok: true, equippedSkin, player }` or `{ error }`.
+ */
 export function equipSkin(address, skinId) {
   open();
   const p = getPlayer(address);
@@ -1179,6 +1530,13 @@ export function equipSkin(address, skinId) {
   return { ok: true, equippedSkin: skinId, player: getPlayer(address) };
 }
 
+/**
+ * Retrieves the skin currently equipped by a player.
+ *
+ * @function getEquippedSkin
+ * @param {string} [address] - Player wallet address.
+ * @returns {Object} Equipped skin object from SKINS catalog.
+ */
 export function getEquippedSkin(address) {
   open();
   const p = address ? getPlayer(address) : null;
@@ -1190,11 +1548,24 @@ export function getEquippedSkin(address) {
 const DEFAULT_PARENT_PIN = '1234';
 const PIN_LOCKOUT_MS = 5 * 60 * 1000; // 5 minute lockout
 
+/**
+ * Resets the failed parent PIN attempt counter and lockout state.
+ *
+ * @function resetPinAttempts
+ * @param {string} [address] - Account address or 'default'.
+ */
 export function resetPinAttempts(address) {
   open();
   prepared.deletePinAttempt.run(address || 'default');
 }
 
+/**
+ * Retrieves the current failed PIN attempt record and lockout timestamp.
+ *
+ * @function getPinAttempt
+ * @param {string} [address] - Account address or 'default'.
+ * @returns {{count: number, lockedUntil: number} | null} Attempt record or null.
+ */
 export function getPinAttempt(address) {
   open();
   const row = prepared.getPinAttempt.get(address || 'default');
@@ -1202,6 +1573,15 @@ export function getPinAttempt(address) {
   return { count: row.count, lockedUntil: row.lockedUntil };
 }
 
+/**
+ * Validates a candidate Parent PIN against bcrypt hash with persistent brute-force lockout protection.
+ * Allows up to 5 attempts before enforcing a 5-minute cooldown.
+ *
+ * @function verifyParentPin
+ * @param {string} address - Account address or 'default'.
+ * @param {string|number} pin - Candidate numeric PIN code.
+ * @returns {{ok: boolean, isDefault?: boolean, locked?: boolean, error?: string}} Verification outcome.
+ */
 export function verifyParentPin(address, pin) {
   open();
   const key = address || 'default';
@@ -1270,21 +1650,50 @@ export function verifyParentPin(address, pin) {
   };
 }
 
+/**
+ * Checks whether a custom Parent PIN has been configured for an account.
+ *
+ * @function hasParentPin
+ * @param {string} [address] - Account address.
+ * @returns {boolean} True if a custom bcrypt PIN hash exists.
+ */
 export function hasParentPin(address) {
   open();
   return !!prepared.getParentPin.get(address || 'default');
 }
 
+/**
+ * Fetches a single chore task record by unique ID.
+ *
+ * @function getChoreById
+ * @param {string} id - Chore identifier.
+ * @returns {Object | null} Chore task record or null.
+ */
 export function getChoreById(id) {
   open();
   return prepared.getChoreById.get(id) || null;
 }
 
+/**
+ * Fetches a single family reward voucher record by unique ID.
+ *
+ * @function getVoucherById
+ * @param {string} id - Voucher identifier.
+ * @returns {Object | null} Voucher record or null.
+ */
 export function getVoucherById(id) {
   open();
   return prepared.getVoucherById.get(id) || null;
 }
 
+/**
+ * Sets a new 4-to-6 digit Parent PIN for an account, storing it as a bcrypt hash.
+ *
+ * @function setParentPin
+ * @param {string} [address] - Account address.
+ * @param {string} newPin - 4 to 6 digit numeric PIN.
+ * @returns {{ok?: boolean, error?: string}} Operation status.
+ */
 export function setParentPin(address, newPin) {
   open();
   const clean = String(newPin || '').trim();
@@ -1299,6 +1708,12 @@ export function setParentPin(address, newPin) {
 // ----------------- Active Game Rooms Persistence -----------------
 // Eliminates in-memory volatility on server crashes, reboots, and redeploys.
 
+/**
+ * Persists live in-flight game room state to SQLite to survive server reboots and hot-reloads.
+ *
+ * @function saveActiveRoom
+ * @param {Object} room - Active room object with game, chat, moves, and spectator list.
+ */
 export function saveActiveRoom(room) {
   if (!room || !room.id || !room.game) return;
   open();
@@ -1318,12 +1733,25 @@ export function saveActiveRoom(room) {
   });
 }
 
+/**
+ * Removes a finished or disbanded active room from SQLite persistence.
+ *
+ * @function removeActiveRoom
+ * @param {string} roomId - Room identifier to remove.
+ */
 export function removeActiveRoom(roomId) {
   if (!roomId) return;
   open();
   prepared.deleteActiveRoom.run(roomId);
 }
 
+/**
+ * Retrieves persisted active room state by room ID.
+ *
+ * @function getActiveRoom
+ * @param {string} roomId - Room identifier.
+ * @returns {Object | null} Restored room object or null.
+ */
 export function getActiveRoom(roomId) {
   if (!roomId) return null;
   open();
@@ -1340,6 +1768,12 @@ export function getActiveRoom(roomId) {
   };
 }
 
+/**
+ * Lists all active in-flight game rooms stored in SQLite.
+ *
+ * @function listActiveRooms
+ * @returns {Array<Object>} Array of active room state objects.
+ */
 export function listActiveRooms() {
   open();
   const rows = prepared.listActiveRooms.all();
@@ -1354,6 +1788,12 @@ export function listActiveRooms() {
   }));
 }
 
+/**
+ * Cleans up stale active rooms older than maxAgeMs (default 30 minutes).
+ *
+ * @function cleanupStaleActiveRooms
+ * @param {number} [maxAgeMs=1800000] - Maximum room age in milliseconds before deletion.
+ */
 export function cleanupStaleActiveRooms(maxAgeMs = 30 * 60 * 1000) {
   open();
   const cutoff = Date.now() - maxAgeMs;

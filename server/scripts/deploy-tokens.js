@@ -1,11 +1,14 @@
+/**
+ * @file deploy-tokens.js
+ * @description Deployment script for ArenaToken.sol (ERC-20 ARENA) and ArenaBadges.sol (ERC-1155 badges).
+ * Connects to the designated EVM network, deploys both reward contracts with sequential nonces,
+ * and writes the deployed contract addresses and minter metadata to `token-address.json`.
+ */
+
 import { ethers } from 'ethers';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-
-// Deploy ArenaToken.sol (ERC-20 ARENA) + ArenaBadges.sol (ERC-1155 badges).
-// Writes token-address.json so chain-tokens.js can find them, mirroring
-// deploy-match-result.js for MatchResult.sol.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -30,6 +33,13 @@ const ARENA_BADGES_ABI = [
 
 const LOCAL_PK = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 
+/**
+ * Main deployment execution for ArenaToken and ArenaBadges contracts.
+ *
+ * @async
+ * @function main
+ * @throws {Error} If chain ID does not match expected network or private key is missing.
+ */
 async function main() {
   const nodeUrl = process.env.NODE_HTTP_URL
     || process.env.BASE_SEPOLIA_RPC_URL

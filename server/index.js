@@ -25,6 +25,13 @@ const ROOM_RETENTION_MS = 10 * 60 * 1000; // finished rooms expire after 10 min
 // Kid safety: profanity filtering & preset moderation pattern
 const PROFANITY_PATTERN = /\b(fuck|shit|bitch|ass|asshole|dick|pussy|cunt|bastard|damn|crap|whore|slut|nigger|nigga|faggot|retard|idiot|stupid|kill|die)\b/i;
 
+/**
+ * Moderates user chat text, sanitizing profanity and limiting message length to 100 characters.
+ *
+ * @function sanitizeChatMessage
+ * @param {string} raw - Raw unmoderated message string.
+ * @returns {string | null} Filtered friendly string or null if empty.
+ */
 function sanitizeChatMessage(raw) {
   if (!raw || typeof raw !== 'string') return null;
   const trimmed = raw.trim();
@@ -52,6 +59,14 @@ const rooms = new Map();          // roomId -> room
 const queue = [];                 // { socketId, gameType } waiting for a match
 const socketPlayer = new Map();   // socketId -> address
 
+/**
+ * Broadcasts an event and payload to all connected sockets belonging to an Ethereum wallet address.
+ *
+ * @function notifyPlayer
+ * @param {string} address - Target player wallet address.
+ * @param {string} event - WebSocket event name.
+ * @param {*} payload - Event payload data.
+ */
 function notifyPlayer(address, event, payload) {
   if (!address) return;
   for (const [sId, addr] of socketPlayer.entries()) {
@@ -70,6 +85,12 @@ const lobbyChat = [
 const PENDING_ROOM_MS = 10 * 60 * 1000;
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I lookalikes
 
+/**
+ * Generates an unambiguous 5-character room invitation code excluding confusing characters (0/O/1/I).
+ *
+ * @function makeRoomCode
+ * @returns {string} Unique uppercase room code.
+ */
 function makeRoomCode() {
   let code;
   do {
@@ -78,6 +99,12 @@ function makeRoomCode() {
   return code;
 }
 
+/**
+ * Cancels and deletes a pending private game room by its invitation code.
+ *
+ * @function dropPendingRoom
+ * @param {string} code - Invitation room code.
+ */
 function dropPendingRoom(code) {
   const p = pendingRooms.get(code);
   if (!p) return;
@@ -85,6 +112,12 @@ function dropPendingRoom(code) {
   pendingRooms.delete(code);
 }
 
+/**
+ * Cancels any pending private rooms hosted by a disconnecting socket.
+ *
+ * @function dropPendingFor
+ * @param {string} socketId - Host socket ID.
+ */
 function dropPendingFor(socketId) {
   for (const [code, p] of pendingRooms) {
     if (p.hostSocketId === socketId) dropPendingRoom(code);
@@ -481,6 +514,14 @@ app.post('/api/parent/set-pin', (req, res) => {
 });
 
 // ---- Helpers ----
+
+/**
+ * Serializes room metadata and active game state for client transmission.
+ *
+ * @function serializeRoom
+ * @param {Object} room - Active room object.
+ * @returns {Object} Public sanitized room representation.
+ */
 function serializeRoom(room) {
   return {
     roomId: room.id,
@@ -492,15 +533,26 @@ function serializeRoom(room) {
   };
 }
 
+/**
+ * Broadcasts latest game state to all players and spectators subscribed to the room's socket room.
+ * Persists room snapshot to SQLite and rearms round deadlines.
+ *
+ * @function broadcastState
+ * @param {Object} room - Active room object.
+ */
 function broadcastState(room) {
   io.to(room.id).emit('game:state', { roomId: room.id, game: room.engine.serialize(room.game) });
   store.saveActiveRoom(room);
   armRoundTimer(room);
 }
 
-// Server-enforced deadline for timed engines (Math Arena). The client also
-// runs its own countdown; this only fires when a connected player idles past
-// the deadline, so a stalling opponent can never freeze the match.
+/**
+ * Server-enforced deadline for timed engines (e.g. Math Arena).
+ * Only fires if players idle past the deadline, preventing matches from freezing.
+ *
+ * @function armRoundTimer
+ * @param {Object} room - Active room object.
+ */
 function armRoundTimer(room) {
   clearTimeout(room.roundTimer);
   if (room.mathTimer) clearTimeout(room.mathTimer);
@@ -519,6 +571,11 @@ function armRoundTimer(room) {
   room.mathTimer = room.roundTimer;
 }
 
+/**
+ * Emits active public matches and spectator counts to connected clients in the lobby.
+ *
+ * @function broadcastLiveRooms
+ */
 function broadcastLiveRooms() {
   if (!liveListeners.size) return;
   const list = [...rooms.values()]
@@ -527,6 +584,17 @@ function broadcastLiveRooms() {
   for (const sid of liveListeners) io.to(sid).emit('rooms:list', list);
 }
 
+/**
+ * Finalizes a finished game match:
+ * 1. Records match result on blockchain (or simulated ledger).
+ * 2. Awards experience points, tokens, and unlocks achievement badges.
+ * 3. Mints on-chain ARENA tokens and ERC-1155 badges for human winners.
+ * 4. Archives replay data to SQLite and notifies participants via WebSockets.
+ *
+ * @async
+ * @function finishRoom
+ * @param {Object} room - Finished room object.
+ */
 async function finishRoom(room) {
   if (room.tickInterval) clearInterval(room.tickInterval);
   if (room.mathTimer) clearTimeout(room.mathTimer);
@@ -630,6 +698,12 @@ async function finishRoom(room) {
   broadcastLiveRooms();
 }
 
+/**
+ * Schedules round timeout enforcement for Math Arena simultaneous rounds.
+ *
+ * @function scheduleMathRoundTimer
+ * @param {Object} room - Active room object.
+ */
 function scheduleMathRoundTimer(room) {
   if (room.mathTimer) clearTimeout(room.mathTimer);
   if (room.game.winner) return;
@@ -647,9 +721,14 @@ function scheduleMathRoundTimer(room) {
   }, 12000);
 }
 
-// Advance game flow after any move: resolve pending state, then run the bot
-//
-// The on-chain path is called only when the room ends, in finishRoom().
+/**
+ * Advances game lifecycle following a move: handles transient resolution steps,
+ * triggers bot AI responses, and completes finished matches.
+ *
+ * @function afterEngineMove
+ * @param {Object} room - Active room object.
+ * @param {Object} [res] - Move result containing optional pendingMs.
+ */
 function afterEngineMove(room, res) {
   if (room.game.winner) return finishRoom(room);
   if (room.gameType === 'math-arena') {
@@ -673,6 +752,12 @@ function afterEngineMove(room, res) {
   }
 }
 
+/**
+ * Executes a calculated bot AI turn step against an active room.
+ *
+ * @function botStep
+ * @param {string} roomId - Room identifier.
+ */
 function botStep(roomId) {
   const room = rooms.get(roomId);
   if (!room || room.game.winner) return;
@@ -684,6 +769,18 @@ function botStep(roomId) {
   afterEngineMove(room, res);
 }
 
+/**
+ * Initializes a new multiplayer or bot game room with the appropriate game engine,
+ * registers socket listeners, initializes game physics or timers, and notifies players.
+ *
+ * @function createRoom
+ * @param {string} gameType - Key of selected game engine.
+ * @param {string} addrX - Player 1 (X) wallet address.
+ * @param {string} addrO - Player 2 (O) wallet address.
+ * @param {(addr: string) => Object} getSocket - Callback retrieving active socket for address.
+ * @param {Object} [opts={}] - Optional game settings (difficulty, deck, skins).
+ * @returns {Object} Created room instance.
+ */
 function createRoom(gameType, addrX, addrO, getSocket, opts = {}) {
   const engine = ENGINES[gameType];
   const id = 'match_' + crypto.randomBytes(6).toString('hex');
@@ -758,9 +855,13 @@ function createRoom(gameType, addrX, addrO, getSocket, opts = {}) {
   return room;
 }
 
-// If this socket holds a player seat in a live room, that player forfeits:
-// the remaining player is declared the winner and the match completes
-// normally (on-chain record, stats, rewards).
+/**
+ * Automatically forfeits any live game match if a participating player leaves or disconnects.
+ * Declares the remaining opponent as the winner and finalizes match on-chain.
+ *
+ * @function maybeForfeit
+ * @param {import('socket.io').Socket} socket - Disconnecting player socket.
+ */
 function maybeForfeit(socket) {
   for (const room of rooms.values()) {
     if (room.game.winner) continue;
@@ -780,6 +881,15 @@ function maybeForfeit(socket) {
 // chat, and spectators remain server-side.
 // Playing requires a registered account. Guests may connect and register/log in,
 // but cannot queue, create/join rooms or start bot matches.
+
+/**
+ * Validates that a connected socket has authenticated as a registered player.
+ * Emits an AUTH_REQUIRED error if the socket is unauthenticated or unregistered.
+ *
+ * @function accountOf
+ * @param {import('socket.io').Socket} socket - Client socket.
+ * @returns {string | null} Authenticated player wallet address or null.
+ */
 function accountOf(socket) {
   const address = socketPlayer.get(socket.id);
   if (address && store.isRegistered(address)) return address;
@@ -787,8 +897,14 @@ function accountOf(socket) {
   return null;
 }
 
-// Binds a verified address to this socket and tells the client who it is.
-// Unregistered (guest) wallets get no database row — only registering creates one.
+/**
+ * Binds an authenticated Ethereum wallet address to a socket session,
+ * syncing player profile, registration status, and username metadata to the client.
+ *
+ * @function bindIdentity
+ * @param {import('socket.io').Socket} socket - Client socket connection.
+ * @param {string} address - Authenticated player address.
+ */
 function bindIdentity(socket, address) {
   socketPlayer.set(socket.id, address);
   const profile = store.getPlayer(address);
@@ -817,6 +933,14 @@ const noteLoginFail = ip => {
 
 // Chat rate limiting (max 1 message per 800ms per connection)
 const socketChatTimes = new Map(); // socketId -> timestamp
+
+/**
+ * Enforces per-socket chat rate limiting (maximum 1 message per 800ms).
+ *
+ * @function isChatRateLimited
+ * @param {string} socketId - Client socket ID.
+ * @returns {boolean} True if client is rate-limited.
+ */
 function isChatRateLimited(socketId) {
   const now = Date.now();
   const last = socketChatTimes.get(socketId) || 0;
@@ -1221,6 +1345,12 @@ io.on('connection', (socket) => {
   });
 });
 
+/**
+ * Restores in-flight active game rooms and loops from SQLite on server startup,
+ * maintaining gameplay continuity across server redeployments or restarts.
+ *
+ * @function restoreActiveRooms
+ */
 function restoreActiveRooms() {
   store.cleanupStaleActiveRooms(30 * 60 * 1000);
   const saved = store.listActiveRooms();

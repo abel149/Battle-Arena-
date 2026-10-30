@@ -1,3 +1,10 @@
+/**
+ * @file deploy-chore.js
+ * @description Standalone deployment script for ProofOfChore.sol.
+ * Connects to EVM network, deploys ProofOfChore oracle contract, and persists
+ * the deployed contract address and deployment parameters to chore-address.json.
+ */
+
 import { ethers } from 'ethers';
 import fs from 'fs';
 import path from 'path';
@@ -5,6 +12,13 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+/**
+ * Main deployment execution for ProofOfChore contract.
+ *
+ * @async
+ * @function main
+ * @throws {Error} If connection or deployment transaction fails.
+ */
 async function main() {
   const nodeUrl = process.env.NODE_HTTP_URL || 'http://127.0.0.1:8545';
   const provider = new ethers.JsonRpcProvider(nodeUrl);

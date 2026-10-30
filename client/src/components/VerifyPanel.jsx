@@ -1,9 +1,26 @@
+/**
+ * @file VerifyPanel.jsx
+ * @description Modal dialog component that verifies game match records against on-chain smart contracts
+ * (MatchResult.sol) or the simulated ledger. Displays match metadata, participant addresses,
+ * cryptographic result hash, and transaction links to block explorers.
+ */
+
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { API } from '../socket.js';
 import { short } from '../lib/session.js';
 import './chain.css';
 
+/**
+ * Renders a row with a label, truncated value, copy-to-clipboard button, and optional explorer link.
+ *
+ * @component
+ * @param {Object} props - Component props.
+ * @param {string} props.label - Row label title.
+ * @param {string | null | undefined} props.value - Full string value to display and copy.
+ * @param {string} [props.href] - Optional external block explorer URL.
+ * @returns {JSX.Element | null} Copyable row element or null if value is falsy.
+ */
 function CopyRow({ label, value, href }) {
   const [copied, setCopied] = useState(false);
   if (!value) return null;
@@ -24,7 +41,16 @@ function CopyRow({ label, value, href }) {
   );
 }
 
-/** Modal that checks a match against the server's ledger (the chain when on-chain). */
+/**
+ * Modal dialog that verifies a match against the server's blockchain or simulated ledger.
+ *
+ * @component
+ * @param {Object} props - Component props.
+ * @param {string} props.matchId - Unique match identifier to verify.
+ * @param {import('../lib/chain.js').ChainStatus | null} props.status - Active blockchain status.
+ * @param {() => void} props.onClose - Callback triggered to dismiss modal.
+ * @returns {JSX.Element} React Portal modal rendering onto document.body.
+ */
 export default function VerifyPanel({ matchId, status, onClose }) {
   const [state, setState] = useState({ loading: true });
 

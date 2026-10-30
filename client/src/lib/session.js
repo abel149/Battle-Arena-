@@ -1,9 +1,12 @@
-// Production-grade client identity & key vault.
-// Features:
-// 1. Dual-layer persistence: localStorage + IndexedDB auto-healing against cache wipes.
-// 2. Full BIP-39 12-word recovery mnemonic & standard secp256k1 key generation.
-// 3. Web3 Keystore export & import for multi-device sync and family backup.
-// 4. Backward-compatible with existing demo wallets and MetaMask connections.
+/**
+ * @file session.js
+ * @description Production-grade client identity & key vault engine.
+ * Features:
+ * 1. Dual-layer persistence: localStorage + IndexedDB auto-healing against cache wipes.
+ * 2. Full BIP-39 12-word recovery mnemonic & standard secp256k1 key generation.
+ * 3. Web3 Keystore export & import for multi-device sync and family backup.
+ * 4. Backward-compatible with existing demo wallets and MetaMask connections.
+ */
 
 import { useEffect, useState } from 'react';
 import { ethers } from 'ethers';
@@ -14,6 +17,13 @@ const STORE_NAME = 'vault';
 const KEY_NAME = 'primary_wallet';
 
 // ---------- IndexedDB Redundancy Engine ----------
+
+/**
+ * Opens or initializes the client IndexedDB vault store.
+ *
+ * @function openVaultDB
+ * @returns {Promise<IDBDatabase | null>} IndexedDB database instance or null in non-browser environment.
+ */
 function openVaultDB() {
   return new Promise((resolve) => {
     if (typeof window === 'undefined' || typeof indexedDB === 'undefined') return resolve(null);
@@ -33,6 +43,13 @@ function openVaultDB() {
   });
 }
 
+/**
+ * Persists wallet identity record to browser IndexedDB store for redundancy.
+ *
+ * @async
+ * @function idbSaveWallet
+ * @param {Object} wallet - Wallet identity object.
+ */
 export async function idbSaveWallet(wallet) {
   if (!wallet) return;
   try {
@@ -45,6 +62,13 @@ export async function idbSaveWallet(wallet) {
   }
 }
 
+/**
+ * Reads persisted wallet identity record from browser IndexedDB.
+ *
+ * @async
+ * @function idbGetWallet
+ * @returns {Promise<Object | null>} Cached wallet object or null if absent.
+ */
 export async function idbGetWallet() {
   try {
     const db = await openVaultDB();
@@ -60,6 +84,12 @@ export async function idbGetWallet() {
   }
 }
 
+/**
+ * Deletes persisted wallet identity from browser IndexedDB store.
+ *
+ * @async
+ * @function idbClearWallet
+ */
 export async function idbClearWallet() {
   try {
     const db = await openVaultDB();
@@ -72,6 +102,24 @@ export async function idbClearWallet() {
 }
 
 // ---------- Wallet Lifecycle & Vault ----------
+
+/**
+ * @typedef {Object} ArenaWallet
+ * @property {string} address - Checksummed Ethereum address.
+ * @property {string} name - Display handle / username.
+ * @property {string | null} privateKey - Hex-encoded secp256k1 private key.
+ * @property {string | null} [mnemonic] - 12-word BIP-39 recovery mnemonic phrase.
+ * @property {string} source - Origin of key ('demo' | 'metamask' | 'imported' | 'account').
+ * @property {number} createdAt - Creation epoch timestamp.
+ * @property {number} vaultVersion - Schema version integer.
+ */
+
+/**
+ * Retrieves existing wallet from localStorage or generates a fresh cryptographically secure random wallet.
+ *
+ * @function getOrCreateWallet
+ * @returns {ArenaWallet} Loaded or newly generated wallet instance.
+ */
 export function getOrCreateWallet() {
   let w = null;
   try {
@@ -103,6 +151,12 @@ export function getOrCreateWallet() {
   return w;
 }
 
+/**
+ * Saves wallet identity simultaneously into localStorage and IndexedDB.
+ *
+ * @function saveWallet
+ * @param {ArenaWallet} wallet - Wallet identity object to save.
+ */
 export function saveWallet(wallet) {
   if (!wallet) return;
   try {
@@ -113,6 +167,11 @@ export function saveWallet(wallet) {
   idbSaveWallet(wallet);
 }
 
+/**
+ * Clears current wallet session from both localStorage and IndexedDB.
+ *
+ * @function clearWalletSession
+ */
 export function clearWalletSession() {
   try {
     localStorage.removeItem('arena_wallet');
@@ -121,9 +180,13 @@ export function clearWalletSession() {
 }
 
 /**
- * Restore wallet from either:
- * - A 12-word BIP-39 mnemonic phrase
- * - A standard 64-character hex private key (with or without '0x')
+ * Restores a wallet from user input: either a 12/24-word BIP-39 mnemonic or a 64-char hex private key.
+ *
+ * @function restoreWalletFromInput
+ * @param {string} input - Mnemonic phrase or raw hex private key.
+ * @param {string} [name] - Optional display name.
+ * @returns {ArenaWallet} Restored wallet identity.
+ * @throws {Error} If input phrase or key format is invalid.
  */
 export function restoreWalletFromInput(input, name) {
   const clean = (input || '').trim();
@@ -173,7 +236,11 @@ export function restoreWalletFromInput(input, name) {
 }
 
 /**
- * Export full Web3 Keystore JSON backup
+ * Serializes wallet identity into an exportable standard Web3 Keystore backup JSON string.
+ *
+ * @function exportKeystoreJson
+ * @param {ArenaWallet} wallet - Wallet identity to export.
+ * @returns {string | null} Formatted JSON string or null if wallet is absent.
  */
 export function exportKeystoreJson(wallet) {
   if (!wallet) return null;
@@ -191,12 +258,22 @@ export function exportKeystoreJson(wallet) {
   return JSON.stringify(backup, null, 2);
 }
 
+/**
+ * Truncates an Ethereum address to compact display format (e.g. 0x1234...abcd).
+ *
+ * @function short
+ * @param {string | null | undefined} a - Full address string.
+ * @returns {string} Truncated address.
+ */
 export const short = a => (a && a.length > 12 ? a.slice(0, 6) + '…' + a.slice(-4) : a || '');
 
-// App-level sign-in state: 'checking' | 'out' (show the sign-in screen) |
-// 'in' (registered account) | 'offline' (server never answered).
-// 'in' is set on `player:registered:user`, which arrives after the wallet in
-// localStorage has been synced to the account — so pages mount with the right address.
+/**
+ * App-level authentication state hook: 'checking' | 'out' | 'in' | 'offline'.
+ * Synchronizes wallet identity and session tokens with the server over WebSockets.
+ *
+ * @function useAuth
+ * @returns {'checking' | 'out' | 'in' | 'offline'} Current authentication lifecycle state.
+ */
 export function useAuth() {
   const [status, setStatus] = useState('checking');
 
@@ -222,8 +299,13 @@ export function useAuth() {
   return status;
 }
 
-// Identifies this tab with the server and keeps the live profile in sync.
-// Also continuously ensures IndexedDB and LocalStorage are synchronized (auto-healing).
+/**
+ * Hook to manage live user profile and wallet state with IndexedDB auto-healing.
+ * Identifies current browser tab with server and keeps profile metadata synchronized.
+ *
+ * @function useProfile
+ * @returns {{wallet: ArenaWallet, setWallet: Function, profile: Object | null}} Live profile state tuple.
+ */
 export function useProfile() {
   const [wallet, setWallet] = useState(getOrCreateWallet);
   const [profile, setProfile] = useState(null);

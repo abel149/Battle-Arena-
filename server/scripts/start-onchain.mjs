@@ -1,3 +1,11 @@
+/**
+ * @file start-onchain.mjs
+ * @description Orchestration runner for full on-chain local development environment.
+ * Automatically checks for or spawns a background Hardhat node on port 8545, compiles contracts,
+ * executes deployments for MatchResult, ArenaToken, and ArenaBadges, injects the deployed
+ * contract addresses into the server process environment, and launches the live Battle Arena backend.
+ */
+
 import { spawn, execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -8,6 +16,13 @@ const SERVER_DIR = path.resolve(__dirname, '..');
 const NODE_URL = process.env.NODE_HTTP_URL || 'http://127.0.0.1:8545';
 const LOCAL_PK = process.env.PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 
+/**
+ * Probes the target JSON-RPC endpoint with eth_blockNumber to test responsiveness.
+ *
+ * @async
+ * @function checkRpc
+ * @returns {Promise<boolean>} True if RPC endpoint is responding successfully.
+ */
 async function checkRpc() {
   try {
     const res = await fetch(NODE_URL, {
@@ -21,6 +36,13 @@ async function checkRpc() {
   }
 }
 
+/**
+ * Main orchestration entrypoint.
+ *
+ * @async
+ * @function main
+ * @throws {Error} If blockchain node cannot be started or deployments fail.
+ */
 async function main() {
   let rpcOk = await checkRpc();
   let hardhatNodeProc = null;

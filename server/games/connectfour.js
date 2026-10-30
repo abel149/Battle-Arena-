@@ -1,12 +1,27 @@
-// Connect Four game engine — pluggable module.
-// 7 columns × 6 rows grid.
-// Players alternate dropping colored discs into columns.
-// Interface: createGame(pX, pO, opts), applyMove(game, address, move),
-//            botMove(game), serialize(game)
+/**
+ * @file connectfour.js
+ * @description Connect Four competitive gravity board game engine.
+ * 7 columns × 6 rows vertical grid.
+ * Players alternate dropping colored discs into columns; discs fall to the lowest unoccupied slot.
+ * The first player to connect four discs horizontally, vertically, or diagonally wins the match.
+ */
 
+/** @constant {number} Number of columns in Connect Four board */
 const COLS = 7;
+
+/** @constant {number} Number of rows in Connect Four board */
 const ROWS = 6;
 
+/**
+ * Creates and initializes a Connect Four game session.
+ *
+ * @function createGame
+ * @param {string} addrX - Player 1 (X) wallet address.
+ * @param {string} addrO - Player 2 (O) wallet address.
+ * @param {Object} [opts={}] - Optional settings.
+ * @param {'easy'|'medium'|'hard'} [opts.difficulty='medium'] - Bot tactical intelligence level.
+ * @returns {Object} Initial Connect Four state object.
+ */
 export function createGame(addrX, addrO, opts = {}) {
   const difficulty = ['easy', 'medium', 'hard'].includes(opts?.difficulty)
     ? opts.difficulty
@@ -28,6 +43,17 @@ export function createGame(addrX, addrO, opts = {}) {
   };
 }
 
+/**
+ * Executes a disc drop move into a designated column.
+ *
+ * @function applyMove
+ * @param {Object} game - Mutable game state.
+ * @param {string} address - Move initiator address.
+ * @param {Object} move - Move details.
+ * @param {number} [move.col] - Column index (0-6).
+ * @param {number} [move.index] - Column index alias.
+ * @returns {{ok?: boolean, error?: string}} Move outcome.
+ */
 export function applyMove(game, address, move) {
   if (game.winner) return { error: 'Game is over' };
   const symbol =
@@ -69,6 +95,16 @@ export function applyMove(game, address, move) {
   return { ok: true };
 }
 
+/**
+ * Checks for a 4-in-a-row alignment radiating from the newly dropped disc coordinate.
+ *
+ * @function checkWin
+ * @param {Array<Array<string|null>>} grid - Board matrix.
+ * @param {number} r - Row index.
+ * @param {number} c - Column index.
+ * @param {string} sym - Disc symbol ('X' or 'O').
+ * @returns {Array<[number, number]> | null} Coordinates of winning 4 cells, or null.
+ */
 function checkWin(grid, r, c, sym) {
   const directions = [
     [0, 1],   // horizontal
@@ -107,6 +143,14 @@ function checkWin(grid, r, c, sym) {
   return null;
 }
 
+/**
+ * Finds lowest empty row index in a specific column.
+ *
+ * @function getLowestEmptyRow
+ * @param {Array<Array<string|null>>} grid - Board matrix.
+ * @param {number} col - Column index.
+ * @returns {number} Row index (0-5) or -1 if column is filled.
+ */
 function getLowestEmptyRow(grid, col) {
   for (let r = ROWS - 1; r >= 0; r--) {
     if (!grid[r][col]) return r;
@@ -114,6 +158,15 @@ function getLowestEmptyRow(grid, col) {
   return -1;
 }
 
+/**
+ * Tactical Connect Four bot choosing optimal column drops based on winning opportunities,
+ * threat blocking, blunder avoidance, and center-column control heuristics.
+ *
+ * @function botMove
+ * @param {Object} game - Game state.
+ * @param {'easy'|'medium'|'hard'} [difficulty] - Bot intelligence level.
+ * @returns {{col: number}} Selected column.
+ */
 export function botMove(game, difficulty = game.difficulty || 'medium') {
   const botSymbol = game.turn;
   const oppSymbol = botSymbol === 'X' ? 'O' : 'X';
@@ -181,6 +234,13 @@ export function botMove(game, difficulty = game.difficulty || 'medium') {
   return { col: pool[Math.floor(Math.random() * pool.length)] };
 }
 
+/**
+ * Serializes the Connect Four game state for client broadcast.
+ *
+ * @function serialize
+ * @param {Object} game - Game state.
+ * @returns {Object} Public sanitized state representation.
+ */
 export function serialize(game) {
   return {
     grid: game.grid,

@@ -1,8 +1,15 @@
-// Educational card decks for Memory Match.
-// Each pair has two DIFFERENT representations (a, b) that must be
-// matched — e.g. a flag and its country name — so kids learn by playing.
-// New decks can be added here without touching game logic.
+/**
+ * @file decks.js
+ * @description Educational card decks for Memory Match game mode.
+ * Each pair contains two complementary representations (a, b) that must be matched
+ * (e.g. flag emoji to country name, English word to Kiswahili translation, arithmetic expressions to values),
+ * reinforcing learning and cognitive retention through interactive gameplay.
+ */
 
+/**
+ * Predefined educational card decks available in Memory Match.
+ * @constant {Object.<string, {label: string, pairs: Array<{a: string, b: string}>}>}
+ */
 export const DECKS = {
   flags: {
     label: 'Flags & Countries',
@@ -47,7 +54,13 @@ export const DECKS = {
   },
 };
 
-// Deterministic "daily challenge" deck — same for everyone on a given day
+/**
+ * Calculates a deterministic "daily challenge" deck identifier based on Unix epoch day.
+ * Ensures all players experience the exact same daily challenge rotation simultaneously.
+ *
+ * @function dailyDeckId
+ * @returns {string} Deck key corresponding to today's active challenge.
+ */
 export function dailyDeckId() {
   const ids = Object.keys(DECKS);
   const day = Math.floor(Date.now() / 86400000);
