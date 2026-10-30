@@ -21,7 +21,7 @@ import {
   rateLimit,
 } from './security.js';
 import { ENGINES, DECKS, dailyDeckId } from './games/index.js';
-import { recordMatch, getLedger, isOnchain, chainInfo } from './chain-onchain.js';
+import { defaultRecorder } from './result-recorder.js';
 import {
   distributeRewards,
   isTokensOnchain,
@@ -202,13 +202,13 @@ app.get('/api/wallet/:address/tokens', async (req, res) => {
 });
 
 app.get('/api/chain/status', async (_req, res) => {
-  const info = await chainInfo();
+  const info = await defaultRecorder.chainInfo();
   res.json({ ...info, tokens: { onchain: isTokensOnchain(), addresses: tokenAddresses() } });
 });
 
 app.get('/api/matches', async (_req, res) => {
   try {
-    res.json(await getLedger());
+    res.json(await defaultRecorder.getLedger());
   } catch (err) {
     console.error('Failed to load match ledger:', err);
     res.status(500).json({ error: 'Failed to load match ledger' });
@@ -224,7 +224,7 @@ app.get('/api/matches', async (_req, res) => {
 // original matchId from the stored bytes32).
 app.get('/api/verify/:matchId', async (req, res) => {
   try {
-    const ledger = await getLedger();
+    const ledger = await defaultRecorder.getLedger();
     const requestedMatchId = req.params.matchId;
     // The contract stores match IDs as original room IDs (bytes32 = encoded room ID).
     // Do NOT hash the matchId here; look up the original value directly.
@@ -680,7 +680,7 @@ async function finishRoom(room) {
   // the same as matchId.
   let receipt = null;
   try {
-    receipt = await recordMatch({
+    receipt = await defaultRecorder.recordMatch({
       matchId: room.id,
       gameType: room.gameType,
       players: { X: addrX, O: addrO },
@@ -758,7 +758,7 @@ async function finishRoom(room) {
     roomId: room.id,
     winner: winnerAddr,
     result: game.winner,
-    receipt: { ...receipt, onchain: isOnchain() && !receipt?.error, rewards: rewardReceipts },
+    receipt: { ...receipt, onchain: defaultRecorder.isOnchain() && !receipt?.error, rewards: rewardReceipts },
   });
   // Clean up persisted active room and memory
   store.removeActiveRoom(room.id);
@@ -1545,7 +1545,7 @@ restoreActiveRooms();
 if (
   process.env.NODE_ENV !== 'test' &&
   process.env.REQUIRE_ONCHAIN === 'true' &&
-  (!isOnchain() || !isTokensOnchain())
+  (!defaultRecorder.isOnchain() || !isTokensOnchain())
 ) {
   console.error(
     '\nReal blockchain required. Start with `npm start` (deploys contracts and sets\nMATCH_RESULT_ADDRESS / ARENA_TOKEN_ADDRESS / ARENA_BADGES_ADDRESS / NODE_HTTP_URL / PRIVATE_KEY).\n'
@@ -1556,7 +1556,7 @@ if (
 if (process.env.NODE_ENV !== 'test') {
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`Battle Arena server on http://localhost:${PORT}`);
-    if (isOnchain()) {
+    if (defaultRecorder.isOnchain()) {
       console.log('On-chain match recording ENABLED (MatchResult.sol)');
     } else {
       console.log('Match recording: simulated ledger (chain.js)');
