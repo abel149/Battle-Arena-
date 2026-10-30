@@ -317,10 +317,6 @@ export function useProfile() {
       if (!local) {
         const idbWallet = await idbGetWallet();
         if (idbWallet?.address && (idbWallet.privateKey || idbWallet.source === 'metamask')) {
-          console.log(
-            '[ArenaVault] Auto-healed account identity from IndexedDB:',
-            idbWallet.address
-          );
           localStorage.setItem('arena_wallet', JSON.stringify(idbWallet));
           setWallet(idbWallet);
           signAndIdentify(idbWallet);
