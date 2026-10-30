@@ -25,6 +25,17 @@ contract MatchResult {
         uint64  timestamp;
     }
 
+    /// @notice Only the deployer (the game server wallet) may write results, so
+    ///         nobody else can publish fake matches into the record book.
+    address public immutable owner = msg.sender;
+
+    error NotOwner();
+
+    modifier onlyOwner() {
+        if (msg.sender != owner) revert NotOwner();
+        _;
+    }
+
     Match[] public matches;
 
     // Map matchId -> index in `matches` for O(1) lookups.
@@ -48,7 +59,7 @@ contract MatchResult {
         address playerA,
         address playerB,
         uint256 moves
-    ) external {
+    ) external onlyOwner {
         require(matchIndex[matchId] == 0, "MatchResult: match already recorded");
         require(playerA != address(0) && playerB != address(0), "MatchResult: invalid players");
 
@@ -78,7 +89,7 @@ contract MatchResult {
 
     /// @notice Batch record multiple matches in a single atomic transaction.
     ///         Amortizes transaction base gas overhead across all matches.
-    function recordMatchBatch(BatchMatchInput[] calldata inputs) external {
+    function recordMatchBatch(BatchMatchInput[] calldata inputs) external onlyOwner {
         uint64 ts = uint64(block.timestamp);
         for (uint256 i = 0; i < inputs.length; i++) {
             BatchMatchInput calldata m = inputs[i];

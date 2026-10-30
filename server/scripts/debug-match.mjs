@@ -114,8 +114,9 @@ async function playBotMatch({ wallet, signer }) {
 
     socket.on('connect', async () => {
       log('match', 'socket connected, identifying');
-      const sig = await signer.signMessage(`Battle Arena login for ${wallet}`);
-      socket.emit('identify', { address: wallet, name: 'OnchainTest', signature: sig });
+      const issuedAt = Date.now();
+      const sig = await signer.signMessage(`Battle Arena login for ${wallet}\nIssued: ${issuedAt}`);
+      socket.emit('identify', { address: wallet, name: 'OnchainTest', signature: sig, issuedAt });
     });
 
     socket.on('identify', () => {}); // no-op listener, just in case

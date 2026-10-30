@@ -1144,7 +1144,6 @@ export function getEquippedSkin(address) {
 }
 
 // Parent PIN Verification (Default PIN is '1234')
-const DEFAULT_PARENT_PIN = '1234';
 const PIN_LOCKOUT_MS = 5 * 60 * 1000; // 5 minute lockout
 
 export function resetPinAttempts(address) {
@@ -1177,20 +1176,13 @@ export function verifyParentPin(address, pin) {
 
   if (!pin) return { ok: false, error: 'PIN required' };
   const pinRow = prepared.getParentPin.get(key);
-  let isMatch = false;
-  let isDefault = false;
-
-  if (!pinRow) {
-    // If not set, default is 1234
-    isDefault = true;
-    isMatch = String(pin).trim() === DEFAULT_PARENT_PIN;
-  } else {
-    isMatch = bcrypt.compareSync(String(pin).trim(), pinRow.pinHash);
-  }
+  // No shared default PIN: the first PIN must be created explicitly.
+  if (!pinRow) return { ok: false, needsSetup: true, error: 'No Parent PIN set yet. Create one first.' };
+  const isMatch = bcrypt.compareSync(String(pin).trim(), pinRow.pinHash);
 
   if (isMatch) {
     prepared.deletePinAttempt.run(key);
-    return { ok: true, isDefault };
+    return { ok: true };
   }
 
   // Failed attempt
@@ -1225,6 +1217,21 @@ export function verifyParentPin(address, pin) {
     ok: false,
     error: `Incorrect Parent PIN. (${remaining} attempt${remaining === 1 ? '' : 's'} remaining)`,
   };
+}
+
+export function hasParentPin(address) {
+  open();
+  return !!prepared.getParentPin.get(address || 'default');
+}
+
+export function getChoreById(id) {
+  open();
+  return prepared.getChoreById.get(id) || null;
+}
+
+export function getVoucherById(id) {
+  open();
+  return prepared.getVoucherById.get(id) || null;
 }
 
 export function setParentPin(address, newPin) {
