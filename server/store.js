@@ -730,6 +730,12 @@ export function withoutPassword(p) {
   return safe;
 }
 
+export function publicProfile(p) {
+  if (!p) return p;
+  const { password, email, parentAddress, allowanceBalance, ...safe } = p;
+  return safe;
+}
+
 const BADGE_DEFS = [
   { id: 'first_blood', label: 'First Blood', desc: 'Win your first match',   check: p => p.wins >= 1 },
   { id: 'hat_trick',   label: 'Hat Trick',   desc: 'Win 3 matches',          check: p => p.wins >= 3 },
@@ -792,7 +798,7 @@ export function applyResult(address, result, ctx = {}) {
 export function leaderboard() {
   open();
   return prepared.leaderboard.all()
-    .map((row, i) => withoutPassword({ rank: i + 1, ...rowToPlayer(row) }));
+    .map((row, i) => publicProfile({ rank: i + 1, ...rowToPlayer(row) }));
 }
 
 // ---- Finished-match archive (for the replay feature) ----

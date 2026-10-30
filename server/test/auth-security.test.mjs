@@ -144,6 +144,23 @@ test('Security SEC-01 & SEC-02: rejecting unauthenticated login and registration
   assert.ok(choreJson.xpReward <= 100, 'XP reward must be capped');
   assert.ok(choreJson.allowanceReward <= 20, 'Allowance reward must be capped');
 
+  // 10. Public leaderboard child privacy check (SEC-15)
+  const lbData = await headRes.json();
+  for (const entry of lbData) {
+    assert.equal(entry.parentAddress, undefined, 'parentAddress must not be exposed on public leaderboard');
+    assert.equal(entry.allowanceBalance, undefined, 'allowanceBalance must not be exposed on public leaderboard');
+  }
+
+  // 11. Malformed socket event crash resilience (SEC-14)
+  guestSock.emit('game:move', null);
+  guestSock.emit('spectate', null);
+  guestSock.emit('chat:send', null);
+  guestSock.emit('lobby:chat:send', null);
+  await new Promise(r => setTimeout(r, 80));
+  // Server must still be alive and responsive
+  const pingRes = await fetch(`${serverUrl}/api/leaderboard`);
+  assert.ok(pingRes.ok, 'Server survived malformed null socket payloads');
+
   guestSock.disconnect();
   io.close();
   await new Promise(r => server.close(r));

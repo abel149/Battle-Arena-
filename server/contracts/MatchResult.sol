@@ -30,6 +30,22 @@ contract MatchResult {
     // Map matchId -> index in `matches` for O(1) lookups.
     mapping(bytes32 => uint256) private matchIndex;
 
+    address public owner;
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "MatchResult: caller is not the owner");
+        _;
+    }
+
+    constructor() {
+        owner = msg.sender;
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "MatchResult: new owner is zero address");
+        owner = newOwner;
+    }
+
     event MatchRecorded(
         bytes32 matchId,
         string  gameType,
@@ -48,7 +64,7 @@ contract MatchResult {
         address playerA,
         address playerB,
         uint256 moves
-    ) external {
+    ) external onlyOwner {
         require(matchIndex[matchId] == 0, "MatchResult: match already recorded");
         require(playerA != address(0) && playerB != address(0), "MatchResult: invalid players");
 
@@ -78,7 +94,7 @@ contract MatchResult {
 
     /// @notice Batch record multiple matches in a single atomic transaction.
     ///         Amortizes transaction base gas overhead across all matches.
-    function recordMatchBatch(BatchMatchInput[] calldata inputs) external {
+    function recordMatchBatch(BatchMatchInput[] calldata inputs) external onlyOwner {
         uint64 ts = uint64(block.timestamp);
         for (uint256 i = 0; i < inputs.length; i++) {
             BatchMatchInput calldata m = inputs[i];
