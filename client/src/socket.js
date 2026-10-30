@@ -19,24 +19,28 @@ export const clearSessionToken = () => localStorage.removeItem(SESSION_KEY);
  * The shared auth message. Must match server/index.js AUTH_MESSAGE exactly;
  * the server verifies it with standard EIP-191 (ethers.verifyMessage).
  */
-export function authMessage(address) {
-  return `Battle Arena login for ${address}`;
+export function authMessage(address, issuedAt) {
+  return `Battle Arena login for ${address}\nIssued: ${issuedAt}`;
 }
 
 /**
  * Sign the auth message as a human user would:
  *  - MetaMask-connected wallet → personal_sign via window.ethereum
  *  - Demo wallet (has a stored private key) → ethers Wallet.signMessage
- * Returns null when neither is available.
+ * The message carries an issue time, so the server rejects stale or reused signatures.
+ * Returns { signature, issuedAt }, or null when no signer is available.
  */
 export async function signAuth(wallet) {
   if (!wallet?.address) return null;
-  const message = authMessage(wallet.address);
+  const issuedAt = Date.now();
+  const message = authMessage(wallet.address, issuedAt);
   if (wallet.source === 'metamask' && window.ethereum) {
-    return window.ethereum.request({ method: 'personal_sign', params: [message, wallet.address] });
+    const signature = await window.ethereum.request({ method: 'personal_sign', params: [message, wallet.address] });
+    return { signature, issuedAt };
   }
   if (wallet.privateKey) {
-    return new ethers.Wallet(wallet.privateKey).signMessage(message);
+    const signature = await new ethers.Wallet(wallet.privateKey).signMessage(message);
+    return { signature, issuedAt };
   }
   return null;
 }
@@ -48,8 +52,23 @@ export async function signAuth(wallet) {
 export async function signAndIdentify(wallet) {
   const token = getSessionToken();
   if (token) return socket.emit('identify', { token });
-  const signature = await signAuth(wallet);
-  socket.emit('identify', { address: wallet.address, name: wallet.name, signature });
+  const signed = await signAuth(wallet);
+  socket.emit('identify', { address: wallet.address, name: wallet.name, signature: signed?.signature, issuedAt: signed?.issuedAt });
+}
+
+// Attach the login session token to every request to our own API, so the server can
+// tell who is calling (it no longer trusts an address sent in the request body).
+if (typeof window !== 'undefined' && !window.__arenaFetchPatched) {
+  window.__arenaFetchPatched = true;
+  const baseFetch = window.fetch.bind(window);
+  window.fetch = (input, init = {}) => {
+    const url = typeof input === 'string' ? input : input?.url || '';
+    const token = getSessionToken();
+    if (token && url.startsWith(SERVER_URL)) {
+      init = { ...init, headers: { ...(init.headers || {}), Authorization: `Bearer ${token}` } };
+    }
+    return baseFetch(input, init);
+  };
 }
 
 /** End the login session on the server and this browser, then reload to the sign-in screen. */

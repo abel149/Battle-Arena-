@@ -9,7 +9,8 @@ const SERVER_URL = process.env.SERVER_URL || 'http://localhost:3000';
 const pk = process.env.WALLET_PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 const walletAddress = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
 
-const MATCH_MESSAGE = `Battle Arena login for ${walletAddress}`;
+const issuedAt = Date.now();
+const MATCH_MESSAGE = `Battle Arena login for ${walletAddress}\nIssued: ${issuedAt}`;
 
 function actOn(game) {
   if (game?.winner) return;
@@ -51,7 +52,7 @@ async function main() {
     console.log(`[ci:e2e] connected as ${socket.id}`);
     // Identify with a real signed message
     const sig = await signMessage(pk, MATCH_MESSAGE);
-    socket.emit('identify', { address: walletAddress, name: 'CI Runner', signature: sig });
+    socket.emit('identify', { address: walletAddress, name: 'CI Runner', signature: sig, issuedAt });
   });
 
   socket.on('registered', async () => {

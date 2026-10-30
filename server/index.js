@@ -7,20 +7,11 @@ import http from 'http';
 import cors from 'cors';
 import { Server } from 'socket.io';
 import crypto from 'crypto';
-import { ethers } from 'ethers';
 
-// Wallet signature verification helpers
-function verifyAuthSignature(signature, address) {
-  if (!signature || typeof signature !== 'string') return false;
-  try {
-    const recovered = ethers.verifyMessage(AUTH_MESSAGE(address), signature);
-    return recovered.toLowerCase() === address.toLowerCase();
-  } catch (e) {
-    console.log('verifyAuthSignature failed: ' + e.message);
-    return false;
-  }
-}
-
+import {
+  verifyAuthSignature, requireSession, same, canAdminister, isParentUnlocked, unlockParent,
+  corsOptions, isAllowedOrigin, securityHeaders, rateLimit,
+} from './security.js';
 import { ENGINES, DECKS, dailyDeckId } from './games/index.js';
 import { recordMatch, getLedger, isOnchain, chainInfo, normalizeLedgerEntry, ONCHAIN_LABELS } from './chain-onchain.js';
 import { distributeRewards, isTokensOnchain, tokenAddresses, tokenBalance } from './chain-tokens.js';
@@ -31,10 +22,6 @@ const PORT = process.env.PORT || 3001;
 const BOT = '0xB07000000000000000000000000000000000000B';
 const BOT_STEP_MS = 700;
 const ROOM_RETENTION_MS = 10 * 60 * 1000; // finished rooms expire after 10 min
-
-// Shared auth message: client (MetaMask personal_sign or local key) must sign
-// exactly this string; verification is standard EIP-191 via ethers.verifyMessage.
-const AUTH_MESSAGE = a => `Battle Arena login for ${a}`;
 
 // Kid safety: profanity filtering & preset moderation pattern
 const PROFANITY_PATTERN = /\b(fuck|shit|bitch|ass|asshole|dick|pussy|cunt|bastard|damn|crap|whore|slut|nigger|nigga|faggot|retard|idiot|stupid|kill|die)\b/i;
@@ -49,11 +36,17 @@ function sanitizeChatMessage(raw) {
 }
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+app.disable('x-powered-by');
+app.use(securityHeaders);
+app.use(cors(corsOptions));
+app.use('/api', rateLimit({ windowMs: 60_000, max: 300 }));
+app.use(express.json({ limit: '100kb' }));
 
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+const io = new Server(server, {
+  cors: corsOptions,
+  allowRequest: (req, cb) => cb(null, isAllowedOrigin(req.headers.origin)),
+});
 
 // ---- In-memory runtime state ----
 const rooms = new Map();          // roomId -> room
@@ -189,15 +182,10 @@ app.get('/api/decks', (_req, res) => {
 
 // Registration / login over REST (address = wallet, passed in body)
 app.post('/api/register', async (req, res) => {
-  const { address, username, name, email, password, signature } = req.body || {};
+  const { address, username, name, email, password, signature, issuedAt } = req.body || {};
   if (!address) return res.status(400).json({ error: 'address is required' });
-  // Verify wallet ownership via signed message
-  if (signature) {
-    if (!verifyAuthSignature(signature, address)) return res.status(401).json({ error: 'Invalid wallet signature' });
-  } else {
-    // Fallback: if no signature, still allow but note it's unauthenticated
-    console.warn('Register without signature verification — address not cryptographically verified');
-  }
+  // Wallet ownership must be proven with a fresh, single-use signature.
+  if (!verifyAuthSignature(signature, address, issuedAt)) return res.status(401).json({ error: 'Invalid or expired wallet signature' });
   const usernameErr = store.validateUsername(username);
   if (usernameErr) return res.status(400).json({ error: usernameErr });
   const result = await store.registerPlayer(address, { name, username, email, password });
@@ -206,11 +194,7 @@ app.post('/api/register', async (req, res) => {
 });
 
 app.post('/api/login', async (req, res) => {
-  const { address, username, name, password, signature } = req.body || {};
-  // Verify wallet ownership via signed message when address is provided
-  if (address && signature) {
-    if (!verifyAuthSignature(signature, address)) return res.status(401).json({ error: 'Invalid wallet signature' });
-  }
+  const { address, username, name, password, signature, issuedAt } = req.body || {};
   // Two ways to log in:
   // 1) By credentials: username + password (wallet resolved from username index).
   if (username && password) {
@@ -220,6 +204,7 @@ app.post('/api/login', async (req, res) => {
     return;
   }
   if (!address) return res.status(400).json({ error: 'address is required when not using username+password' });
+  if (!verifyAuthSignature(signature, address, issuedAt)) return res.status(401).json({ error: 'Invalid or expired wallet signature' });
   const result = await store.loginPlayer(address, { username, name, password });
   if (result.error) return res.status(401).json(result);
   res.json(store.withoutPassword(result));
@@ -240,8 +225,10 @@ app.get('/api/battlepass/tiers', (_req, res) => {
   res.json(store.BATTLE_PASS_TIERS);
 });
 
-app.get('/api/chores/:address', (req, res) => {
+app.get('/api/chores/:address', requireSession, (req, res) => {
   const address = req.params.address;
+  const isParentOf = same(store.getPlayer(address)?.parentAddress, req.auth.address);
+  if (!same(address, req.auth.address) && !isParentOf) return res.status(403).json({ error: 'Not your account' });
   const p = store.getPlayer(address) || store.upsertPlayer(address);
   const chores = store.getChores(address);
   const vouchers = store.getVouchers(address);
@@ -258,9 +245,10 @@ app.get('/api/chores/:address', (req, res) => {
   });
 });
 
-app.post('/api/chores/submit', (req, res) => {
+app.post('/api/chores/submit', requireSession, (req, res) => {
   const { kidAddress, choreId, notes } = req.body || {};
   if (!kidAddress || !choreId) return res.status(400).json({ error: 'kidAddress and choreId required' });
+  if (!same(kidAddress, req.auth.address)) return res.status(403).json({ error: 'You can only submit your own chores' });
   const result = store.submitChore(kidAddress, choreId, notes);
   if (result.error) return res.status(400).json(result);
   const p = store.getPlayer(kidAddress);
@@ -271,9 +259,16 @@ app.post('/api/chores/submit', (req, res) => {
   res.json(result);
 });
 
-app.post('/api/chores/verify', async (req, res) => {
+app.post('/api/chores/verify', requireSession, async (req, res) => {
   const { choreId, parentAddress, signature, message } = req.body || {};
   if (!choreId || !parentAddress) return res.status(400).json({ error: 'choreId and parentAddress required' });
+
+  // Only the linked parent account, or the kid's session after the Parent PIN, may approve.
+  const target = store.getChoreById(choreId);
+  if (!target) return res.status(404).json({ error: 'Chore not found' });
+  if (!canAdminister(req.auth, target.kidAddress)) {
+    return res.status(403).json({ error: 'Parent approval required (link a parent account or unlock with the Parent PIN)' });
+  }
 
   // If signed attestation provided, verify it
   if (signature && message) {
@@ -316,25 +311,29 @@ app.post('/api/chores/verify', async (req, res) => {
   res.json({ ...result, onchainRecord });
 });
 
-app.post('/api/chores/create', (req, res) => {
+app.post('/api/chores/create', requireSession, (req, res) => {
   const { kidAddress, parentAddress, title, category, energyReward, xpReward, allowanceReward } = req.body || {};
   if (!kidAddress || !title) return res.status(400).json({ error: 'kidAddress and title required' });
+  if (!canAdminister(req.auth, kidAddress)) return res.status(403).json({ error: 'Parent approval required' });
+  // Cap rewards so a custom chore cannot be used to mint unlimited energy/XP/allowance.
+  const cap = (v, max) => Math.max(0, Math.min(Number(v) || 0, max));
   const chore = store.createCustomChore({
     kidAddress,
     parentAddress,
-    title,
+    title: String(title).slice(0, 80),
     category,
-    energyReward,
-    xpReward,
-    allowanceReward,
+    energyReward: cap(energyReward, 10),
+    xpReward: cap(xpReward, 200),
+    allowanceReward: cap(allowanceReward, 50),
   });
   notifyPlayer(kidAddress, 'chore:created', chore);
   res.json(chore);
 });
 
-app.post('/api/chores/quiz-complete', (req, res) => {
+app.post('/api/chores/quiz-complete', requireSession, (req, res) => {
   const { kidAddress, score } = req.body || {};
   if (!kidAddress) return res.status(400).json({ error: 'kidAddress required' });
+  if (!same(kidAddress, req.auth.address)) return res.status(403).json({ error: 'Not your account' });
   if (score < 4) return res.status(400).json({ error: 'Need at least 4/5 correct answers to pass' });
   const result = store.completeBrainQuiz(kidAddress);
   if (result.error) return res.status(400).json(result);
@@ -345,22 +344,35 @@ app.post('/api/chores/quiz-complete', (req, res) => {
   res.json(result);
 });
 
-app.post('/api/parent/link', (req, res) => {
+app.post('/api/parent/link', requireSession, (req, res) => {
   const { kidAddress, parentAddress } = req.body || {};
   if (!kidAddress || !parentAddress) return res.status(400).json({ error: 'kidAddress and parentAddress required' });
+  // Either the kid links their parent, or a parent claims a kid that has no parent yet.
+  const kidSelf = same(kidAddress, req.auth.address);
+  const parentSelf = same(parentAddress, req.auth.address);
+  const existing = store.getPlayer(kidAddress);
+  if (!kidSelf && !(parentSelf && existing && !existing.parentAddress)) {
+    return res.status(403).json({ error: 'Cannot link this account' });
+  }
   const kid = store.linkParent(kidAddress, parentAddress);
   res.json(store.withoutPassword(kid));
 });
 
-app.get('/api/parent/:parentAddress/dashboard', (req, res) => {
-  const parentAddress = req.params.parentAddress;
-  const data = store.getParentKids(parentAddress);
-  res.json(data);
+app.get('/api/parent/:parentAddress/dashboard', requireSession, (req, res) => {
+  // Only return kids/chores this session may administer, whatever address was asked for.
+  const data = store.getParentKids(req.params.parentAddress);
+  res.json({
+    kids: data.kids.filter(k => canAdminister(req.auth, k.address)),
+    pendingChores: data.pendingChores.filter(c => canAdminister(req.auth, c.kidAddress)),
+  });
 });
 
-app.post('/api/vouchers/redeem', (req, res) => {
+app.post('/api/vouchers/redeem', requireSession, (req, res) => {
   const { voucherId, parentAddress } = req.body || {};
   if (!voucherId) return res.status(400).json({ error: 'voucherId required' });
+  const voucher = store.getVoucherById(voucherId);
+  if (!voucher) return res.status(404).json({ error: 'Voucher not found' });
+  if (!canAdminister(req.auth, voucher.kidAddress)) return res.status(403).json({ error: 'Parent approval required' });
   const result = store.redeemVoucher(voucherId, parentAddress);
   if (result.error) return res.status(400).json(result);
   res.json(result);
@@ -373,24 +385,31 @@ app.get('/api/skins/:address', (req, res) => {
   res.json(skins);
 });
 
-app.post('/api/skins/equip', (req, res) => {
+app.post('/api/skins/equip', requireSession, (req, res) => {
   const { address, skinId } = req.body || {};
   if (!address || !skinId) return res.status(400).json({ error: 'address and skinId required' });
+  if (!same(address, req.auth.address)) return res.status(403).json({ error: 'Not your account' });
   const result = store.equipSkin(address, skinId);
   if (result.error) return res.status(400).json(result);
   res.json(result);
 });
 
-app.post('/api/parent/verify-pin', (req, res) => {
-  const { address, pin } = req.body || {};
-  const result = store.verifyParentPin(address, pin);
+// The Parent PIN belongs to the logged-in account (never a shared "default"), and a
+// correct PIN unlocks parent actions for this login session for 15 minutes.
+app.post('/api/parent/verify-pin', requireSession, (req, res) => {
+  const result = store.verifyParentPin(req.auth.address, req.body?.pin);
+  if (result.ok) unlockParent(req.auth.token);
   res.json(result);
 });
 
-app.post('/api/parent/set-pin', (req, res) => {
-  const { address, pin } = req.body || {};
-  const result = store.setParentPin(address, pin);
+app.post('/api/parent/set-pin', requireSession, (req, res) => {
+  // Creating the first PIN is open to the account owner; changing it needs the current PIN unlock.
+  if (store.hasParentPin(req.auth.address) && !isParentUnlocked(req.auth.token)) {
+    return res.status(403).json({ error: 'Enter the current Parent PIN first' });
+  }
+  const result = store.setParentPin(req.auth.address, req.body?.pin);
   if (result.error) return res.status(400).json(result);
+  unlockParent(req.auth.token);
   res.json(result);
 });
 
@@ -734,7 +753,7 @@ io.on('connection', (socket) => {
 
   // Two ways to identify: a session token (after login/registration, works from
   // any browser) or a wallet signature (guest wallets, MetaMask).
-  socket.on('identify', ({ address, signature, token } = {}) => {
+  socket.on('identify', ({ address, signature, issuedAt, token } = {}) => {
     if (token) {
       const sessionAddress = store.addressForSession(token);
       if (!sessionAddress) return socket.emit('auth:expired');
@@ -753,7 +772,7 @@ io.on('connection', (socket) => {
     }
     if (!address) return socket.emit('player:error', { error: 'Not identified: no address provided' });
     if (!signature || typeof signature !== 'string' || !signature.trim()) return socket.emit('player:error', { error: 'Not identified: signature required' });
-    if (!verifyAuthSignature(signature, address)) return socket.emit('player:error', { error: 'Not identified: invalid signature' });
+    if (!verifyAuthSignature(signature, address, issuedAt)) return socket.emit('player:error', { error: 'Not identified: invalid or expired signature' });
     bindIdentity(socket, address);
 
     // Auto-resume active match on reconnect/refresh/restart
