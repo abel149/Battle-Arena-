@@ -345,21 +345,18 @@ export default function BattlePass() {
         </div>
       </header>
 
-      {/* Marketing Hook Banner */}
+      {/* Quests & Energy Banner */}
       <div className="bp-marketing-banner">
-        <div className="hook-icon">🧹</div>
+        <div className="hook-icon">⚡</div>
         <div className="hook-content">
-          <div className="hook-headline">Proof-of-Chore Battle Pass</div>
-          <div className="hook-tagline">
-            "The only video game that gets your kids to clean their room first."
-          </div>
+          <div className="hook-headline">Earn Energy & Quests</div>
           <div className="hook-sub">
-            ⚡ Arena Energy cannot be bought with money. Complete real-world chores or ace the Brain Quiz to earn Energy, unlock Battle Pass tiers, and win real allowance rewards & toy vouchers!
+            Finish real-world chores or answer quick quiz questions to earn Energy, unlock season tiers, and save allowance tokens.
           </div>
         </div>
         <div className="hook-cta">
           <button type="button" className="btn-take-quiz" onClick={() => setShowQuiz(true)}>
-            🧠 Take Brain Quiz (+2 ⚡)
+            Take 5-Question Quiz (+2 ⚡)
           </button>
         </div>
       </div>
