@@ -22,6 +22,7 @@ import {
 } from './security.js';
 import { ENGINES, DECKS, dailyDeckId } from './games/index.js';
 import { defaultRecorder } from './result-recorder.js';
+import { registerChatHandlers } from './sockets/chat.js';
 import {
   distributeRewards,
   isTokensOnchain,
@@ -36,26 +37,6 @@ const PORT = process.env.PORT || 3001;
 const BOT = '0xB07000000000000000000000000000000000000B';
 const BOT_STEP_MS = 700;
 const ROOM_RETENTION_MS = 10 * 60 * 1000; // finished rooms expire after 10 min
-
-// Kid safety: profanity filtering & preset moderation pattern
-const PROFANITY_PATTERN =
-  /\b(fuck|shit|bitch|ass|asshole|dick|pussy|cunt|bastard|damn|crap|whore|slut|nigger|nigga|faggot|retard|idiot|stupid|kill|die)\b/i;
-
-/**
- * Moderates user chat text, sanitizing profanity and limiting message length to 100 characters.
- *
- * @function sanitizeChatMessage
- * @param {string} raw - Raw unmoderated message string.
- * @returns {string | null} Filtered friendly string or null if empty.
- */
-function sanitizeChatMessage(raw) {
-  if (!raw || typeof raw !== 'string') return null;
-  const trimmed = raw.trim();
-  if (PROFANITY_PATTERN.test(trimmed)) {
-    return '🎮 [Family Friendly Message]';
-  }
-  return trimmed.slice(0, 100);
-}
 
 const app = express();
 app.disable('x-powered-by');
@@ -1374,76 +1355,7 @@ io.on('connection', (socket) => {
     broadcastLiveRooms();
   });
 
-  socket.on('lobby:chat:history', () => {
-    socket.emit('lobby:chat:history', lobbyChat.slice(-30));
-  });
-
-  socket.on('lobby:chat:send', (payload = {}) => {
-    const { text } = payload || {};
-    const address = socketPlayer.get(socket.id);
-    if (!address || !text?.trim()) return;
-    if (isChatRateLimited(socket.id)) {
-      return socket.emit('chat:rate_limited', {
-        error: 'Please wait a moment before sending another message.',
-      });
-    }
-    const cleanText = sanitizeChatMessage(text);
-    if (!cleanText) return;
-    const p = store.getPlayer(address);
-    const msg = {
-      from: p?.name || address.slice(0, 8),
-      address,
-      text: cleanText,
-      t: Date.now(),
-      time: Date.now(),
-    };
-    lobbyChat.push(msg);
-    if (lobbyChat.length > 50) lobbyChat.shift();
-    io.emit('lobby:chat:message', msg);
-  });
-
-  socket.on('chat:send', (payload = {}) => {
-    const { roomId, text } = payload || {};
-    const address = socketPlayer.get(socket.id);
-    if (!address || !text?.trim()) return;
-    if (isChatRateLimited(socket.id)) {
-      return socket.emit('chat:rate_limited', {
-        error: 'Please wait a moment before sending another message.',
-      });
-    }
-    const cleanText = sanitizeChatMessage(text);
-    if (!cleanText) return;
-
-    if (!roomId || roomId === 'lobby') {
-      const p = store.getPlayer(address);
-      const msg = {
-        from: p?.name || address.slice(0, 8),
-        address,
-        text: cleanText,
-        t: Date.now(),
-        time: Date.now(),
-      };
-      lobbyChat.push(msg);
-      if (lobbyChat.length > 50) lobbyChat.shift();
-      io.emit('lobby:chat:message', msg);
-      return;
-    }
-
-    const room = rooms.get(roomId);
-    if (!room) return;
-    // Only players and spectators of this room may post to its chat.
-    const member = room.sockets[address] === socket.id || room.spectators.has(socket.id);
-    if (!member) return;
-    const msg = {
-      from: store.getPlayer(address)?.name || address.slice(0, 8),
-      address,
-      text: cleanText,
-      t: Date.now(),
-    };
-    room.chat.push(msg);
-    store.saveActiveRoom(room);
-    io.to(roomId).emit('chat:message', msg);
-  });
+  registerChatHandlers(socket, { io, rooms, socketPlayer, lobbyChat, isChatRateLimited });
 
   socket.on('room:reconnect', (payload = {}, ack) => {
     const { roomId } = payload || {};
