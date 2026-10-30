@@ -214,7 +214,8 @@ app.get('/api/wallet/:address/tokens', async (req, res) => {
     const balance = await tokenBalance(req.params.address);
     res.json({ onchain: true, symbol: 'ARENA', balance, addresses: tokenAddresses() });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to read token balance', detail: err.message });
+    console.error('Failed to read token balance:', err);
+    res.status(500).json({ error: 'Failed to read token balance' });
   }
 });
 app.get('/api/chain/status', async (_req, res) => {
@@ -226,7 +227,8 @@ app.get('/api/matches', async (_req, res) => {
   try {
     res.json(await getLedger());
   } catch (err) {
-    res.status(500).json({ error: 'Failed to load match ledger', detail: err.message });
+    console.error('Failed to load match ledger:', err);
+    res.status(500).json({ error: 'Failed to load match ledger' });
   }
 });
 
@@ -250,7 +252,8 @@ app.get('/api/verify/:matchId', async (req, res) => {
     );
     entry ? res.json({ valid: true, entry }) : res.status(404).json({ valid: false });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to load match', detail: err.message });
+    console.error('Failed to load match verification:', err);
+    res.status(500).json({ error: 'Failed to load match' });
   }
 });
 app.get('/api/decks', (_req, res) => {

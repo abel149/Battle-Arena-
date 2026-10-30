@@ -441,7 +441,7 @@ function prepare() {
 
 // ---- Login sessions ----
 
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours (reduced from 30 days)
 const hashToken = token => crypto.createHash('sha256').update(String(token)).digest('hex');
 
 /** Create a login session for `address`; returns the opaque token for the client. */
@@ -640,8 +640,7 @@ export async function registerPlayer(address, { name, username, email, password 
   }
   const taken = prepared.usernameExists.get(normalized, address);
   if (taken) {
-    const addr = (await db.prepare('SELECT address FROM players WHERE lower(username) = lower(?)').get(normalized));
-    return { error: 'Username already taken', conflict: addr?.address };
+    return { error: 'Username already taken' };
   }
   const displayName = name && name.trim() ? name.trim() : normalized;
   const passwordHash = password ? await hashPassword(password) : null;
@@ -949,6 +948,9 @@ export function verifyChore(choreId, parentAddress, proofHash = null) {
   const chore = prepared.getChoreById.get(choreId);
   if (!chore) return { error: 'Chore not found' };
   if (chore.status === 'verified') return { error: 'Chore already verified' };
+  if (chore.parentAddress && parentAddress && chore.parentAddress.toLowerCase() !== parentAddress.toLowerCase()) {
+    return { error: 'Only the assigned parent can verify this chore' };
+  }
 
   prepared.updateChoreStatus.run({
     id: choreId,
