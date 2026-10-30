@@ -476,3 +476,24 @@
   transform: translate(-1px, -1px);
   box-shadow: var(--hard-shadow, 3px 3px 0px #0e1116);
 }
+
+.btn-cancel {
+  background: var(--bg-card-sub, #1e232b);
+  border: var(--border-width, 2.5px) solid var(--border-ink, #0e1116);
+  color: var(--text-dim, #9aa5b5);
+  font-family: var(--font-body);
+  font-weight: 700;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  box-shadow: var(--hard-shadow-sm, 2px 2px 0px #0e1116);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  width: 100%;
+}
+
+.btn-cancel:hover {
+  transform: translate(-1px, -1px);
+  color: var(--text-main, #f5f6f0);
+  box-shadow: var(--hard-shadow, 3px 3px 0px #0e1116);
+}

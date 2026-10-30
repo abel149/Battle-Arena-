@@ -387,6 +387,12 @@ export default function Hub() {
                 <button type="button" className="btn-action-secondary" onClick={() => tryPlay(`connectfour?mode=bot&difficulty=${c4Diff}`)}>
                   <GamepadIcon /> Practice vs Bot
                 </button>
+                <button type="button" className="btn-action-outline" onClick={() => navigate('connectfour?mode=create')}>
+                  <PlusIcon /> Create Room
+                </button>
+                <button type="button" className="btn-action-outline" onClick={() => setJoinGame('connectfour')}>
+                  <KeyIcon /> Join Room
+                </button>
               </div>
             </section>
 
@@ -435,6 +441,12 @@ export default function Hub() {
                 </button>
                 <button type="button" className="btn-action-secondary" onClick={() => tryPlay(`blaster?mode=bot&difficulty=${blasterDiff}`)}>
                   <GamepadIcon /> Practice vs Bot
+                </button>
+                <button type="button" className="btn-action-outline" onClick={() => navigate('blaster?mode=create')}>
+                  <PlusIcon /> Create Room
+                </button>
+                <button type="button" className="btn-action-outline" onClick={() => setJoinGame('blaster')}>
+                  <KeyIcon /> Join Room
                 </button>
               </div>
             </section>
@@ -571,13 +583,28 @@ export default function Hub() {
 
       {joinGame && (
         <JoinRoomModal
-          gameLabel={joinGame === 'arena' ? 'Neon Math Arena' : 'Memory Match'}
+          gameLabel={
+            joinGame === 'arena'
+              ? 'Neon Math Arena'
+              : joinGame === 'memory'
+              ? 'Memory Match'
+              : joinGame === 'connectfour'
+              ? 'Connect Four'
+              : 'Cyber Blaster Arena'
+          }
           onClose={() => setJoinGame(null)}
           onJoin={code => {
+            const target = joinGame;
             setJoinGame(null);
-            navigate(joinGame === 'arena'
-              ? `arena?mode=join&code=${code}`
-              : `memory?mode=join&code=${code}&deck=${deck}`);
+            if (target === 'arena') {
+              navigate(`arena?mode=join&code=${code}`);
+            } else if (target === 'memory') {
+              navigate(`memory?mode=join&code=${code}&deck=${deck}`);
+            } else if (target === 'connectfour') {
+              navigate(`connectfour?mode=join&code=${code}`);
+            } else if (target === 'blaster') {
+              navigate(`blaster?mode=join&code=${code}`);
+            }
           }}
         />
       )}
