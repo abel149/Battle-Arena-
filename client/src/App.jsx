@@ -1,27 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ethers } from 'ethers';
 import { socket, API, signAndIdentify } from './socket.js';
-
-// ---------- wallet identity ----------
-// Demo wallets are real secp256k1 keys nowadays, so every identity can produce
-// a genuine EIP-191 signature. MetaMask users sign with personal_sign instead.
-function getOrCreateWallet() {
-  let w = JSON.parse(localStorage.getItem('arena_wallet') || 'null');
-  if (!w || !w.address || !w.privateKey) {
-    // Legacy wallets stored only a fake address — regenerate a real key pair.
-    const wallet = ethers.Wallet.createRandom();
-    w = {
-      address: wallet.address,
-      name: 'Player-' + Math.random().toString(36).slice(2, 7),
-      privateKey: wallet.privateKey,
-      source: 'demo',
-    };
-    localStorage.setItem('arena_wallet', JSON.stringify(w));
-  }
-  return w;
-}
-
-const short = a => (a && a.length > 12 ? a.slice(0, 6) + '…' + a.slice(-4) : a);
+import { getOrCreateWallet, saveWallet, short, clearWalletSession } from './lib/session.js';
 
 const usernameRe = /^[a-zA-Z0-9_]{3,20}$/;
 
@@ -74,7 +54,7 @@ export default function App() {
       if (u.address) {
         setWallet(current => {
           const next = { ...current, address: u.address, name: u.name || current.name };
-          localStorage.setItem('arena_wallet', JSON.stringify(next));
+          saveWallet(next);
           return next;
         });
       }
@@ -123,7 +103,7 @@ export default function App() {
     setWallet(w => {
       // MetaMask holds the key itself; the stored wallet keeps only the address.
       const next = { address: accounts[0], name: w.name, source: 'metamask' };
-      localStorage.setItem('arena_wallet', JSON.stringify(next));
+      saveWallet(next);
       return next;
     });
   }
@@ -476,10 +456,9 @@ export default function App() {
           </section>
 
           <aside className="panel chat-panel">
-            <h3>Chat</h3>
+            <h3>Kid-Safe Chat</h3>
             <ChatLog chat={chat} myAddr={myAddr} />
             <PresetChat onSend={t => socket.emit('chat:send', { roomId: room.roomId, text: t })} />
-            <ChatInput onSend={t => socket.emit('chat:send', { roomId: room.roomId, text: t })} />
           </aside>
         </main>
       )}

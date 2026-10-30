@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { API, socket, signAndIdentify } from '../socket.js';
 import { navigate } from '../lib/router.js';
-import { saveWallet, short, useProfile } from '../lib/session.js';
+import { saveWallet, short, useProfile, clearWalletSession } from '../lib/session.js';
 import ArenaPreview3D from '../components/ArenaPreview3D.jsx';
 import AuthModal from '../components/AuthModal.jsx';
 import SkinLockerModal from '../components/SkinLockerModal.jsx';
 import ParentApprovalModal from '../components/ParentApprovalModal.jsx';
+import ReplayModal from '../components/ReplayModal.jsx';
+import AccountModal from '../components/AccountModal.jsx';
 import './hub.css';
 
 const DEFAULT_DECK = 'flags';
@@ -27,6 +29,8 @@ export default function Hub() {
   const [blasterDiff, setBlasterDiff] = useState('medium');
   const [showSkinLocker, setShowSkinLocker] = useState(false);
   const [showParentModal, setShowParentModal] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [replayMatchId, setReplayMatchId] = useState(null);
   const [celebrationToast, setCelebrationToast] = useState(null);
   const [showEnergyModal, setShowEnergyModal] = useState(false);
   const [loadError, setLoadError] = useState(null);
@@ -117,7 +121,7 @@ export default function Hub() {
 
   // Logging out just hands this browser a fresh guest wallet.
   function logout() {
-    localStorage.removeItem('arena_wallet');
+    clearWalletSession();
     window.location.reload();
   }
 
@@ -188,6 +192,9 @@ export default function Hub() {
             <button type="button" className="mm-btn" onClick={() => setShowAuth(true)}>Log in</button>
           )}
           <button type="button" className="mm-btn" onClick={connectMetaMask}>MetaMask</button>
+          <button type="button" className="mm-btn key-vault-btn" onClick={() => setShowAccountModal(true)} title="Backup, view keys, or restore account">
+            🔑 Keys & Vault
+          </button>
           <span className="addr-pill" title={wallet.address}>{short(wallet.address)}</span>
         </div>
       </header>
@@ -449,18 +456,27 @@ export default function Hub() {
             <div className="onchain-body">
               {matches.length === 0 && <p className="side-empty">No results recorded yet.</p>}
               {latest.map(m => (
-                <a
-                  key={m.matchId}
-                  className="chain-row"
-                  href={`${API}/api/verify/${m.matchId}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  title={`Verify ${m.matchId}`}
-                >
-                  <span className={`chain-dot ${m.gameType || ''}`} />
-                  <span className="chain-game">{gameLabel(m.gameType)}</span>
-                  <span className="chain-hash">{short(m.txHash || m.matchId)}</span>
-                </a>
+                <div key={m.matchId} className="chain-row-container">
+                  <a
+                    className="chain-row"
+                    href={`${API}/api/verify/${m.matchId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={`Verify ${m.matchId}`}
+                  >
+                    <span className={`chain-dot ${m.gameType || ''}`} />
+                    <span className="chain-game">{gameLabel(m.gameType)}</span>
+                    <span className="chain-hash">{short(m.txHash || m.matchId)}</span>
+                  </a>
+                  <button
+                    type="button"
+                    className="btn-replay-pill"
+                    onClick={() => setReplayMatchId(m.matchId)}
+                    title="Watch match replay"
+                  >
+                    ▶ Replay
+                  </button>
+                </div>
               ))}
               {matches.length > 0 && (
                 <div className="chain-count">{matches.length} verified match{matches.length === 1 ? '' : 'es'}</div>
@@ -519,6 +535,22 @@ export default function Hub() {
           onChoreApproved={() => refresh()}
         />
       )}
+
+      {showAccountModal && (
+        <AccountModal
+          wallet={wallet}
+          setWallet={setWallet}
+          profile={profile}
+          onClose={() => setShowAccountModal(false)}
+        />
+      )}
+
+      {replayMatchId && (
+        <ReplayModal
+          matchId={replayMatchId}
+          onClose={() => setReplayMatchId(null)}
+        />
+      )}
     </div>
   );
 }
@@ -566,8 +598,24 @@ function LiveMatches({ rooms }) {
                 >
                   Watch
                 </button>
+              ) : r.gameType === 'connect-four' ? (
+                <button
+                  type="button"
+                  className="live-watch"
+                  onClick={() => navigate(`connectfour?mode=watch&room=${r.roomId}`)}
+                >
+                  Watch
+                </button>
+              ) : r.gameType === 'math-arena' ? (
+                <button
+                  type="button"
+                  className="live-watch"
+                  onClick={() => navigate(`arena?mode=watch&room=${r.roomId}`)}
+                >
+                  Watch
+                </button>
               ) : (
-                <span className="live-soon">Watching soon</span>
+                <span className="live-soon">Duel in progress</span>
               )}
             </li>
           ))}

@@ -20,6 +20,7 @@ const TOKEN_ADDRESS_FILE = path.join(__dirname, 'token-address.json');
 
 const ARENA_TOKEN_ABI = [
   'function mint(address to, uint256 value) external',
+  'function mintBatch(address[] recipients, uint256[] values) external',
   'function balanceOf(address owner) view returns (uint256)',
   'function totalSupply() view returns (uint256)',
 ];
@@ -29,6 +30,7 @@ const ARENA_BADGES_ABI = [
   'function badgeLabel(uint256 id) view returns (string)',
   'function holderOf(uint256 id) view returns (address)',
   'function mint(address to, uint256 id) external',
+  'function mintBatch(address[] recipients, uint256[] ids) external',
   'event TransferSingle(address indexed operator, address indexed from, address indexed to, uint256 id, uint256 value)',
 ];
 
@@ -120,16 +122,43 @@ export async function distributeRewards(rewards) {
 
   const c = await ensureContracts();
   const out = {};
-  for (const r of rewards) {    const entry = { tokens: r.tokens, tokenTx: null, badges: [] };
-    const to = hexAddress(r.address);
+
+  // Gas Relayer Optimization: Batch token mints for multiple players in one tx
+  const tokenRecipients = [];
+  const tokenAmounts = [];
+  for (const r of rewards) {
+    if (r.tokens > 0) {
+      tokenRecipients.push(hexAddress(r.address));
+      tokenAmounts.push(amountFor(r.tokens));
+    }
+  }
+
+  let sharedTokenTx = null;
+  if (tokenRecipients.length > 1) {
     try {
-      if (r.tokens > 0) {
-        const tx = await c.tokenContract.mint(to, amountFor(r.tokens));
-        const rc = await tx.wait();
-        entry.tokenTx = rc.hash;
-      }
+      const tx = await c.tokenContract.mintBatch(tokenRecipients, tokenAmounts);
+      const rc = await tx.wait();
+      sharedTokenTx = rc.hash;
     } catch (err) {
-      entry.error = `token mint failed: ${err.shortMessage || err.message}`;
+      console.warn('Batch token mint fallback to individual mints:', err.message);
+    }
+  }
+
+  for (const r of rewards) {
+    const entry = { tokens: r.tokens, tokenTx: null, badges: [] };
+    const to = hexAddress(r.address);
+    if (r.tokens > 0) {
+      if (sharedTokenTx) {
+        entry.tokenTx = sharedTokenTx;
+      } else {
+        try {
+          const tx = await c.tokenContract.mint(to, amountFor(r.tokens));
+          const rc = await tx.wait();
+          entry.tokenTx = rc.hash;
+        } catch (err) {
+          entry.error = `token mint failed: ${err.shortMessage || err.message}`;
+        }
+      }
     }
     for (const b of r.badges || []) {
       const item = { id: b.id, label: b.label, tx: null };

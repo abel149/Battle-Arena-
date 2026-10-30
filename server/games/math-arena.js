@@ -121,6 +121,24 @@ export function applyMove(game, address, move) {
   return { ok: true };
 }
 
+export function timeoutRound(game) {
+  if (game.winner) return { ok: false };
+  let timedOut = false;
+  for (const seat of ['X', 'O']) {
+    if (!game.answered[seat]) {
+      game.answered[seat] = true;
+      game.picks[seat] = null;
+      game.moves.push({ round: game.round, index: null, address: game.players[seat], t: Date.now(), timeout: true });
+      timedOut = true;
+    }
+  }
+  if (timedOut) {
+    resolveRound(game);
+    return { ok: true, timedOut: true };
+  }
+  return { ok: false };
+}
+
 export function botMove(game, difficulty = game.difficulty || 'medium') {
   const q = game.questions[game.round];
   if (!q) return { index: 0 };

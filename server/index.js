@@ -35,6 +35,18 @@ const BOT_STEP_MS = 700;
 // exactly this string; verification is standard EIP-191 via ethers.verifyMessage.
 const AUTH_MESSAGE = a => `Battle Arena login for ${a}`;
 
+// Kid safety: profanity filtering & preset moderation pattern
+const PROFANITY_PATTERN = /\b(fuck|shit|bitch|ass|asshole|dick|pussy|cunt|bastard|damn|crap|whore|slut|nigger|nigga|faggot|retard|idiot|stupid|kill|die)\b/i;
+
+function sanitizeChatMessage(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (PROFANITY_PATTERN.test(trimmed)) {
+    return '🎮 [Family Friendly Message]';
+  }
+  return trimmed.slice(0, 100);
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -64,6 +76,25 @@ const liveListeners = new Set();  // socketIds in the lobby (for rooms:live push
 // ---- REST ----
 app.get('/api/leaderboard', (_req, res) => res.json(store.leaderboard()));
 app.get('/api/leaderboard/weekly', (_req, res) => res.json(store.leaderboardWeekly()));
+
+app.get('/api/tournament', (_req, res) => {
+  const standings = store.leaderboardWeekly();
+  const topPlayers = standings.slice(0, 3);
+  res.json({
+    title: 'Weekly Arena Championship',
+    season: 'Season 1',
+    status: 'active',
+    prizePoolArena: 500,
+    prizes: [
+      { rank: 1, arenaReward: 250, badge: 'Gold Arena Champion', xp: 500 },
+      { rank: 2, arenaReward: 150, badge: 'Silver Arena Duelist', xp: 300 },
+      { rank: 3, arenaReward: 100, badge: 'Bronze Arena Contender', xp: 150 },
+    ],
+    rules: 'Top 3 players on the weekly leaderboard at Sunday 23:59 UTC receive ARENA token mints and exclusive on-chain championship badges.',
+    standings: topPlayers,
+    totalContenders: standings.length,
+  });
+});
 
 // Match ledger and verification expose the normalized on-chain shape.
 // matchId is the stable lookup key used by the game flow; matchIdRaw is the
@@ -345,6 +376,7 @@ function serializeRoom(room) {
 
 function broadcastState(room) {
   io.to(room.id).emit('game:state', { roomId: room.id, game: room.engine.serialize(room.game) });
+  store.saveActiveRoom(room);
 }
 
 function broadcastLiveRooms() {
@@ -357,6 +389,7 @@ function broadcastLiveRooms() {
 
 async function finishRoom(room) {
   if (room.tickInterval) clearInterval(room.tickInterval);
+  if (room.mathTimer) clearTimeout(room.mathTimer);
   const { game } = room;
   const addrX = game.players.X;
   const addrO = game.players.O;
@@ -367,13 +400,26 @@ async function finishRoom(room) {
   // recording is enabled, it includes matchIdRaw as the exact bytes32 stored
   // on-chain. When recording falls back to the simulated ledger, matchIdRaw is
   // the same as matchId.
-  const receipt = await recordMatch({
-    matchId: room.id,
-    gameType: room.gameType,
-    players: { X: addrX, O: addrO },
-    winner: winnerAddr || 'draw',
-    moves: game.moves,
-  });
+  let receipt = null;
+  try {
+    receipt = await recordMatch({
+      matchId: room.id,
+      gameType: room.gameType,
+      players: { X: addrX, O: addrO },
+      winner: winnerAddr || 'draw',
+      moves: game.moves,
+    });
+  } catch (err) {
+    console.warn('On-chain match recording failed, falling back to simulated ledger:', err.message);
+    const { recordMatchSimulated, normalizeLedgerEntry } = await import('./chain-onchain.js');
+    receipt = normalizeLedgerEntry(recordMatchSimulated({
+      matchId: room.id,
+      gameType: room.gameType,
+      players: { X: addrX, O: addrO },
+      winner: winnerAddr || 'draw',
+      moves: game.moves,
+    }));
+  }
 
   // Update stats for human players and compute on-chain reward deltas
   const rewards = [];
@@ -433,10 +479,27 @@ async function finishRoom(room) {
     result: game.winner,
     receipt: { ...receipt, rewards: rewardReceipts }, // { matchId, matchIdRaw?, winner, timestamp, resultHash, txHash, rewards? }
   });
-  // Note: the on-chain record and the DB writes below are intentionally
-  // independent. The chain is the proof layer; SQLite is the operational store.
-  // If one fails, the other can still stand on its own.
+  // Clean up persisted active room and memory
+  store.removeActiveRoom(room.id);
+  rooms.delete(room.id);
   broadcastLiveRooms();
+}
+
+function scheduleMathRoundTimer(room) {
+  if (room.mathTimer) clearTimeout(room.mathTimer);
+  if (room.game.winner) return;
+  const currentRound = room.game.round;
+  room.mathTimer = setTimeout(() => {
+    const r = rooms.get(room.id);
+    if (!r || r.game.winner || r.game.round !== currentRound) return;
+    if (!r.game.answered.X || !r.game.answered.O) {
+      if (r.engine.timeoutRound) {
+        r.engine.timeoutRound(r.game);
+        broadcastState(r);
+        afterEngineMove(r);
+      }
+    }
+  }, 12000);
 }
 
 // Advance game flow after any move: resolve pending state, then run the bot
@@ -444,6 +507,9 @@ async function finishRoom(room) {
 // The on-chain path is called only when the room ends, in finishRoom().
 function afterEngineMove(room, res) {
   if (room.game.winner) return finishRoom(room);
+  if (room.gameType === 'math-arena') {
+    scheduleMathRoundTimer(room);
+  }
   if (res?.pendingMs && room.engine.resolve) {
     setTimeout(() => {
       if (room.game.winner) return;
@@ -491,6 +557,7 @@ function createRoom(gameType, addrX, addrO, getSocket, opts = {}) {
     chat: [],
   };
   rooms.set(id, room);
+  store.saveActiveRoom(room);
   for (const addr of [addrX, addrO]) {
     if (addr && addr !== BOT) {
       store.consumeEnergy(addr, 1);
@@ -529,6 +596,11 @@ function createRoom(gameType, addrX, addrO, getSocket, opts = {}) {
     }, 40);
   }
 
+  // Authoritative round timer for Neon Math Arena
+  if (gameType === 'math-arena') {
+    scheduleMathRoundTimer(room);
+  }
+
   broadcastLiveRooms();
   return room;
 }
@@ -552,6 +624,17 @@ io.on('connection', (socket) => {
     socket.emit('player:registered', store.isRegistered(address));
     if (store.isRegistered(address)) {
       socket.emit('player:registered:user', { address, username: profile.username, name: profile.name });
+    }
+
+    // Auto-resume active match on reconnect/refresh/restart
+    for (const room of rooms.values()) {
+      if (!room.game.winner && (room.game.players.X === address || room.game.players.O === address)) {
+        room.sockets[address] = socket.id;
+        socket.join(room.id);
+        socket.emit('match:resumed', serializeRoom(room));
+        socket.emit('game:state', { roomId: room.id, game: room.engine.serialize(room.game) });
+        break;
+      }
     }
   });
 
@@ -593,7 +676,7 @@ io.on('connection', (socket) => {
     socket.emit('player:registered:user', { address: result.address, username: result.username, name: result.name });
   });
 
-  socket.on('queue:join', ({ gameType } = {}) => {
+  socket.on('queue:join', ({ gameType, inviteCode } = {}) => {
     const address = socketPlayer.get(socket.id);
     const type = ENGINES[gameType] ? gameType : 'tic-tac-toe';
     if (!address || queue.some(q => q.socketId === socket.id)) return;
@@ -604,11 +687,12 @@ io.on('connection', (socket) => {
         needsEnergy: true,
       });
     }
-    queue.push({ socketId: socket.id, gameType: type });
-    socket.emit('queue:waiting', { gameType: type });
+    const cleanInvite = inviteCode ? String(inviteCode).trim().toUpperCase().slice(0, 8) : null;
+    queue.push({ socketId: socket.id, gameType: type, inviteCode: cleanInvite });
+    socket.emit('queue:waiting', { gameType: type, inviteCode: cleanInvite });
 
-    // Pair the first two players waiting for the same game
-    const peers = queue.filter(q => q.gameType === type);
+    // Pair the first two players waiting for the same game & invite code
+    const peers = queue.filter(q => q.gameType === type && (cleanInvite ? q.inviteCode === cleanInvite : !q.inviteCode));
     if (peers.length >= 2) {
       const [a, b] = peers;
       const addrA = socketPlayer.get(a.socketId);
@@ -733,14 +817,30 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId);
     const address = socketPlayer.get(socket.id);
     if (!room || !address || !text?.trim()) return;
+    const cleanText = sanitizeChatMessage(text);
+    if (!cleanText) return;
     const msg = {
       from: store.getPlayer(address)?.name || address.slice(0, 8),
       address,
-      text: text.trim().slice(0, 300),
+      text: cleanText,
       t: Date.now(),
     };
     room.chat.push(msg);
+    store.saveActiveRoom(room);
     io.to(roomId).emit('chat:message', msg);
+  });
+
+  socket.on('room:reconnect', ({ roomId }, ack) => {
+    const room = rooms.get(roomId);
+    if (!room) return ack?.({ error: 'Room not found or match already concluded' });
+    const address = socketPlayer.get(socket.id);
+    if (address && (room.game.players.X === address || room.game.players.O === address)) {
+      room.sockets[address] = socket.id;
+    }
+    socket.join(room.id);
+    socket.emit('match:start', serializeRoom(room));
+    socket.emit('game:state', { roomId: room.id, game: room.engine.serialize(room.game) });
+    ack?.({ ok: true, room: serializeRoom(room) });
   });
 
   socket.on('match:leave', ({ roomId }) => {
@@ -781,6 +881,59 @@ io.on('connection', (socket) => {
     liveListeners.delete(socket.id);
   });
 });
+
+function restoreActiveRooms() {
+  store.cleanupStaleActiveRooms(30 * 60 * 1000);
+  const saved = store.listActiveRooms();
+  for (const r of saved) {
+    const engine = ENGINES[r.gameType];
+    if (!engine || r.game.winner) {
+      store.removeActiveRoom(r.roomId);
+      continue;
+    }
+    const room = {
+      id: r.roomId,
+      gameType: r.gameType,
+      difficulty: r.game.difficulty || 'medium',
+      engine,
+      deck: r.deck,
+      names: r.names,
+      game: r.game,
+      sockets: {},
+      spectators: new Set(r.spectators || []),
+      chat: r.chat || [],
+      createdAt: r.createdAt,
+    };
+    if (r.gameType === 'cyber-blaster') {
+      room.tickInterval = setInterval(() => {
+        if (room.game.winner) {
+          clearInterval(room.tickInterval);
+          return;
+        }
+        if (room.game.players.O === BOT) {
+          const bMove = room.engine.botMove(room.game, room.difficulty);
+          if (bMove) room.engine.applyMove(room.game, BOT, bMove);
+        }
+        room.engine.tick(room.game, 40);
+        const tickData = room.engine.serializeTick ? room.engine.serializeTick(room.game) : room.engine.serialize(room.game);
+        io.to(room.id).emit('blaster:tick', tickData);
+        if (room.game.winner) {
+          clearInterval(room.tickInterval);
+          finishRoom(room);
+        }
+      }, 40);
+    }
+    if (r.gameType === 'math-arena') {
+      scheduleMathRoundTimer(room);
+    }
+    rooms.set(room.id, room);
+  }
+  if (saved.length > 0) {
+    console.log(`[Persistence] Restored ${rooms.size} active room(s) from SQLite on boot.`);
+  }
+}
+
+restoreActiveRooms();
 
 server.listen(PORT, () => {
   console.log(`Battle Arena server on http://localhost:${PORT}`);

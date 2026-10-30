@@ -73,6 +73,7 @@ async function ensureContract() {
 
 const MATCH_RESULT_ABI = [
   'function recordMatch(bytes32 matchId, string gameType, address winner, address playerA, address playerB, uint256 moves) external',
+  'function recordMatchBatch(tuple(bytes32 matchId, string gameType, address winner, address playerA, address playerB, uint256 moves)[] inputs) external',
   'function matchCount() external view returns (uint256)',
   'function getMatch(bytes32 matchId) external view returns (tuple(bytes32 matchId, string gameType, address winner, address playerA, address playerB, uint256 moves, uint64 timestamp))',
   'function getMatchByIndex(uint256 index) external view returns (tuple(bytes32 matchId, string gameType, address winner, address playerA, address playerB, uint256 moves, uint64 timestamp))',
@@ -155,6 +156,28 @@ export async function recordMatch({ matchId, gameType, players, winner, moves })
   // matchId is the best-effort decoded original; on current deployments this is
   // the same string that was passed in. matchIdRaw is the exact bytes32 on-chain.
   return { ...recorded, txHash: receipt.hash };
+}
+
+/// Batch record multiple completed matches in a single atomic transaction.
+export async function recordMatchBatch(matchesList) {
+  if (!USE_ONCHAIN) {
+    return matchesList.map(m => recordMatchSimulated(m));
+  }
+  const c = await ensureContract();
+  if (!c) throw new Error('On-chain recording requested but contract is not available');
+
+  const formattedInputs = matchesList.map(m => ({
+    matchId: encodeBytes32String(m.matchId),
+    gameType: m.gameType,
+    winner: m.winner && m.winner !== 'draw' ? hexAddress(m.winner) : ZeroAddress,
+    playerA: hexAddress(m.players.X),
+    playerB: hexAddress(m.players.O),
+    moves: Array.isArray(m.moves) ? m.moves.length : Number(m.moves),
+  }));
+
+  const tx = await c.recordMatchBatch(formattedInputs);
+  const rc = await tx.wait();
+  return { txHash: rc.hash, count: matchesList.length };
 }
 
 /**

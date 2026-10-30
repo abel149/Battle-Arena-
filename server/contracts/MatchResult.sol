@@ -67,6 +67,40 @@ contract MatchResult {
         emit MatchRecorded(matchId, gameType, winner, playerA, playerB, moves, uint64(block.timestamp));
     }
 
+    struct BatchMatchInput {
+        bytes32 matchId;
+        string  gameType;
+        address winner;
+        address playerA;
+        address playerB;
+        uint256 moves;
+    }
+
+    /// @notice Batch record multiple matches in a single atomic transaction.
+    ///         Amortizes transaction base gas overhead across all matches.
+    function recordMatchBatch(BatchMatchInput[] calldata inputs) external {
+        uint64 ts = uint64(block.timestamp);
+        for (uint256 i = 0; i < inputs.length; i++) {
+            BatchMatchInput calldata m = inputs[i];
+            require(matchIndex[m.matchId] == 0, "MatchResult: match already recorded");
+            require(m.playerA != address(0) && m.playerB != address(0), "MatchResult: invalid players");
+
+            uint256 idx = matches.length;
+            matches.push(Match({
+                matchId:    m.matchId,
+                gameType:   m.gameType,
+                winner:     m.winner,
+                playerA:    m.playerA,
+                playerB:    m.playerB,
+                moves:      m.moves,
+                timestamp:  ts
+            }));
+            matchIndex[m.matchId] = idx + 1;
+
+            emit MatchRecorded(m.matchId, m.gameType, m.winner, m.playerA, m.playerB, m.moves, ts);
+        }
+    }
+
     /// @notice Number of recorded matches.
     function matchCount() external view returns (uint256) {
         return matches.length;

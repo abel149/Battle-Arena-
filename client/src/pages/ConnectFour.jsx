@@ -14,6 +14,7 @@ export default function ConnectFour() {
   const mode = modeParam === 'bot' ? 'bot' : modeParam === 'watch' ? 'watch' : 'match';
   const watching = mode === 'watch';
   const watchRoom = route.params.get('room');
+  const inviteCode = route.params.get('invite');
   const rawDiff = route.params.get('difficulty');
   const initialDiff = ['easy', 'medium', 'hard'].includes(rawDiff) ? rawDiff : 'medium';
   const [difficulty, setDifficulty] = useState(initialDiff);
@@ -38,7 +39,7 @@ export default function ConnectFour() {
       } else if (mode === 'bot') {
         socket.emit('match:bot', { gameType: 'connect-four', difficulty });
       } else {
-        socket.emit('queue:join', { gameType: 'connect-four' });
+        socket.emit('queue:join', { gameType: 'connect-four', inviteCode });
         setQueued(true);
       }
     }
@@ -46,7 +47,7 @@ export default function ConnectFour() {
     else socket.once('connect', start);
     return () => socket.off('connect', start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+  }, [mode, inviteCode]);
 
   useEffect(() => {
     const onStart = (data) => {

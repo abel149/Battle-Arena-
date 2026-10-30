@@ -229,6 +229,27 @@ const SCHEMA = [
     pinHash TEXT NOT NULL,
     updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
+  // Active in-progress rooms persistence (eliminates in-memory volatility on restart)
+  `CREATE TABLE IF NOT EXISTS active_rooms (
+    roomId TEXT PRIMARY KEY,
+    gameType TEXT NOT NULL,
+    deck TEXT,
+    players TEXT NOT NULL,
+    names TEXT NOT NULL DEFAULT '{}',
+    game TEXT NOT NULL,
+    moves TEXT NOT NULL DEFAULT '[]',
+    chat TEXT NOT NULL DEFAULT '[]',
+    spectators TEXT NOT NULL DEFAULT '[]',
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL
+  )`,
+  // Parent PIN brute-force attempt lockout persistence (eliminates in-memory volatility on restart)
+  `CREATE TABLE IF NOT EXISTS pin_attempts (
+    address TEXT PRIMARY KEY,
+    count INTEGER NOT NULL DEFAULT 0,
+    lockedUntil INTEGER NOT NULL DEFAULT 0,
+    updatedAt INTEGER NOT NULL DEFAULT 0
+  )`,
 ];
 
 let db;
@@ -345,6 +366,32 @@ function prepare() {
     unlockSkin: db.prepare('INSERT OR IGNORE INTO player_skins (address, skinId, unlockedAt) VALUES (?, ?, ?)'),
     getParentPin: db.prepare('SELECT pinHash FROM parent_pins WHERE address = ?'),
     setParentPin: db.prepare('INSERT OR REPLACE INTO parent_pins (address, pinHash, updatedAt) VALUES (?, ?, ?)'),
+    // PIN brute-force attempt persistence
+    getPinAttempt: db.prepare('SELECT count, lockedUntil FROM pin_attempts WHERE address = ?'),
+    savePinAttempt: db.prepare(`
+      INSERT INTO pin_attempts (address, count, lockedUntil, updatedAt)
+      VALUES (@address, @count, @lockedUntil, @updatedAt)
+      ON CONFLICT(address) DO UPDATE SET
+        count = excluded.count,
+        lockedUntil = excluded.lockedUntil,
+        updatedAt = excluded.updatedAt
+    `),
+    deletePinAttempt: db.prepare('DELETE FROM pin_attempts WHERE address = ?'),
+    // Active rooms persistence
+    upsertActiveRoom: db.prepare(`
+      INSERT INTO active_rooms (roomId, gameType, deck, players, names, game, moves, chat, spectators, createdAt, updatedAt)
+      VALUES (@roomId, @gameType, @deck, @players, @names, @game, @moves, @chat, @spectators, @createdAt, @updatedAt)
+      ON CONFLICT(roomId) DO UPDATE SET
+        game = excluded.game,
+        moves = excluded.moves,
+        chat = excluded.chat,
+        spectators = excluded.spectators,
+        updatedAt = excluded.updatedAt
+    `),
+    deleteActiveRoom: db.prepare('DELETE FROM active_rooms WHERE roomId = ?'),
+    getActiveRoom: db.prepare('SELECT * FROM active_rooms WHERE roomId = ?'),
+    listActiveRooms: db.prepare('SELECT * FROM active_rooms ORDER BY createdAt DESC'),
+    cleanupStaleActiveRooms: db.prepare('DELETE FROM active_rooms WHERE updatedAt < ?'),
   };
 }
 
@@ -1022,17 +1069,25 @@ export function getEquippedSkin(address) {
 // Parent PIN Verification (Default PIN is '1234')
 const DEFAULT_PARENT_PIN = '1234';
 const PIN_LOCKOUT_MS = 5 * 60 * 1000; // 5 minute lockout
-const pinAttempts = new Map(); // address/key -> { count: number, lockedUntil: number }
 
 export function resetPinAttempts(address) {
-  pinAttempts.delete(address || 'default');
+  open();
+  prepared.deletePinAttempt.run(address || 'default');
+}
+
+export function getPinAttempt(address) {
+  open();
+  const row = prepared.getPinAttempt.get(address || 'default');
+  if (!row) return null;
+  return { count: row.count, lockedUntil: row.lockedUntil };
 }
 
 export function verifyParentPin(address, pin) {
   open();
   const key = address || 'default';
   const now = Date.now();
-  const attempt = pinAttempts.get(key);
+  const row = prepared.getPinAttempt.get(key);
+  const attempt = row ? { count: row.count, lockedUntil: row.lockedUntil } : null;
 
   if (attempt && attempt.lockedUntil > now) {
     const waitSec = Math.ceil((attempt.lockedUntil - now) / 1000);
@@ -1044,20 +1099,20 @@ export function verifyParentPin(address, pin) {
   }
 
   if (!pin) return { ok: false, error: 'PIN required' };
-  const row = prepared.getParentPin.get(key);
+  const pinRow = prepared.getParentPin.get(key);
   let isMatch = false;
   let isDefault = false;
 
-  if (!row) {
+  if (!pinRow) {
     // If not set, default is 1234
     isDefault = true;
     isMatch = String(pin).trim() === DEFAULT_PARENT_PIN;
   } else {
-    isMatch = bcrypt.compareSync(String(pin).trim(), row.pinHash);
+    isMatch = bcrypt.compareSync(String(pin).trim(), pinRow.pinHash);
   }
 
   if (isMatch) {
-    pinAttempts.delete(key);
+    prepared.deletePinAttempt.run(key);
     return { ok: true, isDefault };
   }
 
@@ -1069,7 +1124,12 @@ export function verifyParentPin(address, pin) {
   current.count += 1;
   if (current.count >= 5) {
     current.lockedUntil = now + PIN_LOCKOUT_MS;
-    pinAttempts.set(key, current);
+    prepared.savePinAttempt.run({
+      address: key,
+      count: current.count,
+      lockedUntil: current.lockedUntil,
+      updatedAt: now,
+    });
     return {
       ok: false,
       locked: true,
@@ -1077,7 +1137,12 @@ export function verifyParentPin(address, pin) {
     };
   }
 
-  pinAttempts.set(key, current);
+  prepared.savePinAttempt.run({
+    address: key,
+    count: current.count,
+    lockedUntil: current.lockedUntil,
+    updatedAt: now,
+  });
   const remaining = 5 - current.count;
   return {
     ok: false,
@@ -1094,4 +1159,68 @@ export function setParentPin(address, newPin) {
   const hash = bcrypt.hashSync(clean, 8);
   prepared.setParentPin.run(address || 'default', hash, new Date().toISOString());
   return { ok: true };
+}
+
+// ----------------- Active Game Rooms Persistence -----------------
+// Eliminates in-memory volatility on server crashes, reboots, and redeploys.
+
+export function saveActiveRoom(room) {
+  if (!room || !room.id || !room.game) return;
+  open();
+  const now = Date.now();
+  prepared.upsertActiveRoom.run({
+    roomId: room.id,
+    gameType: room.gameType,
+    deck: room.deck || room.game.deck || null,
+    players: JSON.stringify(room.game.players || {}),
+    names: JSON.stringify(room.names || {}),
+    game: JSON.stringify(room.game),
+    moves: JSON.stringify(room.game.moves || []),
+    chat: JSON.stringify(room.chat || []),
+    spectators: JSON.stringify(Array.from(room.spectators || [])),
+    createdAt: room.createdAt || now,
+    updatedAt: now,
+  });
+}
+
+export function removeActiveRoom(roomId) {
+  if (!roomId) return;
+  open();
+  prepared.deleteActiveRoom.run(roomId);
+}
+
+export function getActiveRoom(roomId) {
+  if (!roomId) return null;
+  open();
+  const row = prepared.getActiveRoom.get(roomId);
+  if (!row) return null;
+  return {
+    ...row,
+    players: JSON.parse(row.players),
+    names: JSON.parse(row.names),
+    game: JSON.parse(row.game),
+    moves: JSON.parse(row.moves),
+    chat: JSON.parse(row.chat),
+    spectators: JSON.parse(row.spectators),
+  };
+}
+
+export function listActiveRooms() {
+  open();
+  const rows = prepared.listActiveRooms.all();
+  return rows.map(row => ({
+    ...row,
+    players: JSON.parse(row.players),
+    names: JSON.parse(row.names),
+    game: JSON.parse(row.game),
+    moves: JSON.parse(row.moves),
+    chat: JSON.parse(row.chat),
+    spectators: JSON.parse(row.spectators),
+  }));
+}
+
+export function cleanupStaleActiveRooms(maxAgeMs = 30 * 60 * 1000) {
+  open();
+  const cutoff = Date.now() - maxAgeMs;
+  prepared.cleanupStaleActiveRooms.run(cutoff);
 }

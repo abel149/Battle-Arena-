@@ -55,6 +55,19 @@ contract ArenaBadges {
         emit TransferSingle(msg.sender, address(0), to, id, 1);
     }
 
+    /// @notice Batch mint multiple collectible badges to recipients in one transaction.
+    function mintBatch(address[] calldata recipients, uint256[] calldata ids) external onlyMinter {
+        require(recipients.length == ids.length, "ArenaBadges: length mismatch");
+        for (uint256 i = 0; i < recipients.length; i++) {
+            address to = recipients[i];
+            uint256 id = ids[i];
+            require(bytes(badgeLabel[id]).length > 0, "ArenaBadges: unknown badge");
+            balanceOf[id] = to;
+            badgeCount[to] += 1;
+            emit TransferSingle(msg.sender, address(0), to, id, 1);
+        }
+    }
+
     /// @notice Does `owner` hold badge `id`? Used for verification/lookup.
     function holderOf(uint256 id) external view returns (address) {
         return balanceOf[id];

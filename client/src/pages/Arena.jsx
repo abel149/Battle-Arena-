@@ -21,7 +21,10 @@ const otherSeat = seat => (seat === 'X' ? 'O' : 'X');
 
 export default function Arena() {
   const route = useRoute();
-  const mode = route.params.get('mode') === 'bot' ? 'bot' : 'match';
+  const modeParam = route.params.get('mode');
+  const mode = modeParam === 'bot' ? 'bot' : modeParam === 'watch' ? 'watch' : 'match';
+  const watchRoom = route.params.get('room');
+  const inviteCode = route.params.get('invite');
   const rawDiff = route.params.get('difficulty');
   const initialDiff = ['easy', 'medium', 'hard'].includes(rawDiff) ? rawDiff : 'medium';
   const [difficulty, setDifficulty] = useState(initialDiff);
@@ -64,9 +67,12 @@ export default function Arena() {
   useEffect(() => {
     function start() {
       signAndIdentify(wallet);
-      if (mode === 'bot') socket.emit('match:bot', { gameType: 'math-arena', difficulty });
-      else {
-        socket.emit('queue:join', { gameType: 'math-arena' });
+      if (mode === 'watch' && watchRoom) {
+        socket.emit('spectate', { roomId: watchRoom });
+      } else if (mode === 'bot') {
+        socket.emit('match:bot', { gameType: 'math-arena', difficulty });
+      } else {
+        socket.emit('queue:join', { gameType: 'math-arena', inviteCode });
         setQueued(true);
       }
     }
@@ -74,7 +80,7 @@ export default function Arena() {
     else socket.once('connect', start);
     return () => socket.off('connect', start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+  }, [mode, watchRoom, inviteCode]);
 
   useEffect(() => {
     const onStart = data => {
@@ -197,9 +203,10 @@ export default function Arena() {
     if (Number.isInteger(pick)) setOppTile(pick);
   }, [game?.lastResult, oppSeat]);
 
-  const locked = !!(game && mySeat && game.answered?.[mySeat]);
+  const locked = mode === 'watch' || !!(game && mySeat && game.answered?.[mySeat]);
 
   const answer = useCallback(index => {
+    if (mode === 'watch') return;
     const g = gameRef.current;
     const r = roomRef.current;
     const seat = seatOf(g, wallet.address);
@@ -503,6 +510,8 @@ export default function Arena() {
           bot={mode === 'bot'}
           queued={queued}
           error={error}
+          inviteCode={inviteCode}
+          onSwitchToBot={() => navigate(`arena?mode=bot&difficulty=${difficulty}`)}
           onCancel={leave}
         />
       )}
@@ -512,19 +521,50 @@ export default function Arena() {
 
 /* ------------------------------- components ------------------------------ */
 
-function Waiting({ bot, error, onCancel }) {
+function Waiting({ bot, error, onCancel, inviteCode, onSwitchToBot }) {
+  const [copied, setCopied] = useState(false);
+  const shareCode = inviteCode || (typeof window !== 'undefined' ? (window.arenaInviteCode ??= Math.random().toString(36).slice(2, 6).toUpperCase()) : 'MATH');
+  const inviteUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}${window.location.pathname}#arena?mode=match&invite=${shareCode}`
+    : '';
+
+  function copyInvite() {
+    navigator.clipboard?.writeText(inviteUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    }).catch(() => {});
+  }
+
   return (
     <div className="waiting-overlay">
       <div className="waiting-card">
         <div className="waiting-spinner" aria-hidden="true" />
-        <h2>{error ? 'Match error' : bot ? 'Warming up the bot' : 'Finding an opponent'}</h2>
+        <h2>{error ? 'Match error' : bot ? 'Warming up the bot' : inviteCode ? `Friend Match (${inviteCode})` : 'Finding an opponent'}</h2>
         <p>
           {error ||
             (bot
               ? 'Your rival is stepping onto the arena floor…'
-              : 'Waiting for another player to join Neon Math Arena. Open the arena in a second window to test.')}
+              : inviteCode
+                ? 'Waiting for your friend to enter this private match room…'
+                : 'Waiting for another player. Send your invite link to a friend to duel directly:')}
         </p>
-        <button type="button" className="lock-btn" onClick={onCancel}>Cancel</button>
+
+        {!bot && !error && (
+          <div className="waiting-invite-box">
+            <button type="button" className="btn-copy-invite" onClick={copyInvite}>
+              {copied ? '✓ Friend Link Copied!' : '👥 Copy Friend Invite Link'}
+            </button>
+          </div>
+        )}
+
+        <div className="waiting-actions-row">
+          {!bot && onSwitchToBot && (
+            <button type="button" className="btn-bot-fallback" onClick={onSwitchToBot}>
+              🤖 Play vs Bot
+            </button>
+          )}
+          <button type="button" className="lock-btn" onClick={onCancel}>Cancel</button>
+        </div>
       </div>
     </div>
   );

@@ -121,3 +121,40 @@ test('withoutPassword strips the hash', () => {
   const p = store.withoutPassword(store.getPlayer(A));
   assert.equal(p.password, undefined);
 });
+
+test('saveActiveRoom, getActiveRoom, listActiveRooms, removeActiveRoom survive persistence', () => {
+  const roomId = 'room_persistence_test_1';
+  const dummyRoom = {
+    id: roomId,
+    gameType: 'connect-four',
+    deck: null,
+    names: { [A]: 'Alice', [B]: 'Bob' },
+    game: {
+      turn: 'X',
+      grid: Array(42).fill(null),
+      players: { X: A, O: B },
+      winner: null,
+      moves: [{ col: 3, row: 5, player: 'X' }],
+    },
+    chat: [{ from: 'Alice', text: 'Good game!', t: 100 }],
+    spectators: new Set(['socket_spectator_1']),
+    createdAt: Date.now(),
+  };
+
+  store.saveActiveRoom(dummyRoom);
+
+  const fetched = store.getActiveRoom(roomId);
+  assert.ok(fetched, 'active room retrieved from SQLite');
+  assert.equal(fetched.roomId, roomId);
+  assert.equal(fetched.gameType, 'connect-four');
+  assert.equal(fetched.game.turn, 'X');
+  assert.equal(fetched.game.moves.length, 1);
+  assert.equal(fetched.chat.length, 1);
+  assert.equal(fetched.spectators[0], 'socket_spectator_1');
+
+  const list = store.listActiveRooms();
+  assert.ok(list.some(r => r.roomId === roomId));
+
+  store.removeActiveRoom(roomId);
+  assert.equal(store.getActiveRoom(roomId), null);
+});

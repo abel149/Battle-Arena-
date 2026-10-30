@@ -15,6 +15,7 @@ export default function MemoryMatch() {
   const rawDiff = route.params.get('difficulty');
   const initialDiff = ['easy', 'medium', 'hard'].includes(rawDiff) ? rawDiff : 'medium';
   const [difficulty, setDifficulty] = useState(initialDiff);
+  const inviteCode = route.params.get('invite');
   const { wallet } = useProfile();
 
   const [room, setRoom] = useState(null);
@@ -33,7 +34,7 @@ export default function MemoryMatch() {
       if (mode === 'watch') socket.emit('spectate', { roomId: watchRoom });
       else if (mode === 'bot') socket.emit('match:bot', { gameType: 'memory', deck, difficulty });
       else {
-        socket.emit('queue:join', { gameType: 'memory' });
+        socket.emit('queue:join', { gameType: 'memory', inviteCode });
         setQueued(true);
       }
     }
@@ -41,7 +42,7 @@ export default function MemoryMatch() {
     else socket.once('connect', start);
     return () => socket.off('connect', start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, deck]);
+  }, [mode, deck, inviteCode]);
 
   useEffect(() => {
     const onStart = data => {
