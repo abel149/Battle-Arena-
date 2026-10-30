@@ -56,7 +56,7 @@ export default function VerifyPanel({ matchId, status, onClose }) {
     <div className="vp-backdrop" onClick={onClose} role="presentation">
       <div className="vp-card" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Verify match">
         <button type="button" className="vp-close" onClick={onClose} aria-label="Close">✕</button>
-        <h3 className="vp-title">Match verification</h3>
+        <h3 className="vp-title">Match Verification</h3>
 
         {state.loading && <p className="vp-note">Checking the ledger…</p>}
 

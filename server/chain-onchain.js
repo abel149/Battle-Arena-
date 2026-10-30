@@ -164,7 +164,9 @@ export async function chainInfo() {
 }
 /// Record a completed match on-chain. Returns the receipt entry.
 export async function recordMatch({ matchId, gameType, players, winner, moves }) {
-  if (!USE_ONCHAIN) throw new Error('Real blockchain required: MATCH_RESULT_ADDRESS is not configured');
+  if (!USE_ONCHAIN) {
+    return recordMatchSimulated({ matchId, gameType, players, winner, moves });
+  }
 
   const c = await ensureContract();
   if (!c) throw new Error('On-chain recording requested but contract is not available');

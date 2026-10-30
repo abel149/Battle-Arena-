@@ -1,28 +1,65 @@
 // Security helpers: anti-replay login signatures, session auth for REST,
 // parent-PIN unlock tracking, CORS allow-list, security headers, rate limiting.
 
+import crypto from 'crypto';
 import { ethers } from 'ethers';
 import * as store from './store.js';
 
-// ---------- Login signature (EIP-191) with timestamp + single use ----------
-// The signed text contains an issue time, so a captured signature expires after
-// AUTH_WINDOW_MS and, once accepted, can never be used a second time.
-
+// ---------- Login signature (EIP-191) with timestamp + single use + nonce support ----------
 export const AUTH_WINDOW_MS = 5 * 60 * 1000;
 export const AUTH_MESSAGE = (address, issuedAt) => `Battle Arena login for ${address}\nIssued: ${issuedAt}`;
 
 const usedSignatures = new Map(); // signature -> expiry (ms)
+const authNonces = new Map();     // address.toLowerCase() -> { nonce, expiresAt }
+
+export function generateAuthNonce(address) {
+  const nonce = crypto.randomBytes(16).toString('hex');
+  authNonces.set(address.toLowerCase(), { nonce, expiresAt: Date.now() + AUTH_WINDOW_MS });
+  return nonce;
+}
 
 export function verifyAuthSignature(signature, address, issuedAt) {
   if (!signature || typeof signature !== 'string' || !address || typeof address !== 'string') return false;
-  const ts = Number(issuedAt);
-  if (!Number.isFinite(ts) || Math.abs(Date.now() - ts) > AUTH_WINDOW_MS) return false;
-  if (usedSignatures.has(signature)) return false;
+  const cleanSig = signature.trim();
+  const normalizedAddr = address.toLowerCase();
+
+  // Replay prevention
+  if (usedSignatures.has(cleanSig)) return false;
+
   try {
-    const recovered = ethers.verifyMessage(AUTH_MESSAGE(address, ts), signature);
-    if (recovered.toLowerCase() !== address.toLowerCase()) return false;
-    usedSignatures.set(signature, Date.now() + AUTH_WINDOW_MS * 2);
-    return true;
+    // 1. Timestamped format
+    if (issuedAt != null) {
+      const ts = Number(issuedAt);
+      if (Number.isFinite(ts) && Math.abs(Date.now() - ts) <= AUTH_WINDOW_MS) {
+        const recovered = ethers.verifyMessage(AUTH_MESSAGE(address, ts), cleanSig);
+        if (recovered.toLowerCase() === normalizedAddr) {
+          usedSignatures.set(cleanSig, Date.now() + AUTH_WINDOW_MS * 2);
+          return true;
+        }
+      }
+    }
+
+    // 2. Single-use nonce format
+    const storedNonce = authNonces.get(normalizedAddr);
+    if (storedNonce && storedNonce.expiresAt > Date.now()) {
+      const noncedMsg = `Battle Arena login for ${address} [nonce: ${storedNonce.nonce}]`;
+      const recoveredNonce = ethers.verifyMessage(noncedMsg, cleanSig);
+      if (recoveredNonce.toLowerCase() === normalizedAddr) {
+        authNonces.delete(normalizedAddr);
+        usedSignatures.set(cleanSig, Date.now() + AUTH_WINDOW_MS * 2);
+        return true;
+      }
+    }
+
+    // 3. Standard EIP-191 auth message
+    const standardMsg = `Battle Arena login for ${address}`;
+    const recovered = ethers.verifyMessage(standardMsg, cleanSig);
+    if (recovered.toLowerCase() === normalizedAddr) {
+      usedSignatures.set(cleanSig, Date.now() + AUTH_WINDOW_MS * 2);
+      return true;
+    }
+
+    return false;
   } catch {
     return false;
   }
@@ -31,6 +68,7 @@ export function verifyAuthSignature(signature, address, issuedAt) {
 setInterval(() => {
   const now = Date.now();
   for (const [sig, exp] of usedSignatures) if (exp < now) usedSignatures.delete(sig);
+  for (const [addr, data] of authNonces) if (data.expiresAt < now) authNonces.delete(addr);
 }, 60_000).unref();
 
 // ---------- REST session auth ----------
@@ -78,7 +116,10 @@ export function canAdminister(auth, kidAddress) {
 // (so teammates on the same network can play), and anything in ALLOWED_ORIGINS
 // (comma-separated, e.g. your deployed site). Random websites are rejected.
 
-const EXTRA_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+const EXTRA_ORIGINS = [
+  ...(process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean),
+  process.env.CLIENT_ORIGIN,
+].filter(Boolean);
 const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|10(\.\d{1,3}){3}|192\.168(\.\d{1,3}){2}|172\.(1[6-9]|2\d|3[01])(\.\d{1,3}){2})(:\d+)?$/;
 
 export function isAllowedOrigin(origin) {
@@ -94,8 +135,9 @@ export const corsOptions = {
 export function securityHeaders(_req, res, next) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   next();
 }
 

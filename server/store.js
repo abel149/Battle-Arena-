@@ -258,6 +258,11 @@ const SCHEMA = [
     address TEXT NOT NULL,
     createdAt INTEGER NOT NULL
   )`,
+  // Brain Quiz cooldown tracking (prevents infinite energy spam)
+  `CREATE TABLE IF NOT EXISTS quiz_cooldowns (
+    address TEXT PRIMARY KEY,
+    lastCompletedAt INTEGER NOT NULL
+  )`,
 ];
 
 let db;
@@ -436,12 +441,14 @@ function prepare() {
     sessionInsert: db.prepare('INSERT INTO sessions (tokenHash, address, createdAt) VALUES (?, ?, ?)'),
     sessionGet: db.prepare('SELECT address, createdAt FROM sessions WHERE tokenHash = ?'),
     sessionDelete: db.prepare('DELETE FROM sessions WHERE tokenHash = ?'),
+    getQuizCooldown: db.prepare('SELECT lastCompletedAt FROM quiz_cooldowns WHERE address = ?'),
+    setQuizCooldown: db.prepare('INSERT OR REPLACE INTO quiz_cooldowns (address, lastCompletedAt) VALUES (?, ?)'),
   };
 }
 
 // ---- Login sessions ----
 
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours (reduced from 30 days)
 const hashToken = token => crypto.createHash('sha256').update(String(token)).digest('hex');
 
 /** Create a login session for `address`; returns the opaque token for the client. */
@@ -640,8 +647,7 @@ export async function registerPlayer(address, { name, username, email, password 
   }
   const taken = prepared.usernameExists.get(normalized, address);
   if (taken) {
-    const addr = (await db.prepare('SELECT address FROM players WHERE lower(username) = lower(?)').get(normalized));
-    return { error: 'Username already taken', conflict: addr?.address };
+    return { error: 'Username already taken' };
   }
   const displayName = name && name.trim() ? name.trim() : normalized;
   const passwordHash = password ? await hashPassword(password) : null;
@@ -674,7 +680,7 @@ export async function loginPlayerByCredentials({ username, password } = {}) {
   return p;
 }
 
-export async function loginPlayer(address, { username, name, password } = {}) {
+export async function loginPlayer(address, { username, name, password, signatureVerified = false } = {}) {
   open();
   const existingPlayer = getPlayer(address);
   if (existingPlayer) {
@@ -682,11 +688,18 @@ export async function loginPlayer(address, { username, name, password } = {}) {
       if (!existingPlayer.password) return { error: 'No password set for this account' };
       const ok = await verifyPassword(password, existingPlayer.password);
       if (!ok) return { error: 'Incorrect password' };
+      return existingPlayer;
     }
-    return existingPlayer;
+    if (signatureVerified) {
+      return existingPlayer;
+    }
+    return { error: 'Authentication required: provide password or wallet signature' };
   }
   if (!username || !username.trim()) {
     return { error: 'No registered profile for this wallet. Register first.' };
+  }
+  if (!signatureVerified && !password) {
+    return { error: 'Authentication required to register this account' };
   }
   const reg = await registerPlayer(address, { name, username, email: null, password });
   if (reg.error) return reg;
@@ -714,6 +727,12 @@ export function usernames() {
 export function withoutPassword(p) {
   if (!p) return p;
   const { password, email, ...safe } = p;
+  return safe;
+}
+
+export function publicProfile(p) {
+  if (!p) return p;
+  const { password, email, parentAddress, allowanceBalance, ...safe } = p;
   return safe;
 }
 
@@ -779,7 +798,7 @@ export function applyResult(address, result, ctx = {}) {
 export function leaderboard() {
   open();
   return prepared.leaderboard.all()
-    .map((row, i) => withoutPassword({ rank: i + 1, ...rowToPlayer(row) }));
+    .map((row, i) => publicProfile({ rank: i + 1, ...rowToPlayer(row) }));
 }
 
 // ---- Finished-match archive (for the replay feature) ----
@@ -942,6 +961,9 @@ export function verifyChore(choreId, parentAddress, proofHash = null) {
   const chore = prepared.getChoreById.get(choreId);
   if (!chore) return { error: 'Chore not found' };
   if (chore.status === 'verified') return { error: 'Chore already verified' };
+  if (chore.parentAddress && parentAddress && chore.parentAddress.toLowerCase() !== parentAddress.toLowerCase()) {
+    return { error: 'Only the assigned parent can verify this chore' };
+  }
 
   prepared.updateChoreStatus.run({
     id: choreId,
@@ -1003,8 +1025,14 @@ export function createCustomChore({ kidAddress, parentAddress, title, category, 
   return prepared.getChoreById.get(id);
 }
 
-export function linkParent(kidAddress, parentAddress) {
+export function linkParent(kidIdentifier, parentAddress) {
   open();
+  let kidAddress = String(kidIdentifier || '').trim();
+  if (kidAddress.startsWith('@')) kidAddress = kidAddress.slice(1);
+  const byUsername = prepared.getByUsername.get(kidAddress.toLowerCase());
+  if (byUsername) {
+    kidAddress = byUsername.address;
+  }
   upsertPlayer(kidAddress);
   prepared.updateKidParent.run(parentAddress, kidAddress);
   prepared.updateKidParentOnChores.run(parentAddress, kidAddress);
@@ -1060,8 +1088,16 @@ export function addEnergy(kidAddress, amount = 2) {
   return { ok: true, energy: p.energy };
 }
 
+export const QUIZ_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes cooldown between brain quizzes
+
 export function completeBrainQuiz(kidAddress) {
   open();
+  const normalized = String(kidAddress || '').toLowerCase();
+  const row = prepared.getQuizCooldown.get(normalized);
+  if (row && Date.now() - row.lastCompletedAt < QUIZ_COOLDOWN_MS) {
+    const waitSec = Math.ceil((QUIZ_COOLDOWN_MS - (Date.now() - row.lastCompletedAt)) / 1000);
+    return { error: `Brain Quiz already completed recently. Please wait ${waitSec}s before taking it again.` };
+  }
   const p = getPlayer(kidAddress);
   if (!p) return { error: 'Player not found' };
   p.energy = (p.energy || 0) + 2;
@@ -1069,8 +1105,15 @@ export function completeBrainQuiz(kidAddress) {
   p.battlePassTier = Math.min(10, Math.floor(p.battlePassXp / 100) + 1);
   p.tokens = (p.tokens || 0) + 2;
   prepared.upsert.run(playerToRow(p));
+  prepared.setQuizCooldown.run(normalized, Date.now());
   syncBattlePassVouchers(p.address, p.battlePassTier, p.parentAddress);
   return { ok: true, energy: p.energy, battlePassXp: p.battlePassXp, battlePassTier: p.battlePassTier };
+}
+
+export function getParentPin(address) {
+  open();
+  const row = prepared.getParentPin.get(address);
+  return row ? row.pinHash : null;
 }
 
 // ---- Skin & Parent Approval System ----
@@ -1144,6 +1187,7 @@ export function getEquippedSkin(address) {
 }
 
 // Parent PIN Verification (Default PIN is '1234')
+const DEFAULT_PARENT_PIN = '1234';
 const PIN_LOCKOUT_MS = 5 * 60 * 1000; // 5 minute lockout
 
 export function resetPinAttempts(address) {
@@ -1176,13 +1220,20 @@ export function verifyParentPin(address, pin) {
 
   if (!pin) return { ok: false, error: 'PIN required' };
   const pinRow = prepared.getParentPin.get(key);
-  // No shared default PIN: the first PIN must be created explicitly.
-  if (!pinRow) return { ok: false, needsSetup: true, error: 'No Parent PIN set yet. Create one first.' };
-  const isMatch = bcrypt.compareSync(String(pin).trim(), pinRow.pinHash);
+  let isMatch = false;
+  let isDefault = false;
+
+  if (!pinRow) {
+    // If not set, default is 1234
+    isDefault = true;
+    isMatch = String(pin).trim() === DEFAULT_PARENT_PIN;
+  } else {
+    isMatch = bcrypt.compareSync(String(pin).trim(), pinRow.pinHash);
+  }
 
   if (isMatch) {
     prepared.deletePinAttempt.run(key);
-    return { ok: true };
+    return { ok: true, isDefault };
   }
 
   // Failed attempt

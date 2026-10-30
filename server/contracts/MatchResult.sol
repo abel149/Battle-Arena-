@@ -25,21 +25,26 @@ contract MatchResult {
         uint64  timestamp;
     }
 
-    /// @notice Only the deployer (the game server wallet) may write results, so
-    ///         nobody else can publish fake matches into the record book.
-    address public immutable owner = msg.sender;
-
-    error NotOwner();
-
-    modifier onlyOwner() {
-        if (msg.sender != owner) revert NotOwner();
-        _;
-    }
-
     Match[] public matches;
 
     // Map matchId -> index in `matches` for O(1) lookups.
     mapping(bytes32 => uint256) private matchIndex;
+
+    address public owner;
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "MatchResult: caller is not the owner");
+        _;
+    }
+
+    constructor() {
+        owner = msg.sender;
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "MatchResult: new owner is zero address");
+        owner = newOwner;
+    }
 
     event MatchRecorded(
         bytes32 matchId,

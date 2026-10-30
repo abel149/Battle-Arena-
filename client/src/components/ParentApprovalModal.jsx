@@ -104,7 +104,11 @@ export default function ParentApprovalModal({ parentAddress, onClose, onChoreApp
       const res = await fetch(`${API}/api/parent/set-pin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin: newPin.trim() }),
+        body: JSON.stringify({
+          address: parentAddress || 'default',
+          pin: newPin.trim(),
+          currentPin: pin.trim(),
+        }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);

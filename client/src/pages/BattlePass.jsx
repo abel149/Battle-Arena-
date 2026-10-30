@@ -81,6 +81,12 @@ export default function BattlePass() {
   });
   const [linkKidInput, setLinkKidInput] = useState('');
   const [activeKidTab, setActiveKidTab] = useState('chores'); // chores | roadmap | vouchers
+  const [parentUnlocked, setParentUnlocked] = useState(false);
+  const [parentPin, setParentPin] = useState('');
+  const [pinError, setPinError] = useState(null);
+  const [showPinChange, setShowPinChange] = useState(false);
+  const [newPin, setNewPin] = useState('');
+  const [pinChangeMsg, setPinChangeMsg] = useState(null);
 
   const showToast = useCallback((msg, type = 'info') => {
     setToast({ msg, type });
@@ -135,17 +141,23 @@ export default function BattlePass() {
     const onChoreUpdated = () => refreshAll();
     const onChoreCreated = () => refreshAll();
     const onPlayerUpdate = () => refreshAll();
+    const onParentLinked = ({ parentAddress }) => {
+      showToast(`🎉 Verified Parent linked (${short(parentAddress)})!`, 'success');
+      refreshAll();
+    };
 
     socket.on('chore:verified', onChoreVerified);
     socket.on('chore:updated', onChoreUpdated);
     socket.on('chore:created', onChoreCreated);
     socket.on('player:update', onPlayerUpdate);
+    socket.on('parent:linked', onParentLinked);
 
     return () => {
       socket.off('chore:verified', onChoreVerified);
       socket.off('chore:updated', onChoreUpdated);
       socket.off('chore:created', onChoreCreated);
       socket.off('player:update', onPlayerUpdate);
+      socket.off('parent:linked', onParentLinked);
     };
   }, [refreshAll, showToast]);
 
@@ -288,6 +300,62 @@ export default function BattlePass() {
     }
   }
 
+  // Verify Parent PIN
+  async function handleVerifyPin(e) {
+    e.preventDefault();
+    setPinError(null);
+    try {
+      const parentTarget = data?.parentAddress || profile?.parentAddress || wallet.address || 'default';
+      const res = await fetch(`${API}/api/parent/verify-pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address: parentTarget,
+          pin: parentPin.trim(),
+        }),
+      });
+      const resData = await res.json();
+      if (resData.ok) {
+        setParentUnlocked(true);
+        setParentPin('');
+        showToast('Parent Oracle unlocked!', 'success');
+        refreshAll();
+      } else {
+        setPinError(resData.error || 'Incorrect Parent PIN. (Default PIN is 1234)');
+      }
+    } catch {
+      setPinError('Failed to verify PIN. Try again.');
+    }
+  }
+
+  // Update Parent PIN
+  async function handleSaveNewPin(e) {
+    e.preventDefault();
+    setPinChangeMsg(null);
+    if (!/^\d{4,6}$/.test(newPin.trim())) {
+      setPinChangeMsg({ error: 'PIN must be 4 to 6 digits' });
+      return;
+    }
+    try {
+      const parentTarget = data?.parentAddress || profile?.parentAddress || wallet.address || 'default';
+      const res = await fetch(`${API}/api/parent/set-pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address: parentTarget,
+          pin: newPin.trim(),
+          currentPin: parentPinInput.trim(),
+        }),
+      });
+      const resData = await res.json();
+      if (resData.error) throw new Error(resData.error);
+      setPinChangeMsg({ success: 'Parent PIN updated successfully!' });
+      setNewPin('');
+    } catch (err) {
+      setPinChangeMsg({ error: err.message || 'Failed to update PIN' });
+    }
+  }
+
   const currentEnergy = data?.energy ?? profile?.energy ?? 5;
   const currentTier = data?.battlePassTier ?? profile?.battlePassTier ?? 1;
   const currentXp = data?.battlePassXp ?? profile?.battlePassXp ?? 0;
@@ -345,21 +413,18 @@ export default function BattlePass() {
         </div>
       </header>
 
-      {/* Marketing Hook Banner */}
+      {/* Quests & Energy Banner */}
       <div className="bp-marketing-banner">
-        <div className="hook-icon">🧹</div>
+        <div className="hook-icon">⚡</div>
         <div className="hook-content">
-          <div className="hook-headline">Proof-of-Chore Battle Pass</div>
-          <div className="hook-tagline">
-            "The only video game that gets your kids to clean their room first."
-          </div>
+          <div className="hook-headline">Earn Energy & Quests</div>
           <div className="hook-sub">
-            ⚡ Arena Energy cannot be bought with money. Complete real-world chores or ace the Brain Quiz to earn Energy, unlock Battle Pass tiers, and win real allowance rewards & toy vouchers!
+            Finish real-world chores or answer quick quiz questions to earn Energy, unlock season tiers, and save allowance tokens.
           </div>
         </div>
         <div className="hook-cta">
           <button type="button" className="btn-take-quiz" onClick={() => setShowQuiz(true)}>
-            🧠 Take Brain Quiz (+2 ⚡)
+            Take 5-Question Quiz (+2 ⚡)
           </button>
         </div>
       </div>
@@ -612,7 +677,43 @@ export default function BattlePass() {
       )}
 
       {/* ================= PARENT ORACLE VIEW ================= */}
-      {view === 'parent' && (
+      {view === 'parent' && !parentUnlocked && (
+        <main className="parent-view">
+          <div className="parent-pin-card">
+            <div className="parent-gate-icon">🔒</div>
+            <h2>Enter Parent PIN</h2>
+            <p>
+              The Parent Oracle is protected to prevent kids from self-approving chores and granting themselves infinite energy.
+            </p>
+            <form onSubmit={handleVerifyPin} className="parent-pin-form">
+              <input
+                type="password"
+                maxLength={6}
+                pattern="[0-9]*"
+                inputMode="numeric"
+                className="parent-pin-input"
+                placeholder="1234"
+                value={parentPin}
+                onChange={e => setParentPin(e.target.value)}
+                autoFocus
+                aria-label="Parent PIN"
+              />
+              {pinError && <div className="pin-error-text">{pinError}</div>}
+              <button type="submit" className="btn-pin-submit">
+                Unlock Parent Oracle →
+              </button>
+            </form>
+            <div className="pin-hint">
+              💡 First time? The default family PIN is <strong>1234</strong>.
+            </div>
+            <button type="button" className="btn-return-kid" onClick={() => setView('kid')}>
+              ← Back to Kid Arena
+            </button>
+          </div>
+        </main>
+      )}
+
+      {view === 'parent' && parentUnlocked && (
         <main className="parent-view">
           <div className="parent-banner">
             <div className="oracle-badge">
@@ -622,9 +723,50 @@ export default function BattlePass() {
             <p>
               Verify your child's real-world tasks on-chain, issue custom chore bounties, and manage allowance rewards.
             </p>
-            <div className="parent-wallet-info">
-              Connected Oracle Wallet: <code>{wallet.address}</code>
+            <div className="parent-banner-actions">
+              <div className="parent-wallet-info">
+                Connected Oracle Wallet: <code>{wallet.address}</code>
+              </div>
+              <div className="parent-header-buttons">
+                <button
+                  type="button"
+                  className="btn-toggle-pin-sm"
+                  onClick={() => setShowPinChange(!showPinChange)}
+                >
+                  ⚙️ {showPinChange ? 'Hide Settings' : 'Change PIN'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-lock-parent"
+                  onClick={() => {
+                    setParentUnlocked(false);
+                    setView('kid');
+                    showToast('Parent Oracle locked.', 'info');
+                  }}
+                >
+                  🔒 Lock & Exit
+                </button>
+              </div>
             </div>
+
+            {showPinChange && (
+              <form onSubmit={handleSaveNewPin} className="pin-change-box">
+                <h4>Change Parent PIN</h4>
+                <div className="pin-change-row">
+                  <input
+                    type="password"
+                    maxLength={6}
+                    placeholder="New 4-6 digit PIN"
+                    value={newPin}
+                    onChange={e => setNewPin(e.target.value)}
+                    className="pin-change-input"
+                  />
+                  <button type="submit" className="btn-save-pin">Save PIN</button>
+                </div>
+                {pinChangeMsg?.error && <div className="pin-error-text">{pinChangeMsg.error}</div>}
+                {pinChangeMsg?.success && <div className="pin-success-text">{pinChangeMsg.success}</div>}
+              </form>
+            )}
           </div>
 
           <div className="parent-grid">

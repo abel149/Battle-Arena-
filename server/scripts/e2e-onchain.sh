@@ -103,13 +103,14 @@ log "e2e: registering player"
 export WALLET_PK="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 # Derive the REAL address from the key (string slicing is not how addresses work).
 WALLET=$(node -e "console.log(new (require('ethers').Wallet)(process.env.WALLET_PK).address)")
+SIG=$(node -e "const { ethers } = require('ethers'); const w = new ethers.Wallet(process.env.WALLET_PK); w.signMessage('Battle Arena login for ' + w.address).then(console.log);")
 USERNAME="OnchainTest_$(openssl rand -hex 4)"
 PASSWORD="securepass123"
 export WALLET_PK
 
 REG=$(curl -s -X POST "${SERVER_URL}/api/register" \
   -H 'Content-Type: application/json' \
-  -d "{\"address\":\"${WALLET}\",\"username\":\"${USERNAME}\",\"password\":\"${PASSWORD}\"}")
+  -d "{\"address\":\"${WALLET}\",\"username\":\"${USERNAME}\",\"password\":\"${PASSWORD}\",\"signature\":\"${SIG}\"}")
 echo "register response: ${REG}"
 if echo "${REG}" | grep -q '"password"'; then
   echo "[e2e] FAIL: password leaked in register response"; exit 1

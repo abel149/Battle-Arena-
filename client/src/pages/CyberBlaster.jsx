@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { API, socket, signAndIdentify } from '../socket.js';
 import { navigate, useRoute } from '../lib/router.js';
 import { short, useProfile } from '../lib/session.js';
+import RoomCode from '../components/RoomCode.jsx';
 import SkinLockerModal from '../components/SkinLockerModal.jsx';
 import ParentApprovalModal from '../components/ParentApprovalModal.jsx';
 import './cyberblaster.css';
@@ -108,7 +109,11 @@ function playPowerupSound() {
 export default function CyberBlaster() {
   const route = useRoute();
   const modeParam = route.params.get('mode');
-  const mode = ['bot', 'match'].includes(modeParam) ? modeParam : 'bot';
+  const mode = ['bot', 'match', 'create', 'join', 'watch'].includes(modeParam) ? modeParam : 'bot';
+  const watchRoom = route.params.get('room');
+  const watching = mode === 'watch';
+  const joinCode = (route.params.get('code') || route.params.get('invite') || '').toUpperCase();
+  const inviteCode = route.params.get('invite');
   const rawDiff = route.params.get('difficulty');
   const initialDiff = ['easy', 'medium', 'hard'].includes(rawDiff) ? rawDiff : 'medium';
   const [difficulty, setDifficulty] = useState(initialDiff);
@@ -117,6 +122,7 @@ export default function CyberBlaster() {
   const [room, setRoom] = useState(null);
   const [gameState, setGameState] = useState(null);
   const [queued, setQueued] = useState(false);
+  const [roomCode, setRoomCode] = useState(null);
   const [error, setError] = useState(null);
   const [matchEnd, setMatchEnd] = useState(null);
   const [showSkinLocker, setShowSkinLocker] = useState(false);
@@ -131,27 +137,39 @@ export default function CyberBlaster() {
   useEffect(() => { roomRef.current = room; }, [room]);
 
   // Start match
-  const startMatch = useCallback(() => {
+  const startMatch = useCallback(async () => {
     setError(null);
     setMatchEnd(null);
     setGameState(null);
+    setRoomCode(null);
 
-    if (mode === 'bot') {
+    await signAndIdentify(wallet);
+
+    if (mode === 'watch' && watchRoom) {
+      socket.emit('spectate', { roomId: watchRoom });
+    } else if (mode === 'bot') {
       socket.emit('match:bot', { gameType: 'cyber-blaster', difficulty });
+    } else if (mode === 'create') {
+      socket.emit('room:create', { gameType: 'cyber-blaster' });
+    } else if (mode === 'join') {
+      socket.emit('room:join', { code: joinCode });
     } else {
       setQueued(true);
-      socket.emit('queue:join', { gameType: 'cyber-blaster' });
+      socket.emit('queue:join', { gameType: 'cyber-blaster', inviteCode });
     }
-  }, [mode, difficulty]);
+  }, [mode, difficulty, joinCode, inviteCode, watchRoom, wallet]);
 
   useEffect(() => {
-    startMatch();
+    if (socket.connected) startMatch();
+    else socket.once('connect', startMatch);
 
     const handleMatchStart = (r) => {
       if (r.gameType !== 'cyber-blaster') return;
       setRoom(r);
       setGameState(r.game);
       setQueued(false);
+      setRoomCode(null);
+      setError(null);
     };
 
     const handleBlasterTick = (state) => {
@@ -171,24 +189,59 @@ export default function CyberBlaster() {
     };
 
     const handleGameError = (err) => {
-      setError(err);
+      setError(typeof err === 'string' ? err : err?.error || 'Something went wrong');
+      setQueued(false);
+    };
+
+    const handleRoomWaiting = ({ code }) => {
+      setRoomCode(code);
+      setQueued(false);
+    };
+
+    const handleRoomExpired = () => {
+      setRoomCode(null);
+      setError('This room expired. Go back and create a new one.');
+    };
+
+    const handleMatchError = (data) => {
+      setError(data?.error || 'Match error');
+      setQueued(false);
     };
 
     socket.on('match:start', handleMatchStart);
     socket.on('blaster:tick', handleBlasterTick);
     socket.on('match:end', handleMatchEnd);
     socket.on('game:error', handleGameError);
+    socket.on('player:error', handleGameError);
+    socket.on('room:waiting', handleRoomWaiting);
+    socket.on('room:expired', handleRoomExpired);
+    socket.on('match:error', handleMatchError);
 
     return () => {
+      socket.off('connect', startMatch);
       socket.off('match:start', handleMatchStart);
       socket.off('blaster:tick', handleBlasterTick);
       socket.off('match:end', handleMatchEnd);
       socket.off('game:error', handleGameError);
+      socket.off('player:error', handleGameError);
+      socket.off('room:waiting', handleRoomWaiting);
+      socket.off('room:expired', handleRoomExpired);
+      socket.off('match:error', handleMatchError);
+      socket.emit('queue:leave');
       if (roomRef.current?.roomId) {
         socket.emit('match:leave', { roomId: roomRef.current.roomId });
       }
     };
   }, [startMatch]);
+
+  // Server silence safeguard
+  useEffect(() => {
+    if (mode === 'match' || gameState || roomCode || error) return;
+    const id = setTimeout(() => setError(
+      'The arena server did not respond. Restart it ("npm start" in the server folder) so it runs the latest code.'
+    ), 6000);
+    return () => clearTimeout(id);
+  }, [mode, gameState, roomCode, error]);
 
   // Input listeners
   useEffect(() => {
@@ -260,7 +313,7 @@ export default function CyberBlaster() {
 
   // Send input tick to server every 40ms
   useEffect(() => {
-    if (!room?.roomId || matchEnd) return;
+    if (!room?.roomId || matchEnd || watching) return;
 
     const interval = setInterval(() => {
       let vx = 0;
@@ -486,13 +539,40 @@ export default function CyberBlaster() {
 
       {/* Main Game Stage */}
       <main className="blaster-arena-container">
-        {queued ? (
+        {!gameState && (queued || mode === 'create' || mode === 'join' || mode === 'watch' || error) ? (
           <div className="blaster-queue-card">
-            <div className="queue-spinner" />
-            <h2>Searching for Opponent...</h2>
-            <p>Matching you with a pilot across the arena network.</p>
-            <button type="button" className="btn-cancel-queue" onClick={() => navigate('')}>
-              Cancel Matchmaking
+            <div className="queue-spinner" aria-hidden="true" />
+            <h2>
+              {error
+                ? 'Match error'
+                : mode === 'watch'
+                ? 'Spectator Mode'
+                : mode === 'create'
+                ? 'Room Ready'
+                : mode === 'join'
+                ? 'Joining Room'
+                : 'Searching for Opponent...'}
+            </h2>
+            <p>
+              {error || (mode === 'watch'
+                ? 'Connecting to live arena match as spectator…'
+                : mode === 'create'
+                ? 'Share this code with a friend — your duel begins as soon as they join.'
+                : mode === 'join'
+                ? 'Connecting to your friend’s arena room…'
+                : 'Matching you with a pilot across the arena network.')}
+            </p>
+            {!error && mode === 'create' && roomCode && <RoomCode code={roomCode} />}
+            <button
+              type="button"
+              className="btn-cancel-queue"
+              onClick={() => {
+                socket.emit('queue:leave');
+                if (roomRef.current?.roomId) socket.emit('match:leave', { roomId: roomRef.current.roomId });
+                navigate('');
+              }}
+            >
+              {error ? 'Back to Hub' : 'Cancel'}
             </button>
           </div>
         ) : (

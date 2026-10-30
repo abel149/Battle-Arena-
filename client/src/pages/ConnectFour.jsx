@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { API, socket, signAndIdentify } from '../socket.js';
 import { navigate, useRoute } from '../lib/router.js';
 import { short, useProfile } from '../lib/session.js';
+import RoomCode from '../components/RoomCode.jsx';
 import MatchChat from '../components/MatchChat.jsx';
 import './connectfour.css';
 
@@ -11,10 +12,11 @@ const ROWS = 6;
 export default function ConnectFour() {
   const route = useRoute();
   const modeParam = route.params.get('mode');
-  const mode = modeParam === 'bot' ? 'bot' : modeParam === 'watch' ? 'watch' : 'match';
+  const mode = ['bot', 'watch', 'create', 'join'].includes(modeParam) ? modeParam : 'match';
   const watching = mode === 'watch';
   const watchRoom = route.params.get('room');
   const inviteCode = route.params.get('invite');
+  const joinCode = (route.params.get('code') || route.params.get('invite') || '').toUpperCase();
   const rawDiff = route.params.get('difficulty');
   const initialDiff = ['easy', 'medium', 'hard'].includes(rawDiff) ? rawDiff : 'medium';
   const [difficulty, setDifficulty] = useState(initialDiff);
@@ -23,6 +25,7 @@ export default function ConnectFour() {
   const [room, setRoom] = useState(null);
   const [game, setGame] = useState(null);
   const [queued, setQueued] = useState(false);
+  const [roomCode, setRoomCode] = useState(null);
   const [error, setError] = useState(null);
   const [receipt, setReceipt] = useState(null);
   const [hoverCol, setHoverCol] = useState(null);
@@ -32,12 +35,16 @@ export default function ConnectFour() {
   useEffect(() => { roomRef.current = room; }, [room]);
 
   useEffect(() => {
-    function start() {
-      signAndIdentify(wallet);
+    async function start() {
+      await signAndIdentify(wallet);
       if (mode === 'watch') {
         socket.emit('spectate', { roomId: watchRoom });
       } else if (mode === 'bot') {
         socket.emit('match:bot', { gameType: 'connect-four', difficulty });
+      } else if (mode === 'create') {
+        socket.emit('room:create', { gameType: 'connect-four' });
+      } else if (mode === 'join') {
+        socket.emit('room:join', { code: joinCode });
       } else {
         socket.emit('queue:join', { gameType: 'connect-four', inviteCode });
         setQueued(true);
@@ -47,7 +54,7 @@ export default function ConnectFour() {
     else socket.once('connect', start);
     return () => socket.off('connect', start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, inviteCode]);
+  }, [mode, inviteCode, joinCode, watchRoom, difficulty]);
 
   useEffect(() => {
     const onStart = (data) => {
@@ -56,6 +63,7 @@ export default function ConnectFour() {
       setRoom(next);
       setGame(data.game);
       setQueued(false);
+      setRoomCode(null);
       setReceipt(null);
       setError(null);
       setOutOfEnergy(false);
@@ -72,13 +80,25 @@ export default function ConnectFour() {
     };
 
     const onWaiting = () => setQueued(true);
-    const onError = (msg) => setError(typeof msg === 'string' ? msg : msg?.error);
+    const onRoomWaiting = ({ code }) => {
+      setRoomCode(code);
+      setQueued(false);
+    };
+    const onRoomExpired = () => {
+      setRoomCode(null);
+      setError('This room expired. Go back and create a new one.');
+    };
+    const onError = (msg) => {
+      setError(typeof msg === 'string' ? msg : msg?.error || 'Something went wrong');
+      setQueued(false);
+    };
     const onMatchError = (data) => {
       if (data?.needsEnergy) {
         setOutOfEnergy(true);
         setQueued(false);
       } else {
         setError(data?.error || 'Match error');
+        setQueued(false);
       }
     };
 
@@ -86,7 +106,10 @@ export default function ConnectFour() {
     socket.on('game:state', onState);
     socket.on('match:end', onEnd);
     socket.on('queue:waiting', onWaiting);
+    socket.on('room:waiting', onRoomWaiting);
+    socket.on('room:expired', onRoomExpired);
     socket.on('game:error', onError);
+    socket.on('player:error', onError);
     socket.on('match:error', onMatchError);
 
     return () => {
@@ -94,12 +117,30 @@ export default function ConnectFour() {
       socket.off('game:state', onState);
       socket.off('match:end', onEnd);
       socket.off('queue:waiting', onWaiting);
+      socket.off('room:waiting', onRoomWaiting);
+      socket.off('room:expired', onRoomExpired);
       socket.off('game:error', onError);
+      socket.off('player:error', onError);
       socket.off('match:error', onMatchError);
       const r = roomRef.current;
       socket.emit('queue:leave');
       if (r?.roomId) socket.emit('match:leave', { roomId: r.roomId });
     };
+  }, []);
+
+  // Server silence safeguard
+  useEffect(() => {
+    if (mode === 'match' || game || roomCode || error) return;
+    const id = setTimeout(() => setError(
+      'The arena server did not respond. Restart it ("npm start" in the server folder) so it runs the latest code.'
+    ), 6000);
+    return () => clearTimeout(id);
+  }, [mode, game, roomCode, error]);
+
+  const leave = useCallback(() => {
+    socket.emit('queue:leave');
+    if (roomRef.current?.roomId) socket.emit('match:leave', { roomId: roomRef.current.roomId });
+    navigate('hub');
   }, []);
 
   function handleDrop(col) {
@@ -112,8 +153,11 @@ export default function ConnectFour() {
   function handleRematch() {
     setReceipt(null);
     setGame(null);
+    setRoomCode(null);
     if (mode === 'bot') {
       socket.emit('match:bot', { gameType: 'connect-four', difficulty });
+    } else if (mode === 'create') {
+      socket.emit('room:create', { gameType: 'connect-four' });
     } else {
       socket.emit('queue:join', { gameType: 'connect-four' });
       setQueued(true);
@@ -169,18 +213,39 @@ export default function ConnectFour() {
         </div>
       )}
 
+      {/* Private Room Waiting & Joining Modal */}
+      {!game && (mode === 'create' || mode === 'join' || (error && mode !== 'match')) && (
+        <div className="c4-overlay">
+          <div className="c4-modal">
+            <div className="modal-icon">{error ? '⚠️' : mode === 'create' ? '🏷️' : '🔑'}</div>
+            <h2>{error ? 'Match error' : mode === 'create' ? 'Room Ready' : 'Joining Room'}</h2>
+            <p>
+              {error || (mode === 'create'
+                ? 'Share this 5-character code with a friend — the match begins as soon as they enter it.'
+                : 'Connecting to your friend’s Connect Four room…')}
+            </p>
+            {!error && mode === 'create' && roomCode && <RoomCode code={roomCode} />}
+            <div className="modal-actions">
+              <button type="button" className="btn-cancel" onClick={leave}>
+                {error ? 'Back to Hub' : 'Cancel'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Queueing State */}
       {queued && (
         <div className="c4-queue-banner">
           <div className="spinner" />
           <span>Searching for an online challenger… (-1 ⚡ on match start)</span>
-          <button type="button" className="btn-cancel-q" onClick={() => navigate('hub')}>
+          <button type="button" className="btn-cancel-q" onClick={leave}>
             Cancel
           </button>
         </div>
       )}
 
-      {error && <div className="c4-alert">{error}</div>}
+      {error && !['create', 'join'].includes(mode) && <div className="c4-alert">{error}</div>}
 
       {/* Main Game Arena */}
       <main className="c4-arena-body">

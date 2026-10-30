@@ -1,6 +1,6 @@
 import './chain.css';
 
-/** Small pill that says which ledger results are really written to. */
+/** Badge that displays the active blockchain or simulated ledger connection. */
 export default function ChainBadge({ status }) {
   if (!status) return null;
 

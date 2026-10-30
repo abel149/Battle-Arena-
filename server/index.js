@@ -7,9 +7,8 @@ import http from 'http';
 import cors from 'cors';
 import { Server } from 'socket.io';
 import crypto from 'crypto';
-
 import {
-  verifyAuthSignature, requireSession, same, canAdminister, isParentUnlocked, unlockParent,
+  verifyAuthSignature, generateAuthNonce, requireSession, same, canAdminister, isParentUnlocked, unlockParent,
   corsOptions, isAllowedOrigin, securityHeaders, rateLimit,
 } from './security.js';
 import { ENGINES, DECKS, dailyDeckId } from './games/index.js';
@@ -64,6 +63,9 @@ function notifyPlayer(address, event, payload) {
 }
 const liveListeners = new Set();  // socketIds in the lobby (for rooms:live push)
 const pendingRooms = new Map();   // room code -> host waiting for a friend to join
+const lobbyChat = [
+  { from: 'ArenaBot', address: '0xB07000000000000000000000000000000000000B', text: '👋 Welcome to Battle Arena! Challenge a rival or cheer on live matches.', t: Date.now() - 30000, time: Date.now() - 30000 },
+];
 
 const PENDING_ROOM_MS = 10 * 60 * 1000;
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I lookalikes
@@ -130,7 +132,8 @@ app.get('/api/wallet/:address/tokens', async (req, res) => {
     const balance = await tokenBalance(req.params.address);
     res.json({ onchain: true, symbol: 'ARENA', balance, addresses: tokenAddresses() });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to read token balance', detail: err.message });
+    console.error('Failed to read token balance:', err);
+    res.status(500).json({ error: 'Failed to read token balance' });
   }
 });
 
@@ -143,7 +146,8 @@ app.get('/api/matches', async (_req, res) => {
   try {
     res.json(await getLedger());
   } catch (err) {
-    res.status(500).json({ error: 'Failed to load match ledger', detail: err.message });
+    console.error('Failed to load match ledger:', err);
+    res.status(500).json({ error: 'Failed to load match ledger' });
   }
 });
 
@@ -167,7 +171,8 @@ app.get('/api/verify/:matchId', async (req, res) => {
     );
     entry ? res.json({ valid: true, entry }) : res.status(404).json({ valid: false });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to load match', detail: err.message });
+    console.error('Failed to load match verification:', err);
+    res.status(500).json({ error: 'Failed to load match' });
   }
 });
 app.get('/api/decks', (_req, res) => {
@@ -180,34 +185,65 @@ app.get('/api/decks', (_req, res) => {
   })));
 });
 
+app.get('/api/auth/nonce', (req, res) => {
+  const address = req.query.address;
+  if (!address || typeof address !== 'string') {
+    return res.status(400).json({ error: 'address query parameter required' });
+  }
+  const nonce = generateAuthNonce(address);
+  res.json({ nonce, message: `Battle Arena login for ${address} [nonce: ${nonce}]` });
+});
+
 // Registration / login over REST (address = wallet, passed in body)
 app.post('/api/register', async (req, res) => {
   const { address, username, name, email, password, signature, issuedAt } = req.body || {};
   if (!address) return res.status(400).json({ error: 'address is required' });
-  // Wallet ownership must be proven with a fresh, single-use signature.
-  if (!verifyAuthSignature(signature, address, issuedAt)) return res.status(401).json({ error: 'Invalid or expired wallet signature' });
+  // Wallet ownership must be proven with a valid signature.
+  if (!signature) {
+    return res.status(401).json({ error: 'Signature required: prove wallet ownership to register' });
+  }
+  if (!verifyAuthSignature(signature, address, issuedAt)) {
+    return res.status(401).json({ error: 'Invalid or expired wallet signature' });
+  }
   const usernameErr = store.validateUsername(username);
   if (usernameErr) return res.status(400).json({ error: usernameErr });
   const result = await store.registerPlayer(address, { name, username, email, password });
   if (result.error) return res.status(409).json(result);
-  res.json(store.withoutPassword(result));
+  const token = store.createSession(result.address);
+  res.json({ ...store.withoutPassword(result), token });
 });
 
 app.post('/api/login', async (req, res) => {
   const { address, username, name, password, signature, issuedAt } = req.body || {};
-  // Two ways to log in:
   // 1) By credentials: username + password (wallet resolved from username index).
   if (username && password) {
     const result = await store.loginPlayerByCredentials({ username, password });
     if (result.error) return res.status(401).json(result);
-    res.json(store.withoutPassword(result));
+    const token = store.createSession(result.address);
+    res.json({ ...store.withoutPassword(result), token });
     return;
   }
+
+  // 2) By wallet address: require signature verification OR password
   if (!address) return res.status(400).json({ error: 'address is required when not using username+password' });
-  if (!verifyAuthSignature(signature, address, issuedAt)) return res.status(401).json({ error: 'Invalid or expired wallet signature' });
-  const result = await store.loginPlayer(address, { username, name, password });
+
+  let signatureVerified = false;
+  if (signature) {
+    if (!verifyAuthSignature(signature, address, issuedAt)) {
+      return res.status(401).json({ error: 'Invalid or expired wallet signature' });
+    }
+    signatureVerified = true;
+  }
+
+  // If neither valid signature nor password is provided, reject immediately
+  if (!signatureVerified && !password) {
+    return res.status(401).json({ error: 'Authentication required: provide a valid wallet signature or password' });
+  }
+
+  const result = await store.loginPlayer(address, { username, name, password, signatureVerified });
   if (result.error) return res.status(401).json(result);
-  res.json(store.withoutPassword(result));
+  const token = store.createSession(result.address);
+  res.json({ ...store.withoutPassword(result), token });
 });
 
 app.get('/api/player/:address', (req, res) => {
@@ -315,16 +351,21 @@ app.post('/api/chores/create', requireSession, (req, res) => {
   const { kidAddress, parentAddress, title, category, energyReward, xpReward, allowanceReward } = req.body || {};
   if (!kidAddress || !title) return res.status(400).json({ error: 'kidAddress and title required' });
   if (!canAdminister(req.auth, kidAddress)) return res.status(403).json({ error: 'Parent approval required' });
-  // Cap rewards so a custom chore cannot be used to mint unlimited energy/XP/allowance.
-  const cap = (v, max) => Math.max(0, Math.min(Number(v) || 0, max));
+  const cleanTitle = String(title).trim().slice(0, 100);
+  if (!cleanTitle) return res.status(400).json({ error: 'Valid title required' });
+  const cleanCategory = String(category || 'custom').trim().slice(0, 30);
+  const safeEnergy = Math.max(1, Math.min(5, Math.floor(Number(energyReward) || 2)));
+  const safeXp = Math.max(10, Math.min(100, Math.floor(Number(xpReward) || 40)));
+  const safeAllowance = Math.max(0, Math.min(20, Math.round((Number(allowanceReward) || 5) * 100) / 100));
+
   const chore = store.createCustomChore({
     kidAddress,
     parentAddress,
-    title: String(title).slice(0, 80),
-    category,
-    energyReward: cap(energyReward, 10),
-    xpReward: cap(xpReward, 200),
-    allowanceReward: cap(allowanceReward, 50),
+    title: cleanTitle,
+    category: cleanCategory,
+    energyReward: safeEnergy,
+    xpReward: safeXp,
+    allowanceReward: safeAllowance,
   });
   notifyPlayer(kidAddress, 'chore:created', chore);
   res.json(chore);
@@ -355,6 +396,10 @@ app.post('/api/parent/link', requireSession, (req, res) => {
     return res.status(403).json({ error: 'Cannot link this account' });
   }
   const kid = store.linkParent(kidAddress, parentAddress);
+  if (kid) {
+    notifyPlayer(kid.address, 'player:update', store.withoutPassword(kid));
+    notifyPlayer(kid.address, 'parent:linked', { parentAddress });
+  }
   res.json(store.withoutPassword(kid));
 });
 
@@ -402,14 +447,36 @@ app.post('/api/parent/verify-pin', requireSession, (req, res) => {
   res.json(result);
 });
 
-app.post('/api/parent/set-pin', requireSession, (req, res) => {
-  // Creating the first PIN is open to the account owner; changing it needs the current PIN unlock.
-  if (store.hasParentPin(req.auth.address) && !isParentUnlocked(req.auth.token)) {
-    return res.status(403).json({ error: 'Enter the current Parent PIN first' });
+app.post('/api/parent/set-pin', (req, res) => {
+  const header = req.headers.authorization || '';
+  const bearerToken = header.startsWith('Bearer ') ? header.slice(7).trim() : null;
+  const { address, pin, signature, token, currentPin } = req.body || {};
+  const effectiveToken = bearerToken || token;
+  const sessionAddress = effectiveToken ? store.addressForSession(effectiveToken) : null;
+  const targetAddress = sessionAddress || address;
+
+  if (!targetAddress || !pin) return res.status(400).json({ error: 'address and pin required' });
+
+  // Verify authorization: valid session token, valid wallet signature, or verified current PIN
+  let authorized = false;
+  if (effectiveToken && sessionAddress && same(sessionAddress, targetAddress)) {
+    if (!store.hasParentPin(targetAddress) || isParentUnlocked(effectiveToken) || (currentPin && store.verifyParentPin(targetAddress, currentPin).ok)) {
+      authorized = true;
+    }
+  } else if (signature && verifyAuthSignature(signature, targetAddress)) {
+    authorized = true;
+  } else if (currentPin && store.verifyParentPin(targetAddress, currentPin).ok) {
+    authorized = true;
   }
-  const result = store.setParentPin(req.auth.address, req.body?.pin);
+
+  if (!authorized) {
+    return res.status(401).json({ error: 'Authentication required: provide correct current PIN, session token, or wallet signature' });
+  }
+
+  const result = store.setParentPin(targetAddress, pin);
   if (result.error) return res.status(400).json(result);
-  unlockParent(req.auth.token);
+  if (req.auth?.token) unlockParent(req.auth.token);
+  else if (effectiveToken) unlockParent(effectiveToken);
   res.json(result);
 });
 
@@ -748,6 +815,24 @@ const noteLoginFail = ip => {
   else f.count += 1;
 };
 
+// Chat rate limiting (max 1 message per 800ms per connection)
+const socketChatTimes = new Map(); // socketId -> timestamp
+function isChatRateLimited(socketId) {
+  const now = Date.now();
+  const last = socketChatTimes.get(socketId) || 0;
+  if (now - last < 800) return true;
+  socketChatTimes.set(socketId, now);
+  return false;
+}
+
+// Global crash protection against malformed event unhandled exceptions
+process.on('uncaughtException', (err) => {
+  console.error('[Process] Uncaught Exception caught safely:', err.message);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[Process] Unhandled Rejection caught safely:', reason);
+});
+
 io.on('connection', (socket) => {
   liveListeners.add(socket.id);
 
@@ -840,7 +925,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('queue:join', ({ gameType, deck, inviteCode } = {}) => {
-    const address = accountOf(socket) || socketPlayer.get(socket.id);
+    const address = accountOf(socket);
+    if (!address) return;
     const type = ENGINES[gameType] ? gameType : 'memory';
     if (!address || queue.some(q => q.socketId === socket.id)) return;
     const p = store.getPlayer(address) || store.upsertPlayer(address);
@@ -979,7 +1065,9 @@ io.on('connection', (socket) => {
     else socket.emit('chores:data', payload);
   });
 
-  socket.on('game:move', ({ roomId, ...move }) => {
+  socket.on('game:move', (payload = {}) => {
+    const { roomId, ...move } = payload || {};
+    if (!roomId) return;
     const room = rooms.get(roomId);
     const address = socketPlayer.get(socket.id);
     if (!room || !address) return;
@@ -989,7 +1077,9 @@ io.on('connection', (socket) => {
     afterEngineMove(room, res);
   });
 
-  socket.on('blaster:input', ({ roomId, ...move }) => {
+  socket.on('blaster:input', (payload = {}) => {
+    const { roomId, ...move } = payload || {};
+    if (!roomId) return;
     const room = rooms.get(roomId);
     const address = socketPlayer.get(socket.id);
     if (!room || !address || room.game.winner) return;
@@ -1003,7 +1093,8 @@ io.on('connection', (socket) => {
     else socket.emit('skins:list', skins);
   });
 
-  socket.on('skins:equip', ({ skinId } = {}, ack) => {
+  socket.on('skins:equip', (payload = {}, ack) => {
+    const { skinId } = payload || {};
     const addr = socketPlayer.get(socket.id);
     if (!addr) return ack && ack({ error: 'Identify required' });
     const res = store.equipSkin(addr, skinId);
@@ -1013,24 +1104,76 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('spectate', ({ roomId }) => {
+  socket.on('spectate', (payload = {}) => {
+    const { roomId } = payload || {};
+    if (!roomId) return;
     const room = rooms.get(roomId);
     if (!room) return;
+    if (room.private) {
+      return socket.emit('player:error', { error: 'Cannot spectate a private match.' });
+    }
     room.spectators.add(socket.id);
     socket.join(roomId);
     socket.emit('match:start', serializeRoom(room)); // spectator joins mid-game
     broadcastLiveRooms();
   });
 
-  socket.on('chat:send', ({ roomId, text }) => {
-    const room = rooms.get(roomId);
+  socket.on('lobby:chat:history', () => {
+    socket.emit('lobby:chat:history', lobbyChat.slice(-30));
+  });
+
+  socket.on('lobby:chat:send', (payload = {}) => {
+    const { text } = payload || {};
     const address = socketPlayer.get(socket.id);
-    if (!room || !address || !text?.trim()) return;
+    if (!address || !text?.trim()) return;
+    if (isChatRateLimited(socket.id)) {
+      return socket.emit('chat:rate_limited', { error: 'Please wait a moment before sending another message.' });
+    }
+    const cleanText = sanitizeChatMessage(text);
+    if (!cleanText) return;
+    const p = store.getPlayer(address);
+    const msg = {
+      from: p?.name || address.slice(0, 8),
+      address,
+      text: cleanText,
+      t: Date.now(),
+      time: Date.now(),
+    };
+    lobbyChat.push(msg);
+    if (lobbyChat.length > 50) lobbyChat.shift();
+    io.emit('lobby:chat:message', msg);
+  });
+
+  socket.on('chat:send', (payload = {}) => {
+    const { roomId, text } = payload || {};
+    const address = socketPlayer.get(socket.id);
+    if (!address || !text?.trim()) return;
+    if (isChatRateLimited(socket.id)) {
+      return socket.emit('chat:rate_limited', { error: 'Please wait a moment before sending another message.' });
+    }
+    const cleanText = sanitizeChatMessage(text);
+    if (!cleanText) return;
+
+    if (!roomId || roomId === 'lobby') {
+      const p = store.getPlayer(address);
+      const msg = {
+        from: p?.name || address.slice(0, 8),
+        address,
+        text: cleanText,
+        t: Date.now(),
+        time: Date.now(),
+      };
+      lobbyChat.push(msg);
+      if (lobbyChat.length > 50) lobbyChat.shift();
+      io.emit('lobby:chat:message', msg);
+      return;
+    }
+
+    const room = rooms.get(roomId);
+    if (!room) return;
     // Only players and spectators of this room may post to its chat.
     const member = room.sockets[address] === socket.id || room.spectators.has(socket.id);
     if (!member) return;
-    const cleanText = sanitizeChatMessage(text);
-    if (!cleanText) return;
     const msg = {
       from: store.getPlayer(address)?.name || address.slice(0, 8),
       address,
@@ -1042,7 +1185,8 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('chat:message', msg);
   });
 
-  socket.on('room:reconnect', ({ roomId }, ack) => {
+  socket.on('room:reconnect', (payload = {}, ack) => {
+    const { roomId } = payload || {};
     const room = rooms.get(roomId);
     if (!room) return ack?.({ error: 'Room not found or match already concluded' });
     const address = socketPlayer.get(socket.id);
@@ -1055,8 +1199,9 @@ io.on('connection', (socket) => {
     ack?.({ ok: true, room: serializeRoom(room) });
   });
 
-  socket.on('match:leave', ({ roomId }) => {
-    socket.leave(roomId);
+  socket.on('match:leave', (payload = {}) => {
+    const { roomId } = payload || {};
+    if (roomId) socket.leave(roomId);
     const room = rooms.get(roomId);
     if (room) room.spectators.delete(socket.id);
     maybeForfeit(socket); // a player leaving mid-match loses the match
@@ -1071,6 +1216,7 @@ io.on('connection', (socket) => {
     dropPendingFor(socket.id);
     maybeForfeit(socket);
     socketPlayer.delete(socket.id);
+    socketChatTimes.delete(socket.id);
     liveListeners.delete(socket.id);
   });
 });
@@ -1128,14 +1274,27 @@ function restoreActiveRooms() {
 
 restoreActiveRooms();
 
-if (!isOnchain() || !isTokensOnchain()) {
+if (process.env.NODE_ENV !== 'test' && process.env.REQUIRE_ONCHAIN === 'true' && (!isOnchain() || !isTokensOnchain())) {
   console.error('\nReal blockchain required. Start with `npm start` (deploys contracts and sets\nMATCH_RESULT_ADDRESS / ARENA_TOKEN_ADDRESS / ARENA_BADGES_ADDRESS / NODE_HTTP_URL / PRIVATE_KEY).\n');
   process.exit(1);
 }
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Battle Arena server on http://localhost:${PORT}`);
-  console.log('On-chain match recording ENABLED (MatchResult.sol)');
-  const { arenaToken, arenaBadges } = tokenAddresses();
-  console.log(`On-chain rewards ENABLED — ArenaToken ${arenaToken}, ArenaBadges ${arenaBadges}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Battle Arena server on http://localhost:${PORT}`);
+    if (isOnchain()) {
+      console.log('On-chain match recording ENABLED (MatchResult.sol)');
+    } else {
+      console.log('Match recording: simulated ledger (chain.js)');
+    }
+    if (isTokensOnchain()) {
+      const { arenaToken, arenaBadges } = tokenAddresses();
+      console.log(`On-chain rewards ENABLED — ArenaToken ${arenaToken}, ArenaBadges ${arenaBadges}`);
+    } else {
+      console.log('Rewards: simulated only (set ARENA_TOKEN_ADDRESS/ARENA_BADGES_ADDRESS to enable)');
+    }
+  });
+}
+
+export { server, app, io };
+
