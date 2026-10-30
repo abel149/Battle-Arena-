@@ -9,12 +9,59 @@ import { Server } from 'socket.io';
 import crypto from 'crypto';
 import { ethers } from 'ethers';
 
-// Wallet signature verification helpers
+// Wallet signature verification & replay protection helpers
+const authNonces = new Map(); // address.toLowerCase() -> { nonce, expiresAt }
+const usedSignatures = new Map(); // signature -> expiresAt (for replay prevention)
+
+function cleanupAuthNonces() {
+  const now = Date.now();
+  for (const [addr, data] of authNonces.entries()) {
+    if (data.expiresAt < now) authNonces.delete(addr);
+  }
+  for (const [sig, exp] of usedSignatures.entries()) {
+    if (exp < now) usedSignatures.delete(sig);
+  }
+}
+
+export function generateAuthNonce(address) {
+  cleanupAuthNonces();
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 min TTL
+  authNonces.set(address.toLowerCase(), { nonce, expiresAt });
+  return nonce;
+}
+
 function verifyAuthSignature(signature, address) {
-  if (!signature || typeof signature !== 'string') return false;
+  if (!signature || typeof signature !== 'string' || !address) return false;
+  const cleanSig = signature.trim();
+  const normalizedAddr = address.toLowerCase();
+
+  // Replay prevention: check if this signature was already consumed recently
+  if (usedSignatures.has(cleanSig)) {
+    console.log('verifyAuthSignature rejected: signature replay detected');
+    return false;
+  }
+
   try {
-    const recovered = ethers.verifyMessage(AUTH_MESSAGE(address), signature);
-    return recovered.toLowerCase() === address.toLowerCase();
+    // 1. Check if matching a single-use nonced message
+    const storedNonce = authNonces.get(normalizedAddr);
+    if (storedNonce && storedNonce.expiresAt > Date.now()) {
+      const noncedMsg = `Battle Arena login for ${address} [nonce: ${storedNonce.nonce}]`;
+      const recoveredNonce = ethers.verifyMessage(noncedMsg, cleanSig);
+      if (recoveredNonce.toLowerCase() === normalizedAddr) {
+        authNonces.delete(normalizedAddr); // single-use consumed
+        usedSignatures.set(cleanSig, Date.now() + 24 * 60 * 60 * 1000);
+        return true;
+      }
+    }
+
+    // 2. Standard EIP-191 auth message
+    const recovered = ethers.verifyMessage(AUTH_MESSAGE(address), cleanSig);
+    if (recovered.toLowerCase() === normalizedAddr) {
+      usedSignatures.set(cleanSig, Date.now() + 24 * 60 * 60 * 1000);
+      return true;
+    }
+    return false;
   } catch (e) {
     console.log('verifyAuthSignature failed: ' + e.message);
     return false;
@@ -189,42 +236,65 @@ app.get('/api/decks', (_req, res) => {
   })));
 });
 
+app.get('/api/auth/nonce', (req, res) => {
+  const address = req.query.address;
+  if (!address || typeof address !== 'string') {
+    return res.status(400).json({ error: 'address query parameter required' });
+  }
+  const nonce = generateAuthNonce(address);
+  res.json({ nonce, message: `Battle Arena login for ${address} [nonce: ${nonce}]` });
+});
+
 // Registration / login over REST (address = wallet, passed in body)
 app.post('/api/register', async (req, res) => {
   const { address, username, name, email, password, signature } = req.body || {};
   if (!address) return res.status(400).json({ error: 'address is required' });
-  // Verify wallet ownership via signed message
-  if (signature) {
-    if (!verifyAuthSignature(signature, address)) return res.status(401).json({ error: 'Invalid wallet signature' });
-  } else {
-    // Fallback: if no signature, still allow but note it's unauthenticated
-    console.warn('Register without signature verification — address not cryptographically verified');
+  // Cryptographic proof of wallet ownership is strictly required
+  if (!signature) {
+    return res.status(401).json({ error: 'Signature required: prove wallet ownership to register' });
+  }
+  if (!verifyAuthSignature(signature, address)) {
+    return res.status(401).json({ error: 'Invalid wallet signature' });
   }
   const usernameErr = store.validateUsername(username);
   if (usernameErr) return res.status(400).json({ error: usernameErr });
   const result = await store.registerPlayer(address, { name, username, email, password });
   if (result.error) return res.status(409).json(result);
-  res.json(store.withoutPassword(result));
+  const token = store.createSession(result.address);
+  res.json({ ...store.withoutPassword(result), token });
 });
 
 app.post('/api/login', async (req, res) => {
   const { address, username, name, password, signature } = req.body || {};
-  // Verify wallet ownership via signed message when address is provided
-  if (address && signature) {
-    if (!verifyAuthSignature(signature, address)) return res.status(401).json({ error: 'Invalid wallet signature' });
-  }
-  // Two ways to log in:
   // 1) By credentials: username + password (wallet resolved from username index).
   if (username && password) {
     const result = await store.loginPlayerByCredentials({ username, password });
     if (result.error) return res.status(401).json(result);
-    res.json(store.withoutPassword(result));
+    const token = store.createSession(result.address);
+    res.json({ ...store.withoutPassword(result), token });
     return;
   }
+
+  // 2) By wallet address: require signature verification OR password
   if (!address) return res.status(400).json({ error: 'address is required when not using username+password' });
-  const result = await store.loginPlayer(address, { username, name, password });
+
+  let signatureVerified = false;
+  if (signature) {
+    if (!verifyAuthSignature(signature, address)) {
+      return res.status(401).json({ error: 'Invalid wallet signature' });
+    }
+    signatureVerified = true;
+  }
+
+  // If neither valid signature nor password is provided, reject immediately
+  if (!signatureVerified && !password) {
+    return res.status(401).json({ error: 'Authentication required: provide a valid wallet signature or password' });
+  }
+
+  const result = await store.loginPlayer(address, { username, name, password, signatureVerified });
   if (result.error) return res.status(401).json(result);
-  res.json(store.withoutPassword(result));
+  const token = store.createSession(result.address);
+  res.json({ ...store.withoutPassword(result), token });
 });
 
 app.get('/api/player/:address', (req, res) => {
@@ -1175,3 +1245,6 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log('Rewards: simulated only (set ARENA_TOKEN_ADDRESS/ARENA_BADGES_ADDRESS to enable)');
   }
 });
+
+export { server, app, io };
+

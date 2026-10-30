@@ -674,7 +674,7 @@ export async function loginPlayerByCredentials({ username, password } = {}) {
   return p;
 }
 
-export async function loginPlayer(address, { username, name, password } = {}) {
+export async function loginPlayer(address, { username, name, password, signatureVerified = false } = {}) {
   open();
   const existingPlayer = getPlayer(address);
   if (existingPlayer) {
@@ -682,11 +682,18 @@ export async function loginPlayer(address, { username, name, password } = {}) {
       if (!existingPlayer.password) return { error: 'No password set for this account' };
       const ok = await verifyPassword(password, existingPlayer.password);
       if (!ok) return { error: 'Incorrect password' };
+      return existingPlayer;
     }
-    return existingPlayer;
+    if (signatureVerified) {
+      return existingPlayer;
+    }
+    return { error: 'Authentication required: provide password or wallet signature' };
   }
   if (!username || !username.trim()) {
     return { error: 'No registered profile for this wallet. Register first.' };
+  }
+  if (!signatureVerified && !password) {
+    return { error: 'Authentication required to register this account' };
   }
   const reg = await registerPlayer(address, { name, username, email: null, password });
   if (reg.error) return reg;

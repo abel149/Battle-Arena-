@@ -86,7 +86,8 @@ async function registerPlayer() {
   const wallet = signer.address;
   const username = 'OnchainTest_' + crypto.randomBytes(4).toString('hex');
   const password = 'securepass123';
-  const body = JSON.stringify({ address: wallet, username, password });
+  const signature = await signer.signMessage(`Battle Arena login for ${wallet}`);
+  const body = JSON.stringify({ address: wallet, username, password, signature });
   const r = execSync(`curl -s -X POST ${SERVER_URL}/api/register -H 'Content-Type: application/json' -d '${body.replace(/'/g, "%27")}'`, { cwd: SERVER_DIR, timeout: 10000 });
   const reg = JSON.parse(r.toString());
   if (reg.error) throw new Error('register failed: ' + JSON.stringify(reg));
