@@ -89,18 +89,6 @@ tr.me td { color: var(--accent2); }
 .turn-bar { display: flex; justify-content: space-between; align-items: center;
   margin-bottom: 1rem; font-size: 1.05rem; font-weight: 600; }
 
-.board { display: grid; grid-template-columns: repeat(3, 120px); gap: 10px; justify-content: center; }
-.cell {
-  width: 120px; height: 120px; font-size: 3.2rem; font-weight: 700;
-  background: var(--panel2); border: 1px solid var(--border); border-radius: 12px;
-  color: var(--text); cursor: pointer; transition: transform .08s;
-}
-.cell:hover:not(:disabled) { transform: scale(1.04); box-shadow: 0 0 0 2px var(--accent); }
-.cell:disabled { cursor: default; }
-.cell.x { color: var(--accent); }
-.cell.o { color: var(--accent2); }
-.cell.win { background: #20304f; border-color: var(--accent2); box-shadow: 0 0 12px rgba(0,212,166,.4); }
-
 .receipt {
   margin-top: 1.25rem; padding: 1rem; border-radius: 10px;
   background: #0f2b22; border: 1px solid #1f6b52; font-size: 0.85rem;
@@ -212,3 +200,30 @@ tr.me td { color: var(--accent2); }
   padding: 0.45rem 0; border-bottom: 1px solid var(--border); }
 .match-row:last-child { border-bottom: none; }
 .replay-controls { display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; justify-content: center; }
+
+/* Private-room code shown to a host waiting for a friend (Arena + Memory) */
+.room-code-box { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 4px 0 14px; }
+.room-code {
+  padding: 8px 16px 8px 22px;
+  border-radius: 10px;
+  border: 1px dashed rgba(63, 224, 255, 0.6);
+  background: rgba(4, 12, 26, 0.7);
+  color: #63f0ff;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  user-select: all;
+}
+.room-copy {
+  padding: 8px 14px;
+  border-radius: 9px;
+  border: 1px solid rgba(80, 175, 255, 0.5);
+  background: rgba(9, 32, 58, 0.75);
+  color: #a9e4ff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.room-copy:hover { background: rgba(18, 56, 92, 0.9); }

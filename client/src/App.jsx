@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ethers } from 'ethers';
 import { socket, API, signAndIdentify } from './socket.js';
 import { getOrCreateWallet, saveWallet, short, clearWalletSession } from './lib/session.js';
+import { navigate } from './lib/router.js';
+import './classic.css';
 
 const usernameRe = /^[a-zA-Z0-9_]{3,20}$/;
 
@@ -169,7 +171,9 @@ export default function App() {
     try {
       const r = await fetch(`${API}/api/replay/${matchId}`);
       if (!r.ok) return alert('Replay not available');
-      setReplay(await r.json());
+      const match = await r.json();
+      if (match.gameType !== 'memory') return alert('Replay is only supported for Memory Match.');
+      setReplay(match);
       setReceipt(null);
       setView('replay');
     } catch (e) {
@@ -178,23 +182,25 @@ export default function App() {
   }
 
   const myAddr = wallet.address;
-  const mySymbol = room?.game && (room.game.players.X === myAddr ? 'X' : room.game.players.O === myAddr ? 'O' : null);
+  const gameLabel = room ? (GAME_LABELS[room.gameType] || 'Match') : '';
+  const watchable = r => r.gameType === 'memory';
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <a href="#hub" style={{ textDecoration: 'none', color: 'inherit' }}><h1>⚔️ Battle Arena</h1></a>
-          <a className="btn ghost sm" href="#hub">← Back to Hub</a>
-        </div>
-        <div className="wallet">
+    <div className="cl">
+      <header className="cl-top">
+        <a className="cl-brand" href="#hub">
+          <BrandMark />
+          <span className="cl-brand-name">Battle Arena</span>
+        </a>
+        <div className="cl-top-right">
+          <a className="cl-btn-pill" href="#hub">← Back to Hub</a>
           {profile && (
-            <span className="chip">{profile.tokens} ARENA · {profile.wins}W/{profile.losses}L</span>
+            <span className="cl-pill stat">Lv {profile.level || 1} · {profile.tokens} ARENA · {profile.wins}W/{profile.losses}L</span>
           )}
-          <button className="btn ghost" onClick={connectMetaMask}>MetaMask</button>
-          <span className="chip addr" title={wallet.address}>{short(wallet.address)}</span>
+          <button type="button" className="cl-btn-pill" onClick={connectMetaMask}>MetaMask</button>
+          <span className="cl-pill addr" title={wallet.address}>{short(wallet.address)}</span>
           {view === 'lobby' && !registered && profile && (
-            <button className="btn ghost sm" onClick={() => { setView('login'); setLoginUsername(profile.username || ''); clearAuthError(); }}>
+            <button type="button" className="cl-btn-pill" onClick={() => { setView('login'); setLoginUsername(profile.username || ''); clearAuthError(); }}>
               Log in
             </button>
           )}
@@ -203,293 +209,378 @@ export default function App() {
 
       {/* ---- Auth screens ---- */}
       {view === 'register' && (
-        <main className="auth">
-          <section className="panel auth-panel">
-            <h2>Create your arena identity</h2>
-            <p className="muted small">Pick a globally unique username. Your wallet address is your real identity underneath.</p>
+        <main className="cl-auth">
+          <section className="cl-panel glow cl-auth-card">
+            <h2 className="cl-title">Create your arena identity</h2>
+            <p className="cl-empty">Pick a globally unique username. Your wallet address is your real identity underneath.</p>
             <form onSubmit={handleRegister}>
-              <div className="field">
+              <div className="cl-field">
                 <label htmlFor="reg-username">Username</label>
-                <input id="reg-username" type="text" autoComplete="username"
+                <input id="reg-username" className="cl-input" type="text" autoComplete="username"
                   value={regUsername} onChange={e => { setRegUsername(e.target.value); clearAuthError(); }}
                   placeholder="VictoryKing" required />
               </div>
-              <div className="field">
-                <label htmlFor="reg-name">Display name <span className="muted">(optional)</span></label>
-                <input id="reg-name" type="text"
+              <div className="cl-field">
+                <label htmlFor="reg-name">Display name <span className="cl-muted">(optional)</span></label>
+                <input id="reg-name" className="cl-input" type="text"
                   value={regName} onChange={e => { setRegName(e.target.value); clearAuthError(); }}
                   placeholder="What friends call you" />
               </div>
-              <div className="field">
-                <label htmlFor="reg-email">Email <span className="muted">(optional)</span></label>
-                <input id="reg-email" type="email"
+              <div className="cl-field">
+                <label htmlFor="reg-email">Email <span className="cl-muted">(optional)</span></label>
+                <input id="reg-email" className="cl-input" type="email"
                   value={regEmail} onChange={e => { setRegEmail(e.target.value); clearAuthError(); }}
                   placeholder="you@example.com" />
               </div>
-              <div className="field">
+              <div className="cl-field">
                 <label htmlFor="reg-password">Password</label>
-                <div className="pw-field">
-                  <input id="reg-password" type={regShowPw ? 'text' : 'password'} autoComplete="new-password"
+                <div className="cl-pw">
+                  <input id="reg-password" className="cl-input" type={regShowPw ? 'text' : 'password'} autoComplete="new-password"
                     value={regPassword} onChange={e => { setRegPassword(e.target.value); clearAuthError(); }}
                     placeholder="At least 8 characters" required />
-                  <button type="button" className="pw-toggle" onClick={() => setRegShowPw(v => !v)} aria-label="Toggle password visibility">
+                  <button type="button" onClick={() => setRegShowPw(v => !v)} aria-label="Toggle password visibility">
                     {regShowPw ? '🙈' : '👁'}
                   </button>
                 </div>
               </div>
-              <div className="field">
+              <div className="cl-field">
                 <label htmlFor="reg-password-confirm">Confirm password</label>
-                <div className="pw-field">
-                  <input id="reg-password-confirm" type={regShowPw ? 'text' : 'password'} autoComplete="new-password"
-                    value={regPasswordConfirm} onChange={e => { setRegPasswordConfirm(e.target.value); clearAuthError(); }}
-                    placeholder="Repeat your password" required />
-                </div>
+                <input id="reg-password-confirm" className="cl-input" type={regShowPw ? 'text' : 'password'} autoComplete="new-password"
+                  value={regPasswordConfirm} onChange={e => { setRegPasswordConfirm(e.target.value); clearAuthError(); }}
+                  placeholder="Repeat your password" required />
               </div>
-              {authError && <div className="auth-error">{authError}</div>}
-              <button className="btn primary" type="submit" disabled={authLoading}>
+              {authError && <div className="cl-error">{authError}</div>}
+              <button className="cl-btn primary" type="submit" disabled={authLoading}>
                 {authLoading ? 'Creating…' : 'Create account'}
               </button>
             </form>
-            <div className="auth-switch">
-              Already have an account? <button className="link-btn" onClick={() => { setView('login'); setLoginUsername(''); setLoginPassword(''); setLoginShowPw(false); clearAuthError(); }}>Log in</button>
+            <div className="cl-switch">
+              Already have an account? <button type="button" className="cl-link" onClick={() => { setView('login'); setLoginUsername(''); setLoginPassword(''); setLoginShowPw(false); clearAuthError(); }}>Log in</button>
             </div>
           </section>
         </main>
       )}
 
       {view === 'login' && (
-        <main className="auth">
-          <section className="panel auth-panel">
-            <h2>Log in to your arena identity</h2>
-            <p className="muted small">Enter your username and password. Your wallet address is shown for reference.</p>
-            <div className="wallet-line">
-              <span className="chip addr" title={wallet.address}>{short(wallet.address)}</span>
-              <button className="btn ghost sm" onClick={() => { setWallet(getOrCreateWallet()); setView('login'); clearAuthError(); }}>New wallet</button>
+        <main className="cl-auth">
+          <section className="cl-panel glow cl-auth-card">
+            <h2 className="cl-title">Log in to your arena</h2>
+            <p className="cl-empty">Enter your username and password. Your wallet address is shown for reference.</p>
+            <div className="cl-wallet-line">
+              <span className="cl-pill addr" title={wallet.address}>{short(wallet.address)}</span>
+              <button type="button" className="cl-btn sm" onClick={() => { setWallet(getOrCreateWallet()); setView('login'); clearAuthError(); }}>New wallet</button>
             </div>
             <form onSubmit={handleLogin}>
-              <div className="field">
+              <div className="cl-field">
                 <label htmlFor="login-username">Username</label>
-                <input id="login-username" type="text" autoComplete="username"
+                <input id="login-username" className="cl-input" type="text" autoComplete="username"
                   value={loginUsername} onChange={e => { setLoginUsername(e.target.value); clearAuthError(); }}
                   placeholder="Your arena username" required />
               </div>
-              <div className="field">
+              <div className="cl-field">
                 <label htmlFor="login-password">Password</label>
-                <div className="pw-field">
-                  <input id="login-password" type={loginShowPw ? 'text' : 'password'} autoComplete="current-password"
+                <div className="cl-pw">
+                  <input id="login-password" className="cl-input" type={loginShowPw ? 'text' : 'password'} autoComplete="current-password"
                     value={loginPassword} onChange={e => { setLoginPassword(e.target.value); clearAuthError(); }}
                     placeholder="Your password" required />
-                  <button type="button" className="pw-toggle" onClick={() => setLoginShowPw(v => !v)} aria-label="Toggle password visibility">
+                  <button type="button" onClick={() => setLoginShowPw(v => !v)} aria-label="Toggle password visibility">
                     {loginShowPw ? '🙈' : '👁'}
                   </button>
                 </div>
               </div>
-              {authError && <div className="auth-error">{authError}</div>}
-              <button className="btn primary" type="submit" disabled={authLoading}>
+              {authError && <div className="cl-error">{authError}</div>}
+              <button className="cl-btn primary" type="submit" disabled={authLoading}>
                 {authLoading ? 'Logging in…' : 'Log in'}
               </button>
             </form>
-            <div className="auth-switch">
-              New here? <button className="link-btn" onClick={() => { setView('register'); setRegUsername(''); setRegName(''); setRegEmail(''); setRegPassword(''); setRegPasswordConfirm(''); setRegShowPw(false); clearAuthError(); }}>Create account</button>
+            <div className="cl-switch">
+              New here? <button type="button" className="cl-link" onClick={() => { setView('register'); setRegUsername(''); setRegName(''); setRegEmail(''); setRegPassword(''); setRegPasswordConfirm(''); setRegShowPw(false); clearAuthError(); }}>Create account</button>
             </div>
           </section>
         </main>
       )}
 
+      {/* ---- Lobby ---- */}
       {view === 'lobby' && (
-        <main className="lobby">
-          <section className="panel">
-            <h2>Play</h2>
-            <div className="game-picker">
-              <button className={`game-card ${gameType === 'memory' ? 'sel' : ''}`}
-                onClick={() => setGameType('memory')}>
-                <span className="gicon">🧠</span>Memory Match
-                <span className="muted">educational decks</span>
-              </button>
-              <button className={`game-card ${gameType === 'tic-tac-toe' ? 'sel' : ''}`}
-                onClick={() => setGameType('tic-tac-toe')}>
-                <span className="gicon">⭕</span>Tic Tac Toe
-                <span className="muted">classic duel</span>
-              </button>
-            </div>
+        <main className="cl-lobby">
+          <div className="cl-col">
+            <section className="cl-panel glow cl-play">
+              <h2 className="cl-title">Chat &amp; Spectate</h2>
 
-            {gameType === 'memory' && (
-              <div className="deck-picker">
-                {decks.map(d => (
-                  <button key={d.id} className={`deck-chip ${deckId === d.id ? 'sel' : ''}`}
-                    onClick={() => setDeckId(d.id)}>
-                    {d.label}{d.daily ? ' 📅' : ''}
-                  </button>
-                ))}
-                <div className="muted small">📅 = Daily Challenge deck (+15 bonus XP)</div>
+              <div className="cl-games">
+                <button type="button" className={`cl-game ${gameType === 'memory' ? 'sel' : ''}`}
+                  onClick={() => setGameType('memory')}>
+                  <span className="ico">🧠</span>Memory Match
+                  <small>educational decks</small>
+                </button>
+                <button type="button" className={`cl-game ${gameType === 'math-arena' ? 'sel' : ''}`}
+                  onClick={() => setGameType('math-arena')}>
+                  <span className="ico">⚡</span>Neon Math Arena
+                  <small>real-time math duel</small>
+                </button>
               </div>
-            )}
 
-            <div className="bot-diff-row" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '8px 0' }}>
-              <span className="muted small">🤖 Bot Level:</span>
-              <span className="lb-tabs" style={{ margin: 0 }}>
-                {['easy', 'medium', 'hard'].map(lvl => (
-                  <button
-                    key={lvl}
-                    type="button"
-                    className={`tab ${botDifficulty === lvl ? 'sel' : ''}`}
-                    onClick={() => setBotDifficulty(lvl)}
-                  >
-                    {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
-                  </button>
-                ))}
-              </span>
-            </div>
-
-            <div className="actions">
-              <button className="btn primary" disabled={queueing}
-                onClick={() => { spectatingRef.current = false; socket.emit('queue:join', { gameType }); setQueueing(true); }}>
-                {queueing ? 'Finding opponent…' : '⚡ Quick Match'}
-              </button>
-              {queueing && <button className="btn" onClick={() => { socket.emit('queue:leave'); setQueueing(false); }}>Cancel</button>}
-              <button className="btn" onClick={() => { spectatingRef.current = false; socket.emit('match:bot', { gameType, deck: deckId, difficulty: botDifficulty }); }}>🤖 Play vs Bot</button>
-            </div>
-
-            {profile && (
-              <div className="profile">
-                <input className="name-input" defaultValue={profile.name}
-                  onBlur={e => { setWallet(w => ({ ...w, name: e.target.value }));
-                                 socket.emit('identify', { ...wallet, name: e.target.value }); }} />
-                <div className="stats">
-                  <span>⭐ Lv {profile.level || 1} ({profile.xp || 0} XP)</span>
-                  <span>{profile.matches} matches</span>
-                  <span>{profile.wins} wins · streak {profile.streak || 0}</span>
-                  <span>{profile.tokens} tokens</span>
+              {gameType === 'memory' && (
+                <div className="cl-decks">
+                  {decks.map(d => (
+                    <button type="button" key={d.id} className={`cl-deck ${deckId === d.id ? 'sel' : ''}`} onClick={() => setDeckId(d.id)}>
+                      {d.label}{d.daily ? ' 📅' : ''}
+                    </button>
+                  ))}
+                  <div className="cl-hint">📅 = Daily Challenge deck (+15 bonus XP)</div>
                 </div>
-                <div className="badges">
-                  {profile.badges.length === 0 && <span className="muted">No badges yet — win a match!</span>}
-                  {profile.badges.map(b => <span key={b.id} className="badge" title={b.desc}>🏅 {b.label}</span>)}
+              )}
+
+              <div className="cl-diff-row">
+                <span className="cl-diff-label">🤖 Bot Level:</span>
+                <div className="cl-diff" role="radiogroup" aria-label="Bot difficulty">
+                  {['easy', 'medium', 'hard'].map(lvl => (
+                    <button
+                      key={lvl}
+                      type="button"
+                      className={`${lvl} ${botDifficulty === lvl ? 'on' : ''}`}
+                      onClick={() => setBotDifficulty(lvl)}
+                    >
+                      {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                    </button>
+                  ))}
                 </div>
               </div>
-            )}
 
-            {liveRooms.length > 0 && (
-              <div className="live">
-                <h3>Live matches</h3>
-                {liveRooms.map(r => (
-                  <div key={r.roomId} className="live-row">
-                    <span>{r.gameType === 'memory' ? '🧠' : '⭕'} {r.players.X || '?'} vs {r.players.O || '?'}</span>
-                    <button className="btn sm" onClick={() => spectate(r.roomId)}>👁 Spectate</button>
+              <div className="cl-actions">
+                <button type="button" className="cl-btn primary" disabled={queueing}
+                  onClick={() => {
+                    spectatingRef.current = false;
+                    if (gameType === 'math-arena') navigate('arena?mode=match');
+                    else {
+                      socket.emit('queue:join', { gameType });
+                      setQueueing(true);
+                    }
+                  }}>
+                  ⚡ {queueing ? 'Finding opponent…' : 'Quick Match'}
+                </button>
+                {queueing && <button type="button" className="cl-btn" onClick={() => { socket.emit('queue:leave'); setQueueing(false); }}>Cancel</button>}
+                <button type="button" className="cl-btn" onClick={() => {
+                  spectatingRef.current = false;
+                  if (gameType === 'math-arena') navigate(`arena?mode=bot&difficulty=${botDifficulty}`);
+                  else socket.emit('match:bot', { gameType, deck: deckId, difficulty: botDifficulty });
+                }}>🤖 Play vs Bot</button>
+              </div>
+
+              {profile && (
+                <div className="cl-profile">
+                  <div className="cl-profile-head">
+                    <span className="cl-avatar">{(profile.name || '?').slice(0, 1).toUpperCase()}</span>
+                    <input className="cl-input cl-name-input" defaultValue={profile.name} aria-label="Display name"
+                      onBlur={e => { const next = { ...wallet, name: e.target.value }; setWallet(next); signAndIdentify(next); }} />
                   </div>
-                ))}
-              </div>
-            )}
-          </section>
+                  <div className="cl-lvl">
+                    <span>Level {profile.level || 1}</span>
+                    <span>{(profile.xp || 0) % 100} / 100 XP</span>
+                  </div>
+                  <div className="cl-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={(profile.xp || 0) % 100}>
+                    <span style={{ width: `${(profile.xp || 0) % 100}%` }} />
+                  </div>
+                  <div className="cl-stats">
+                    <div><b>{profile.matches || 0}</b><span>Matches</span></div>
+                    <div><b>{profile.wins || 0}</b><span>Wins</span></div>
+                    <div><b>{profile.streak || 0}</b><span>Streak</span></div>
+                    <div><b>{profile.tokens || 0}</b><span>Tokens</span></div>
+                  </div>
+                  <div className="cl-badges">
+                    {(profile.badges || []).length === 0 && <span className="cl-empty">No badges yet — win a match!</span>}
+                    {(profile.badges || []).map(b => <span key={b.id} className="cl-badge" title={b.desc}>🏅 {b.label}</span>)}
+                  </div>
+                </div>
+              )}
+            </section>
 
-          <aside className="panel">
-            <h2>🏆 Leaderboard
-              <span className="lb-tabs">
-                <button className={`tab ${lbScope === 'all' ? 'sel' : ''}`} onClick={() => setLbScope('all')}>All-time</button>
-                <button className={`tab ${lbScope === 'weekly' ? 'sel' : ''}`} onClick={() => setLbScope('weekly')}>This week</button>
-              </span>
-            </h2>
-            <table>
-              <thead><tr><th>#</th><th>Player</th><th>Lv</th><th>W</th><th>{lbScope === 'weekly' ? 'Pts' : 'Tokens'}</th></tr></thead>
-              <tbody>
+            <section className="cl-panel">
+              <h3 className="cl-side-title">👁 Live Matches</h3>
+              {liveRooms.length === 0 ? (
+                <p className="cl-empty">No matches in progress. Start one and ask a friend to watch.</p>
+              ) : (
+                <ul className="cl-live-list">
+                  {liveRooms.map(r => (
+                    <li key={r.roomId} className="cl-live-row">
+                      <div className="cl-live-info">
+                        <span className="cl-live-game">{GAME_LABELS[r.gameType] || r.gameType}</span>
+                        <span className="cl-live-players">{Object.values(r.players || {}).join(' vs ') || '?'}</span>
+                        <span className="cl-live-watchers">{r.spectators || 0} watching</span>
+                      </div>
+                      {watchable(r)
+                        ? <button type="button" className="cl-watch" onClick={() => spectate(r.roomId)}>Spectate</button>
+                        : <span className="cl-live-watchers">Watching soon</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+
+          <aside className="cl-col">
+            <section className="cl-panel">
+              <h3 className="cl-side-title">
+                🏆 Leaderboard
+                <span className="cl-tabs">
+                  <button type="button" className={lbScope === 'all' ? 'on' : ''} onClick={() => setLbScope('all')}>All-time</button>
+                  <button type="button" className={lbScope === 'weekly' ? 'on' : ''} onClick={() => setLbScope('weekly')}>This week</button>
+                </span>
+              </h3>
+              <div className="cl-lb-head">
+                <span>#</span><span>Player</span><span>Lv</span><span>W</span><span>{lbScope === 'weekly' ? 'Pts' : 'Tokens'}</span>
+              </div>
+              <ol className="cl-lb-list">
                 {leaderboard.map(p => (
-                  <tr key={p.address} className={p.address === myAddr ? 'me' : ''}>
-                    <td>{p.rank}</td>
-                    <td>{p.name} <span className="muted">{short(p.address)}</span></td>
-                    <td>{p.level || 1}</td>
-                    <td>{p.wins}</td>
-                    <td>{lbScope === 'weekly' ? p.points : p.tokens}</td>
-                  </tr>
+                  <li key={p.address} className={`cl-lb-row ${p.address === myAddr ? 'me' : ''} ${p.rank <= 3 ? `top${p.rank}` : ''}`}>
+                    <span className="cl-lb-rank">{p.rank}</span>
+                    <span className="cl-lb-player">
+                      <span className="cl-avatar sm">{(p.name || '?').slice(0, 1).toUpperCase()}</span>
+                      <span className="cl-lb-name" title={p.address}>{p.name || short(p.address)}</span>
+                    </span>
+                    <span>{p.level || 1}</span>
+                    <span>{p.wins}</span>
+                    <span className="cl-lb-pts">{(lbScope === 'weekly' ? p.points : p.tokens) ?? 0}</span>
+                  </li>
                 ))}
-                {leaderboard.length === 0 && <tr><td colSpan="5" className="muted">No players yet</td></tr>}
-              </tbody>
-            </table>
+              </ol>
+              {leaderboard.length === 0 && <p className="cl-empty">No ranked players yet. Win a match and the board updates live.</p>}
+            </section>
 
-            <h2 style={{ marginTop: '1.5rem' }}>⛓ On-Chain Results</h2>
-            <div className="matches">
-              {matches.slice(0, 8).map(m => (
-                <div key={m.matchId} className="match-row">
-                  <div className="mono">{m.matchId.slice(0, 16)}…</div>
-                  <div className="muted">
-                    winner <span className="mono">{short(m.winner)}</span> · tx <span className="mono">{short(m.txHash)}</span>
-                  </div>
-                  <button className="btn sm" onClick={() => openReplay(m.matchId)}>▶ Replay</button>
+            <section className="cl-panel">
+              <h3 className="cl-side-title">⛓ On-Chain Results</h3>
+              {matches.length === 0 ? (
+                <p className="cl-empty">No results recorded yet.</p>
+              ) : (
+                <div className="cl-chain-list">
+                  {matches.slice(0, 8).map(m => (
+                    <div key={m.matchId} className="cl-chain-row">
+                      <span className={`cl-dot ${m.gameType || ''}`} />
+                      <div className="cl-chain-main">
+                        <span>{GAME_LABELS[m.gameType] || 'Match'} · winner <span className="cl-mono">{short(m.winner)}</span></span>
+                        <span className="cl-mono">tx {short(m.txHash)}</span>
+                      </div>
+                      <button type="button" className="cl-btn sm" onClick={() => openReplay(m.matchId)}>▶ Replay</button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-              {matches.length === 0 && <div className="muted">No recorded matches yet</div>}
-            </div>
+              )}
+            </section>
           </aside>
         </main>
       )}
 
+      {/* ---- Replay ---- */}
       {view === 'replay' && replay && (
-        <main className="game">
-          <section className="panel board-panel">
-            <div className="game-head">
-              <button className="btn sm" onClick={() => { setReplay(null); setView('lobby'); }}>← Back to lobby</button>
-              <span className="mono muted">REPLAY {replay.matchId}</span>
+        <>
+          <div className="cl-game-top">
+            <button type="button" className="cl-back" onClick={() => { setReplay(null); setView('lobby'); }}>← Lobby</button>
+            <h1 className="cl-title">Match Replay</h1>
+            <div className="cl-game-tags">
+              <span className="cl-pill cl-room-tag cl-mono" title={replay.matchId}>{replay.matchId}</span>
             </div>
-            <ReplayView replay={replay} />
-          </section>
-        </main>
+          </div>
+          <main className="cl-game-grid" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
+            <section className="cl-panel cl-arena">
+              <ReplayView replay={replay} />
+            </section>
+          </main>
+        </>
       )}
 
+      {/* ---- Live game / spectating ---- */}
       {view === 'game' && room && (
-        <main className="game">
-          <section className="panel board-panel">
-            <div className="game-head">
-              <button className="btn sm" onClick={() => { socket.emit('match:leave', { roomId: room.roomId }); setView('lobby'); }}>← Leave</button>
-              <span className="mono muted">{room.roomId}</span>
-              {spectating && <span className="chip">SPECTATING</span>}
+        <>
+          <div className="cl-game-top">
+            <button type="button" className="cl-back" onClick={() => { socket.emit('match:leave', { roomId: room.roomId }); setView('lobby'); }}>← Leave</button>
+            <h1 className="cl-title">{gameLabel}</h1>
+            <div className="cl-game-tags">
+              {spectating && <span className="cl-pill live">👁 SPECTATING</span>}
+              <span className="cl-pill cl-room-tag cl-mono" title={room.roomId}>{room.roomId}</span>
             </div>
-            {room.game && (room.gameType === 'memory' ? (
-              <MemoryBoard game={room.game} myAddr={myAddr} spectating={spectating}
-                onFlip={i => socket.emit('game:move', { roomId: room.roomId, index: i })}
-                names={room.names} />
-            ) : (
-              <Board game={room.game} mySymbol={mySymbol} spectating={spectating}
-                onMove={i => socket.emit('game:move', { roomId: room.roomId, index: i })}
-                names={room.names} />
-            ))}
-            {receipt && <Receipt receipt={receipt}
-              onRematch={() => { spectatingRef.current = false;
-                socket.emit('match:bot', { gameType: room.gameType, deck: room.deck, difficulty: botDifficulty }); }} />}
-          </section>
+          </div>
 
-          <aside className="panel chat-panel">
-            <h3>Kid-Safe Chat</h3>
-            <ChatLog chat={chat} myAddr={myAddr} />
-            <PresetChat onSend={t => socket.emit('chat:send', { roomId: room.roomId, text: t })} />
-          </aside>
-        </main>
+          <main className="cl-game-grid">
+            <section className="cl-panel cl-arena">
+              {!room.game && (
+                <div className="cl-wait">
+                  <div className="cl-spinner" aria-hidden="true" />
+                  Joining the match… if nothing appears, it has already finished.
+                </div>
+              )}
+              {room.game && room.gameType === 'memory' && (
+                <MemoryBoard game={room.game} myAddr={myAddr} spectating={spectating}
+                  onFlip={i => socket.emit('game:move', { roomId: room.roomId, index: i })}
+                  names={room.names} />
+              )}
+              {receipt && <Receipt receipt={receipt}
+                onRematch={spectating ? null : () => { spectatingRef.current = false;
+                  socket.emit('match:bot', { gameType: room.gameType, deck: room.deck, difficulty: botDifficulty }); }} />}
+            </section>
+
+            <aside className="cl-panel cl-chat">
+              <h3 className="cl-side-title">💬 Kid-Safe Chat{spectating ? ' · spectators welcome' : ''}</h3>
+              <ChatLog chat={chat} myAddr={myAddr} />
+              <PresetChat onSend={t => socket.emit('chat:send', { roomId: room.roomId, text: t })} />
+            </aside>
+          </main>
+        </>
       )}
     </div>
   );
 }
 
-function Board({ game, mySymbol, spectating, onMove, names }) {
-  const myTurn = game.turn === mySymbol && !game.winner && !spectating;
-  const status = game.winner
-    ? game.winner === 'draw' ? "It's a draw!"
-      : `${names?.[game.players[game.winner]] || game.winner} wins!`
-    : `${names?.[game.players[game.turn]] || game.players[game.turn]}'s turn (${game.turn})`;
+const GAME_LABELS = {
+  memory: 'Memory Match',
+  'math-arena': 'Neon Math Arena',
+};
 
+function BrandMark() {
   return (
-    <>
-      <div className="turn-bar">
-        <span>{status}</span>
-        {mySymbol && <span className="chip">You are {mySymbol}</span>}
+    <svg className="cl-brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M5 3h7l4.2 7.4L20.4 3H27l-7.6 12.4L28 29h-7.1l-4.6-8.2L11.4 29H5l8-13.2L5 3Z" />
+    </svg>
+  );
+}
+
+// Two player cards with a status pill between them — same layout as Memory Match.
+function ScoreBar({ left, right, status }) {
+  const card = p => (
+    <div className={`cl-score ${p.active ? 'active' : ''}`}>
+      <span className="cl-avatar">{(p.name || '?').slice(0, 1).toUpperCase()}</span>
+      <div className="cl-who">
+        <span className="nm">{p.name}{p.you && <span className="cl-you">YOU</span>}</span>
+        <span className="sub">{p.sub}</span>
       </div>
-      <div className="board">
-        {game.board.map((cell, i) => (
-          <button key={i}
-            className={`cell ${cell?.toLowerCase() || ''} ${game.winLine?.includes(i) ? 'win' : ''}`}
-            disabled={!!cell || !myTurn || !!game.winner}
-            onClick={() => onMove(i)}>
-            {cell}
+    </div>
+  );
+  return (
+    <div className="cl-scores">
+      {card(left)}
+      <div className="cl-status">{status}</div>
+      {card(right)}
+    </div>
+  );
+}
+
+function MemoryGrid({ cards, cols, onFlip, canFlip }) {
+  return (
+    <div className="cl-mem-grid" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+      {cards.map((c, i) => {
+        const shown = c.flipped || c.matched;
+        return (
+          <button key={i} type="button"
+            className={`cl-mem-card ${c.matched ? 'matched' : c.flipped ? 'up' : ''}`}
+            disabled={!canFlip || c.matched || c.flipped}
+            onClick={() => onFlip && onFlip(i)}
+            aria-label={shown ? `Card: ${c.content}` : 'Hidden card'}>
+            {shown
+              ? <span className={`face ${String(c.content).length > 6 ? 'text' : ''}`}>{c.content}</span>
+              : <span className="q" aria-hidden="true">?</span>}
           </button>
-        ))}
-      </div>
-    </>
+        );
+      })}
+    </div>
   );
 }
 
@@ -498,32 +589,24 @@ function MemoryBoard({ game, myAddr, spectating, onFlip, names }) {
   const cols = game.cards.length <= 16 ? 4 : 5;
   const nameOf = addr => names?.[addr] || short(addr);
   const status = game.winner
-    ? game.winner === 'draw' ? "It's a draw!"
-      : `${nameOf(game.players[game.winner])} wins!`
-    : `${nameOf(game.players[game.turn])}'s turn`;
+    ? game.winner === 'draw' ? 'Draw' : `${nameOf(game.players[game.winner])} wins`
+    : spectating ? `${nameOf(game.players[game.turn])}'s turn` : myTurn ? 'Your turn' : `${nameOf(game.players[game.turn])}'s turn`;
+  const side = sym => {
+    const addr = game.players[sym];
+    const s = game.scores?.[addr] ?? 0;
+    return { name: nameOf(addr), sub: `${s} ${s === 1 ? 'pair' : 'pairs'}`,
+      active: game.turn === sym && !game.winner, you: !spectating && addr === myAddr };
+  };
 
   return (
     <>
-      <div className="turn-bar">
-        <span>{status}</span>
-        <span className="chip">{game.deckLabel}</span>
-      </div>
-      <div className="scorebar">
-        {Object.entries(game.scores).map(([addr, s]) => (
-          <span key={addr} className={`chip ${game.players[game.turn] === addr ? 'active' : ''}`}>
-            {nameOf(addr)}: {s}
-          </span>
-        ))}
-      </div>
-      <div className="memory-grid" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
-        {game.cards.map((c, i) => (
-          <button key={i}
-            className={`mcard ${c.matched ? 'matched' : c.flipped ? 'up' : ''}`}
-            disabled={!myTurn || c.matched || c.flipped || game.locked}
-            onClick={() => onFlip(i)}>
-            {c.flipped || c.matched ? c.content : '?'}
-          </button>
-        ))}
+      <ScoreBar left={side('X')} right={side('O')} status={status} />
+      <MemoryGrid cards={game.cards} cols={cols} onFlip={onFlip} canFlip={myTurn && !game.locked} />
+      <div className="cl-foot">
+        <span>{game.locked ? 'Checking the pair…'
+          : spectating ? 'You are watching this match live.'
+          : myTurn ? 'Flip two cards — a matching pair scores and keeps your turn.' : 'Waiting for your rival to flip…'}</span>
+        <span>{game.deckLabel}</span>
       </div>
     </>
   );
@@ -532,30 +615,6 @@ function MemoryBoard({ game, myAddr, spectating, onFlip, names }) {
 const CHAT_PRESETS = ['Good luck!', 'Well played!', 'Nice match!', 'Rematch?', '👏', '😄', '😅', '🎉'];
 
 // ---------- match replay (re-applies recorded moves client-side) ----------
-
-const TTT_LINES = [
-  [0, 1, 2], [3, 4, 5], [6, 7, 8],
-  [0, 3, 6], [1, 4, 7], [2, 5, 8],
-  [0, 4, 8], [2, 4, 6],
-];
-
-function buildTttReplay(replay, step) {
-  const board = Array(9).fill(null);
-  let winner = null;
-  let winLine = null;
-  for (const mv of replay.moves.slice(0, step)) board[mv.index] = mv.symbol;
-  for (const line of TTT_LINES) {
-    const [a, b, c] = line;
-    if (board[a] && board[a] === board[b] && board[a] === board[c]) {
-      winner = board[a];
-      winLine = line;
-    }
-  }
-  if (!winner && board.every(Boolean)) winner = 'draw';
-  // X always opens; moves strictly alternate, so the mover at `step` follows parity.
-  const turn = step % 2 === 0 ? 'X' : 'O';
-  return { board, winner, winLine, turn };
-}
 
 function buildMemoryReplay(replay, step) {
   const cards = replay.layout.map(c => ({ pairId: c.pairId, content: c.content, matched: false, flipped: false }));
@@ -585,7 +644,6 @@ function buildMemoryReplay(replay, step) {
     winner: step >= replay.moves.length ? replay.result : null,
   };
 }
-
 function ReplayView({ replay }) {
   const total = replay.moves.length;
   const [step, setStep] = useState(0);
@@ -599,59 +657,40 @@ function ReplayView({ replay }) {
   }, [playing, step, total]);
 
   const nameOf = addr => replay.names?.[addr] || short(addr);
-  const state = useMemo(() => (
-    replay.gameType === 'memory' ? buildMemoryReplay(replay, step) : buildTttReplay(replay, step)
-  ), [replay, step]);
+  const state = useMemo(() => buildMemoryReplay(replay, step), [replay, step]);
 
   const jump = d => { setPlaying(false); setStep(s => Math.max(0, Math.min(total, s + d))); };
   const status = state.winner
-    ? state.winner === 'draw' ? "It's a draw!" : `${nameOf(replay.players[state.winner] ?? '') || state.winner} wins!`
-    : `Move ${step}/${total} — ${nameOf(replay.players[state.turn] ?? replay.players[state.turn])}'s turn`;
+    ? state.winner === 'draw' ? 'Draw' : `${nameOf(replay.players[state.winner] ?? '') || state.winner} wins`
+    : `Move ${step}/${total}`;
+  const side = sym => {
+    const addr = replay.players[sym];
+    return {
+      name: nameOf(addr),
+      sub: `${state.scores[addr] ?? 0} pairs`,
+      active: state.turn === sym && !state.winner,
+    };
+  };
 
   return (
     <>
-      <div className="turn-bar">
-        <span>{status}</span>
-        <span className="chip">{replay.gameType === 'memory' ? '🧠 Memory' : '⭕ Tic Tac Toe'}{replay.deck ? ` · ${replay.deck}` : ''}</span>
-      </div>
+      <ScoreBar left={side('X')} right={side('O')} status={status} />
 
-      {replay.gameType === 'memory' ? (
-        <>
-          <div className="scorebar">
-            {Object.entries(state.scores).map(([addr, s]) => (
-              <span key={addr} className={`chip ${replay.players[state.turn] === addr ? 'active' : ''}`}>
-                {nameOf(addr)}: {s}
-              </span>
-            ))}
-          </div>
-          <div className="memory-grid" style={{ gridTemplateColumns: `repeat(${replay.layout.length <= 16 ? 4 : 5}, 1fr)` }}>
-            {state.cards.map((c, i) => (
-              <button key={i} className={`mcard ${c.matched ? 'matched' : c.flipped ? 'up' : ''}`} disabled>
-                {c.matched || c.flipped ? c.content : '?'}
-              </button>
-            ))}
-          </div>
-        </>
-      ) : (
-        <div className="board">
-          {state.board.map((cell, i) => (
-            <button key={i} className={`cell ${cell?.toLowerCase() || ''} ${state.winLine?.includes(i) ? 'win' : ''}`} disabled>
-              {cell}
-            </button>
-          ))}
-        </div>
-      )}
+      <MemoryGrid cards={state.cards} cols={replay.layout.length <= 16 ? 4 : 5} canFlip={false} />
 
-      <div className="replay-controls">
-        <button className="btn sm" onClick={() => jump(-total)}>⏮</button>
-        <button className="btn sm" onClick={() => jump(-1)}>⏪</button>
-        <button className="btn primary sm" onClick={() => {
+      <div className="cl-replay-controls">
+        <button type="button" className="cl-btn sm" onClick={() => jump(-total)}>⏮</button>
+        <button type="button" className="cl-btn sm" onClick={() => jump(-1)}>⏪</button>
+        <button type="button" className="cl-btn primary sm" onClick={() => {
           if (step >= total) setStep(0);
           setPlaying(p => !p);
         }}>{playing ? '⏸ Pause' : '▶ Play'}</button>
-        <button className="btn sm" onClick={() => jump(1)}>⏩</button>
-        <button className="btn sm" onClick={() => jump(total)}>⏭</button>
-        <span className="muted">{step} / {total} moves</span>
+        <button type="button" className="cl-btn sm" onClick={() => jump(1)}>⏩</button>
+        <button type="button" className="cl-btn sm" onClick={() => jump(total)}>⏭</button>
+        <span>{step} / {total} moves</span>
+      </div>
+      <div className="cl-foot">
+        <span>🧠 Memory Match{replay.deck ? ` · ${replay.deck}` : ''}</span>
       </div>
     </>
   );
@@ -659,9 +698,9 @@ function ReplayView({ replay }) {
 
 function PresetChat({ onSend }) {
   return (
-    <div className="preset-chat">
+    <div className="cl-presets">
       {CHAT_PRESETS.map(p => (
-        <button key={p} className="btn sm ghost" onClick={() => onSend(p)}>{p}</button>
+        <button type="button" key={p} onClick={() => onSend(p)}>{p}</button>
       ))}
     </div>
   );
@@ -669,16 +708,16 @@ function PresetChat({ onSend }) {
 
 function Receipt({ receipt, onRematch }) {
   return (
-    <div className="receipt">
-      <h3>✅ Verified Result — Recorded On-Chain</h3>
-      <div className="mono">matchId&nbsp;&nbsp;: {receipt.matchId}</div>
-      <div className="mono">winner&nbsp;&nbsp;&nbsp;: {short(receipt.winner)}</div>
-      <div className="mono">time&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: {new Date(receipt.timestamp).toLocaleString()}</div>
-      <div className="mono">resultHash: {receipt.resultHash?.slice(0, 24) ?? '—'}…</div>
-      <div className="mono">txHash&nbsp;&nbsp;&nbsp;: {receipt.txHash?.slice(0, 24) ?? '—'}…</div>
-      <div className="receipt-actions">
-        <a className="btn sm" href={`${API}/api/verify/${receipt.matchId}`} target="_blank" rel="noreferrer">⛓ Verify</a>
-        {onRematch && <button className="btn primary sm" onClick={onRematch}>🔁 Play Again</button>}
+    <div className="cl-result">
+      <h3>✅ Verified result — recorded on-chain</h3>
+      <div className="row cl-mono"><span>match</span><span>{receipt.matchId}</span></div>
+      <div className="row cl-mono"><span>winner</span><span>{short(receipt.winner)}</span></div>
+      <div className="row cl-mono"><span>time</span><span>{new Date(receipt.timestamp).toLocaleString()}</span></div>
+      <div className="row cl-mono"><span>result hash</span><span>{receipt.resultHash?.slice(0, 24) ?? '—'}…</span></div>
+      <div className="row cl-mono"><span>tx hash</span><span>{receipt.txHash?.slice(0, 24) ?? '—'}…</span></div>
+      <div className="cl-result-actions">
+        <a className="cl-btn sm" href={`${API}/api/verify/${receipt.matchId}`} target="_blank" rel="noreferrer">⛓ Verify</a>
+        {onRematch && <button type="button" className="cl-btn primary sm" onClick={onRematch}>🔁 Play Again</button>}
       </div>
     </div>
   );
@@ -688,13 +727,13 @@ function ChatLog({ chat, myAddr }) {
   const ref = useRef(null);
   useEffect(() => { ref.current?.scrollTo(0, ref.current.scrollHeight); }, [chat]);
   return (
-    <div className="chat-log" ref={ref}>
+    <div className="cl-chat-log" ref={ref} aria-live="polite">
       {chat.map((m, i) => (
-        <div key={i} className={`msg ${m.address === myAddr ? 'mine' : ''}`}>
-          <b>{m.from}</b> {m.text}
+        <div key={i} className={`cl-msg ${m.address === myAddr ? 'mine' : ''}`}>
+          <b>{m.address === myAddr ? 'You' : m.from}</b>{m.text}
         </div>
       ))}
-      {chat.length === 0 && <div className="muted">No messages yet</div>}
+      {chat.length === 0 && <div className="cl-empty">No messages yet — say hi.</div>}
     </div>
   );
 }
@@ -702,9 +741,9 @@ function ChatLog({ chat, myAddr }) {
 function ChatInput({ onSend }) {
   const [text, setText] = useState('');
   return (
-    <form className="chat-input" onSubmit={e => { e.preventDefault(); if (text.trim()) { onSend(text); setText(''); } }}>
-      <input value={text} onChange={e => setText(e.target.value)} placeholder="Say something…" />
-      <button className="btn sm" type="submit">Send</button>
+    <form className="cl-chat-form" onSubmit={e => { e.preventDefault(); if (text.trim()) { onSend(text); setText(''); } }}>
+      <input className="cl-input" value={text} onChange={e => setText(e.target.value)} placeholder="Say something…" maxLength={200} />
+      <button className="cl-btn primary sm" type="submit">Send</button>
     </form>
   );
 }

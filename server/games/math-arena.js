@@ -13,6 +13,10 @@ const TOTAL_ROUNDS = 8;
 const MAX_LIVES = 3;
 const POINTS = 20;
 
+// Server-side round deadline: the client gets ~10s; the server enforces this
+// after a grace period so an idle opponent cannot stall the match forever.
+export const ROUND_MS = 14000;
+
 const OPERATORS = ['+', '−', '×', '÷'];
 
 function rand(min, max) {
@@ -138,6 +142,9 @@ export function timeoutRound(game) {
   }
   return { ok: false };
 }
+
+// Alias for backwards/cross-branch compatibility
+export const timeoutMove = timeoutRound;
 
 export function botMove(game, difficulty = game.difficulty || 'medium') {
   const q = game.questions[game.round];

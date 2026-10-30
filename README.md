@@ -1,199 +1,298 @@
 # ⚔️ Web3 Battle Arena
 
-Real-time multiplayer gaming platform with Web3 player identity, real on-chain
-match recording + rewards, leaderboards, match replays and collectible
+Real-time multiplayer gaming platform featuring Web3 player identity, real on-chain
+match verification + token rewards, leaderboards, match replays, and collectible
 achievement badges.
 
-## Games
+---
 
-- **⚡ Neon Math Arena** — 3D arena duel. Both players get the same question,
-  move across the four answer tiles and lock in before the 10s clock runs
-  out. Correct answer scores, a wrong one costs a life.
-- **🧠 Memory Match** — educational decks (Flags & Countries, Math Pairs,
-  Animals, English↔Kiswahili). Cards pair two *different* representations
-  (e.g. 🇫🇷 ↔ France), so players learn while competing.
-- **⭕ Tic Tac Toe** — classic real-time duel.
+## 🎮 Games Included
 
-## Features
+- **⚡ Neon Math Arena** — 3D arena duel. Both players face identical timed questions, move across 4 answer tiles, and lock in before the 10-second timer expires. Correct answers score points; wrong answers cost lives. Playable in 3 bot difficulty tiers (**Easy**, **Medium**, **Hard**) or live multiplayer.
+- **🧠 Memory Match** — Educational card duel (Flags & Countries, Math Pairs, Animals, English ↔ Kiswahili). Cards pair distinct representations (e.g., 🇫🇷 ↔ France), testing recall and skill.
 
-- **Real-time multiplayer** — Socket.IO matchmaking queue, authoritative
-  server-side game state, spectator mode, live chat + kid-safe preset phrases
-- **Web3 identity** — every player wallet signs an EIP-191 "ownership proof"
-  (`Battle Arena login for 0x…`): MetaMask users sign with `personal_sign`,
-  while demo wallets ship a real, randomly generated secp256k1 key stored in
-  the browser. The server recovers the signer with `ethers.verifyMessage`.
-- **On-chain results** — every finished match is written to `MatchResult.sol`
-  (matchId, winner, players, move count, timestamp) and returns a receipt with
-  the real `txHash`, verifiable via `/api/verify/:matchId`
-- **ERC-20 ARENA token** — winners/draw/loss payouts (10 / 3 / 1 ARENA) are
-  minted on-chain to both human players by `ArenaToken.sol` at match end
-- **ERC-1155 badges** — achievements (First Blood, Flag Master, Memory King…)
-  are minted as 1-of-1 `ArenaBadges.sol` tokens with deterministic ids
-- **Match replay** — every finished match stores its full move list + final
-  board layout; the lobby has a ▶ Replay player that steps through the match
-  (auto-play, ⏪/⏩ scrubbing). Endpoint: `/api/replay/:matchId`
-- **Weekly leaderboard** — points mirror ARENA earned per match, bucketed by
-  ISO week; a new week starts a fresh board. `/api/leaderboard/weekly`
-- **Rewards** — ARENA tokens, XP + levels, win streaks, learning badges
-- **Daily Challenge deck** — one deck gets +15 bonus XP each day
-- **Pluggable games** — add a game = one engine file in `server/games/` +
-  one line in `server/games/index.js`
+---
 
-## Frontend pages
+## 🚀 Quick Start (All Operating Systems)
 
-The new interface is a blue-neon hub; every game can be played against a real
-matched player or a bot, and the leaderboard / on-chain panels read live
-server data (no mock rows).
+Battle Arena runs seamlessly across **Linux**, **macOS**, and **Windows**.
 
-| Route | Page | File |
-| ----- | ---- | ---- |
-| `#hub` (default) | Battle Arena hub — game cards, leaderboard, on-chain results | `client/src/pages/Hub.jsx` |
-| `#arena?mode=match\|bot` | Neon Math Arena match | `client/src/pages/Arena.jsx` |
-| `#memory?mode=match\|bot&deck=flags` | Memory Match table | `client/src/pages/MemoryMatch.jsx` |
-| `#classic` | Earlier lobby (register / login / chat / spectate) | `client/src/App.jsx` |
+### Prerequisites
 
-Quick Match puts you in the Socket.IO queue for that game and drops you into
-the match as soon as a second player joins. Play vs Bot starts an immediate
-match against `ArenaBot`. Both games produce the same verified result receipt.
+- **Node.js 18+ or 20+** installed: [https://nodejs.org](https://nodejs.org) (check with `node -v`)
+- **Git**: [https://git-scm.com](https://git-scm.com)
 
-Everything degrades gracefully: without chain env vars the server falls back
-to a simulated ledger / simulated rewards, so dev works with no blockchain.
+### 1. Clone & Install Dependencies
 
-## Tech Stack
-
-| Layer    | Tech                                                                 |
-| -------- | -------------------------------------------------------------------- |
-| Client   | React 18, Vite, ethers v6, socket.io-client, three.js, plain CSS     |
-| Server   | Node.js, Express, Socket.IO, SQLite (better-sqlite3)                 |
-| Storage  | SQLite (`server/data.sqlite`), simulated ledger fallback             |
-| Chain    | Hardhat 3 + ethers v6 — `MatchResult.sol`, `ArenaToken.sol` (ERC-20), `ArenaBadges.sol` (ERC-1155) / simulated fallback |
-
-## Prerequisites
-
-- **Node.js 20+** — https://nodejs.org
-
-## Setup (local dev, no blockchain needed)
-
-Two terminal windows — the app is two separate packages:
+From the repository root directory:
 
 ```bash
-# Terminal 1 — game server (port 3001)
-cd server
-npm install
-npm start
+git clone https://github.com/abel149/Battle-Arena-.git
+cd Battle-Arena-
 
-# Terminal 2 — web client (port 5173)
-cd client
+# Automatically installs dependencies for both server and client:
 npm install
-npm run dev
 ```
 
-Open **http://localhost:5173** in your browser. Demo wallets are generated
-with real keys and sign automatically; click *MetaMask* to use your own wallet.
+*(Alternatively, you can manually run `npm --prefix server install` and `npm --prefix client install`).*
 
-## Full on-chain mode (local Hardhat)
+### 2. Start the Blockchain Node & Game Server
+
+In your first terminal window:
 
 ```bash
-cd server
-npm run node                          # Terminal 1: Hardhat node (8545)
-
-# Terminal 2: deploy + run the server against the node
-NODE_HTTP_URL=http://127.0.0.1:8545 \
-PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
-npm run deploy:local                  # MatchResult.sol
-NODE_HTTP_URL=http://127.0.0.1:8545 \
-PRIVATE_KEY=0xac09...2ff80 \
-npm run deploy:tokens:local           # ArenaToken.sol + ArenaBadges.sol
-
-NODE_HTTP_URL=http://127.0.0.1:8545 \
-PRIVATE_KEY=0xac09...2ff80 \
-MATCH_RESULT_ADDRESS=<printed address> \
 npm start
 ```
 
-The token deployer is the contracts' `minter`; the server wallet (`PRIVATE_KEY`)
-must be the same account (or call `setMinter`) so it can mint rewards.
+> **What `npm start` does automatically:**
+> 1. Detects if a local blockchain node is running on `http://127.0.0.1:8545`. If not, it automatically boots a local **Hardhat node**.
+> 2. Automatically compiles and deploys the smart contracts:
+>    - `MatchResult.sol` (on-chain match receipts)
+>    - `ArenaToken.sol` (ERC-20 ARENA reward token)
+>    - `ArenaBadges.sol` (ERC-1155 achievement badges)
+> 3. Starts the Battle Arena backend server on port `3001` in on-chain mode.
 
-### Base Sepolia (real testnet)
+### 3. Start the Web Client
 
-Set these env vars before `deploy:*:base-sepolia` and `npm start`:
-
-```bash
-NODE_HTTP_URL=<SEPOLIA_VIA_BASE_RPC_URL>      # e.g. https://sepolia.base.org or a provider URL
-BASE_SEPOLIA_PRIVATE_KEY=<funded wallet key>  # needs Base Sepolia ETH for gas
-```
-
-Or use the equivalent `PRIVATE_KEY` / `MATCH_RESULT_ADDRESS` /
-`ARENA_TOKEN_ADDRESS` + `ARENA_BADGES_ADDRESS` form.
-
-## How to Play / Demo
-
-- **Solo** — click *🤖 Play vs Bot*
-- **Two players** — open http://localhost:5173 in **two browser windows**
-  (or normal + incognito), both click *⚡ Quick Match*
-- **Spectate** — a live match appears under *Live matches* in the other window's lobby
-- After a match: the *Verified Result* card shows the on-chain receipt with the
-  real `txHash`, minted ARENA + badge token transactions, and *⛓ Verify* opens
-  the raw ledger entry
-- **▶ Replay** — under *On-Chain Results* in the lobby, step through any past match
-
-## Tests
+In a second terminal window:
 
 ```bash
-cd server
-npm test          # node:test: game engines, store/weekly/replay, reward fallbacks
-npm run test:local   # full-stack E2E (Hardhat note: use scripts/e2e-onchain.sh)
-bash scripts/e2e-onchain.sh   # deploys on a Hardhat node, plays a bot match,
-                              # verifies receipt, replay, weekly board, token balance
+npm run client
 ```
 
-## Project Structure
+Now open **http://localhost:5173** in your web browser!
+
+---
+
+## 💻 Operating System Guides
+
+### 🐧 Linux (Ubuntu, Debian, Fedora, Arch)
+
+1. **Install Node.js & C++ Build Tools** (needed for SQLite native addon):
+   ```bash
+   # Ubuntu / Debian:
+   sudo apt update
+   sudo apt install -y build-essential python3 nodejs npm
+
+   # Recommended: Node 20 via nvm (Node Version Manager)
+   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+   nvm install 20 && nvm use 20
+   ```
+2. **If port 3001 or 8545 is busy (`EADDRINUSE`):**
+   ```bash
+   fuser -k 3001/tcp 8545/tcp 5173/tcp
+   ```
+3. **Allow LAN teammates to connect (UFW Firewall):**
+   ```bash
+   sudo ufw allow 5173/tcp
+   sudo ufw allow 3001/tcp
+   ```
+
+---
+
+### 🍎 macOS (Apple Silicon M1/M2/M3/M4 & Intel)
+
+1. **Install Xcode Command Line Tools & Node.js**:
+   ```bash
+   xcode-select --install
+   # Using Homebrew:
+   brew install node@20
+   ```
+2. **If port 3001, 8545, or 5173 is already in use:**
+   ```bash
+   lsof -ti :3001,8545,5173 | xargs kill -9
+   ```
+3. **Local Network Permission**:
+   When macOS prompts *"Node wants to find and connect to devices on your local network"*, click **Allow** so multiplayer works across LAN devices.
+
+---
+
+### 🪟 Windows (Windows 10 / 11, PowerShell, CMD, Git Bash)
+
+1. **Install Node.js 20+**:
+   - Download the LTS installer from [nodejs.org](https://nodejs.org).
+   - During installation, check the box: **"Automatically install the necessary tools (Chocolatey, Python, Visual Studio Build Tools)"** if prompted. This ensures `better-sqlite3` builds without issues.
+   - If `better-sqlite3` shows compilation errors later, open PowerShell as Administrator and run:
+     ```powershell
+     npm install --global windows-build-tools
+     ```
+     *(Or install "Desktop development with C++" via the free Visual Studio Community Installer).*
+
+2. **PowerShell Script Execution Policy**:
+   If PowerShell throws `File ... cannot be loaded because running scripts is disabled on this system`:
+   ```powershell
+   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+   ```
+
+3. **Running the App**:
+   - Open PowerShell or Git Bash:
+     ```powershell
+     # Terminal 1: Starts blockchain + game server (cross-platform npx.cmd supported)
+     npm start
+
+     # Terminal 2: Starts web client
+     npm run client
+     ```
+
+4. **Kill Stuck Ports on Windows (`EADDRINUSE`)**:
+   ```powershell
+   # Quick one-liner via npx:
+   npx kill-port 3001 8545 5173
+
+   # Or natively in PowerShell:
+   Get-Process -Id (Get-NetTCPConnection -LocalPort 3001).OwningProcess -ErrorAction SilentlyContinue | Stop-Process -Force
+   Get-Process -Id (Get-NetTCPConnection -LocalPort 8545).OwningProcess -ErrorAction SilentlyContinue | Stop-Process -Force
+   Get-Process -Id (Get-NetTCPConnection -LocalPort 5173).OwningProcess -ErrorAction SilentlyContinue | Stop-Process -Force
+   ```
+
+5. **Windows Firewall Prompt**:
+   When prompted by Windows Defender Firewall, check **Private networks** and click **Allow access**.
+
+> 💡 **Tip for Windows Users**: You can also use **WSL2** (Windows Subsystem for Linux with Ubuntu) for an identical Linux terminal experience:
+> ```bash
+> wsl --install
+> ```
+
+---
+
+## 🌐 Playing with Teammates Across Devices / LAN
+
+Battle Arena supports playing between two separate laptops, tablets, or phones connected to the same Wi-Fi network:
+
+1. **Find the host machine's Local IP address:**
+   - **Linux**: Run `hostname -I` (e.g. `192.168.1.8`)
+   - **macOS**: Run `ipconfig getifaddr en0`
+   - **Windows**: Run `ipconfig` (look for *IPv4 Address* under your active Wi-Fi adapter)
+2. **Start the server and client on the host machine:**
+   ```bash
+   npm start        # Terminal 1
+   npm run client   # Terminal 2
+   ```
+3. **On your teammate's device/laptop/phone:**
+   Open their browser and navigate to:
+   ```
+   http://<HOST_IP>:5173     (e.g., http://192.168.1.8:5173)
+   ```
+   *The client automatically resolves Socket.IO connections to `http://<HOST_IP>:3001`!*
+
+---
+
+## 🕹️ How to Play & Test Multiplayer
+
+1. **Authentication**:
+   - The app opens on a sign-in screen.
+   - Register a username and password (or click *Connect MetaMask* to bind your wallet).
+   - Works across browser refreshes and different devices.
+2. **Solo vs Bot**:
+   - Click **🤖 Play vs Bot** on Math Arena or Memory Match.
+   - Select difficulty: **Easy**, **Medium**, or **Hard**. The bot's accuracy and reaction times dynamically adjust.
+3. **Multiplayer Matchmaking (Quick Match)**:
+   - Open `http://localhost:5173` in two separate browser windows (or normal + incognito).
+   - Sign in with two different accounts.
+   - Both players click **⚡ Quick Match** on the same game to be paired instantly.
+4. **Private Game Rooms**:
+   - Player 1 clicks **Create Room** and shares the 5-character room code.
+   - Player 2 clicks **Join Room** and enters the code.
+5. **Live Spectator Mode**:
+   - Ongoing public matches appear under **Live Matches** in the lobby. Click **👁 Spectate** to watch in real-time.
+6. **On-Chain Results & Replays**:
+   - When a match ends (by knockout or score), the result banner immediately reveals the winner and rematch buttons.
+   - The transaction receipt confirms on the local Hardhat blockchain with a real transaction hash.
+   - Click **▶ Replay** under **On-Chain Results** in the lobby to scrub through past match moves.
+
+---
+
+## 🧪 Automated Testing
+
+Run the full automated test suite (28 tests covering game engines, EIP-191 verification, reward calculations, and weekly resets):
+
+```bash
+# Run unit and integration tests:
+npm test
+
+# Run socket smoke test:
+cd client && node smoke-test.mjs
+
+# Run full end-to-end on-chain bash verification:
+bash server/scripts/e2e-onchain.sh
+```
+
+---
+
+## 🛠️ Project Structure
 
 ```
-server/
-  index.js                  Socket.IO server — matchmaking, rooms, chat, results, rewards
-  store.js                  Player profiles, weekly points, match archive, SQLite
-  chain-onchain.js          MatchResult.sol integration (simulated fallback)
-  chain-tokens.js           ArenaToken/ArenaBadges reward distribution (simulated fallback)
-  contracts/
-    MatchResult.sol         On-chain match receipts
-    ArenaToken.sol          ERC-20 ARENA reward token
-    ArenaBadges.sol         ERC-1155 collectible badges
-  scripts/
-    deploy-match-result.js  Deploy the receipt contract, write match-result-address.json
-    deploy-tokens.js         Deploy token + badges, write token-address.json
-    test-onchain.mjs        Full-stack on-chain E2E
-    e2e-onchain.sh          Shell E2E incl. replay/weekly/token assertions
-    debug-match.mjs         Debug runthrough with verbose socket logs
-  games/
-    index.js                 Game registry (add games here)
-    tictactoe.js             Tic Tac Toe engine
-    memory.js                Memory Match engine
-    math-arena.js            Neon Math Arena engine (questions, lives, scoring)
-    decks.js                 Educational card decks + daily challenge
-  test/                      node:test unit suite (engines, store, tokens)
-  data.sqlite                Player DB (runtime-generated, gitignored)
-client/
-  src/App.jsx                Classic lobby (#classic): auth, chat, spectate, replay viewer
-  src/pages/Hub.jsx          Battle Arena hub (default page)
-  src/pages/Arena.jsx        Neon Math Arena live match screen
-  src/pages/MemoryMatch.jsx  Memory Match live match screen
-  src/components/ArenaPreview3D.jsx  three.js arena preview on the hub card
-  src/lib/                   Hash router + wallet/socket identity hooks
-  src/socket.js              Server connection + wallet signing (MetaMask / demo key)
-  src/styles.css             Global styling (each page has its own CSS file)
-  smoke-test.mjs             Plays a full match vs the bot over real sockets
-  debug-sock.mjs             Logs every socket event (debugging)
+Battle-Arena-/
+├── package.json               # Root scripts (start, client, dev, test, build, install:all)
+├── server/
+│   ├── index.js               # Socket.IO & Express server (matchmaking, auth, gameplay, rewards)
+│   ├── store.js               # SQLite database & player profile storage (server/data.sqlite)
+│   ├── chain-onchain.js       # Hardhat / Ethers integration for MatchResult.sol
+│   ├── chain-tokens.js        # ERC-20 ARENA & ERC-1155 Badges minting logic
+│   ├── contracts/
+│   │   ├── MatchResult.sol    # On-chain match receipts contract
+│   │   ├── ArenaToken.sol     # ERC-20 ARENA reward token contract
+│   │   └── ArenaBadges.sol    # ERC-1155 collectible achievement badges contract
+│   ├── scripts/
+│   │   ├── start-onchain.mjs  # One-step auto-runner: boots Hardhat, deploys, starts backend
+│   │   ├── deploy-match-result.js
+│   │   ├── deploy-tokens.js
+│   │   └── e2e-onchain.sh
+│   ├── games/
+│   │   ├── index.js           # Pluggable game registry
+│   │   ├── math-arena.js      # 3D Math Arena duel engine
+│   │   ├── memory.js          # Memory Match engine with bot AI
+│   │   └── decks.js           # Educational decks (Flags, Animals, Kiswahili, Math)
+│   └── test/                  # Node.js native test suite
+└── client/
+    ├── vite.config.js         # Vite configuration with 0.0.0.0 host binding
+    ├── src/
+    │   ├── socket.js          # Socket.IO client with dynamic LAN host resolution
+    │   ├── App.jsx            # Classic lobby & spectator view (#classic)
+    │   ├── pages/
+    │   │   ├── Hub.jsx        # Modern neon gaming hub (#hub)
+    │   │   ├── Arena.jsx      # 3D Neon Math Arena match interface
+    │   │   └── MemoryMatch.jsx# Memory Match duel interface
+    │   └── components/
+    │       └── ArenaPreview3D.jsx # Three.js interactive 3D preview
+    └── smoke-test.mjs         # Headless socket match validation script
 ```
 
-## Notes
+---
 
-- `node_modules/` exists in **both** `server/` and `client/` — they are two
-  independent npm packages; each needs its own `npm install`.
-- The server imports `ethers` from its devDependencies, so install with plain
-  `npm install` (not `--omit=dev`) or it will fail to boot.
-- `data.sqlite` is runtime-generated. **Delete it to reset** all players,
-  weekly points and match history for a fresh demo.
-- Bot matches (`ArenaBot`) do not earn tokens/badges; only human wallets are
-  minted to.
-- To run the socket smoke test: `cd client && node smoke-test.mjs`
+## ❓ Troubleshooting & FAQs
+
+### 1. `Error: listen EADDRINUSE: address already in use :::3001` or `8545`
+Another instance of the backend or Hardhat is still running in the background.
+- **Linux/Mac**: `fuser -k 3001/tcp 8545/tcp 5173/tcp`
+- **Windows**: `npx kill-port 3001 8545 5173`
+
+### 2. "Arena server offline — start it with 'cd server && npm start'"
+Your frontend cannot connect to port 3001. Ensure `npm start` is actively running in your first terminal.
+
+### 3. Native module compilation errors (`better-sqlite3`)
+- **Linux**: Run `sudo apt install build-essential python3`
+- **Mac**: Run `xcode-select --install`
+- **Windows**: Run `npm install --global windows-build-tools` (or install Visual Studio Community Desktop C++).
+
+### 4. How do I reset all player data, tokens, and match history?
+Delete the SQLite database file in `server/`:
+```bash
+# Linux / macOS:
+rm server/data.sqlite
+
+# Windows (PowerShell):
+Remove-Item server/data.sqlite
+```
+The server will automatically generate a fresh database on next boot.
+
+### 5. MetaMask Nonce Desync on Localhost
+If you restart the local Hardhat node, transaction nonces reset to 0. In MetaMask:
+- Go to **Settings** → **Advanced** → **Clear activity and nonce data** (or Reset Account).
+- Ensure your network RPC is set to `http://127.0.0.1:8545` with Chain ID `31337`.
+
+---
+
+## 📄 License
+
+MIT License. Crafted for decentralized competitive gaming.

@@ -30,6 +30,7 @@ import * as store from './store.js';
 const PORT = process.env.PORT || 3001;
 const BOT = '0xB07000000000000000000000000000000000000B';
 const BOT_STEP_MS = 700;
+const ROOM_RETENTION_MS = 10 * 60 * 1000; // finished rooms expire after 10 min
 
 // Shared auth message: client (MetaMask personal_sign or local key) must sign
 // exactly this string; verification is standard EIP-191 via ethers.verifyMessage.
@@ -69,6 +70,31 @@ function notifyPlayer(address, event, payload) {
   }
 }
 const liveListeners = new Set();  // socketIds in the lobby (for rooms:live push)
+const pendingRooms = new Map();   // room code -> host waiting for a friend to join
+
+const PENDING_ROOM_MS = 10 * 60 * 1000;
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I lookalikes
+
+function makeRoomCode() {
+  let code;
+  do {
+    code = Array.from({ length: 5 }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join('');
+  } while (pendingRooms.has(code));
+  return code;
+}
+
+function dropPendingRoom(code) {
+  const p = pendingRooms.get(code);
+  if (!p) return;
+  clearTimeout(p.timer);
+  pendingRooms.delete(code);
+}
+
+function dropPendingFor(socketId) {
+  for (const [code, p] of pendingRooms) {
+    if (p.hostSocketId === socketId) dropPendingRoom(code);
+  }
+}
 
 // The server uses room ids as match ids. On-chain, those are stored as bytes32.
 // The on-chain module normalizes them back to strings where possible.
@@ -377,12 +403,34 @@ function serializeRoom(room) {
 function broadcastState(room) {
   io.to(room.id).emit('game:state', { roomId: room.id, game: room.engine.serialize(room.game) });
   store.saveActiveRoom(room);
+  armRoundTimer(room);
+}
+
+// Server-enforced deadline for timed engines (Math Arena). The client also
+// runs its own countdown; this only fires when a connected player idles past
+// the deadline, so a stalling opponent can never freeze the match.
+function armRoundTimer(room) {
+  clearTimeout(room.roundTimer);
+  if (room.mathTimer) clearTimeout(room.mathTimer);
+  room.roundTimer = null;
+  const timeoutMs = room.engine.ROUND_MS || (room.gameType === 'math-arena' ? 12000 : null);
+  if (!timeoutMs || room.game.winner) return;
+  const armedRound = room.game.round;
+  room.roundTimer = setTimeout(() => {
+    room.roundTimer = null;
+    if (room.game.winner || room.game.round !== armedRound) return;
+    if (room.engine.timeoutRound) room.engine.timeoutRound(room.game);
+    else if (room.engine.timeoutMove) room.engine.timeoutMove(room.game);
+    broadcastState(room);
+    afterEngineMove(room);
+  }, timeoutMs);
+  room.mathTimer = room.roundTimer;
 }
 
 function broadcastLiveRooms() {
   if (!liveListeners.size) return;
   const list = [...rooms.values()]
-    .filter(r => !r.game.winner)
+    .filter(r => !r.game.winner && !r.private)
     .map(r => ({ roomId: r.id, gameType: r.gameType, players: r.names, spectators: r.spectators.size }));
   for (const sid of liveListeners) io.to(sid).emit('rooms:list', list);
 }
@@ -390,6 +438,8 @@ function broadcastLiveRooms() {
 async function finishRoom(room) {
   if (room.tickInterval) clearInterval(room.tickInterval);
   if (room.mathTimer) clearTimeout(room.mathTimer);
+  clearTimeout(room.roundTimer);
+  room.roundTimer = null;
   const { game } = room;
   const addrX = game.players.X;
   const addrO = game.players.O;
@@ -411,14 +461,25 @@ async function finishRoom(room) {
     });
   } catch (err) {
     console.warn('On-chain match recording failed, falling back to simulated ledger:', err.message);
-    const { recordMatchSimulated, normalizeLedgerEntry } = await import('./chain-onchain.js');
-    receipt = normalizeLedgerEntry(recordMatchSimulated({
-      matchId: room.id,
-      gameType: room.gameType,
-      players: { X: addrX, O: addrO },
-      winner: winnerAddr || 'draw',
-      moves: game.moves,
-    }));
+    try {
+      const { recordMatchSimulated, normalizeLedgerEntry } = await import('./chain-onchain.js');
+      receipt = normalizeLedgerEntry(recordMatchSimulated({
+        matchId: room.id,
+        gameType: room.gameType,
+        players: { X: addrX, O: addrO },
+        winner: winnerAddr || 'draw',
+        moves: game.moves,
+      }));
+    } catch {
+      receipt = {
+        matchId: room.id,
+        gameType: room.gameType,
+        players: { X: addrX, O: addrO },
+        winner: winnerAddr || 'draw',
+        timestamp: Date.now(),
+        error: err.message,
+      };
+    }
   }
 
   // Update stats for human players and compute on-chain reward deltas
@@ -481,7 +542,8 @@ async function finishRoom(room) {
   });
   // Clean up persisted active room and memory
   store.removeActiveRoom(room.id);
-  rooms.delete(room.id);
+  // Free finished rooms after a grace period so the map does not grow forever.
+  setTimeout(() => rooms.delete(room.id), ROOM_RETENTION_MS);
   broadcastLiveRooms();
 }
 
@@ -519,7 +581,11 @@ function afterEngineMove(room, res) {
     }, res.pendingMs);
     return;
   }
-  if (room.game.players[room.game.turn] === BOT) {
+  // Turn-based games: move when it is the bot's turn. Simultaneous games
+  // (Math Arena): the bot can lock its answer at any point in the round.
+  const botHasTurn = room.game.players[room.game.turn] === BOT;
+  const botUnanswered = !!room.game.answered && room.game.players.O === BOT && !room.game.answered.O;
+  if (botHasTurn || botUnanswered) {
     setTimeout(() => botStep(room.id), BOT_STEP_MS);
   }
 }
@@ -527,7 +593,9 @@ function afterEngineMove(room, res) {
 function botStep(roomId) {
   const room = rooms.get(roomId);
   if (!room || room.game.winner) return;
-  if (room.game.players[room.game.turn] !== BOT) return;
+  const botHasTurn = room.game.players[room.game.turn] === BOT;
+  const botUnanswered = !!room.game.answered && room.game.players.O === BOT && !room.game.answered.O;
+  if (!botHasTurn && !botUnanswered) return;
   const res = room.engine.applyMove(room.game, BOT, room.engine.botMove(room.game));
   broadcastState(room);
   afterEngineMove(room, res);
@@ -555,6 +623,7 @@ function createRoom(gameType, addrX, addrO, getSocket, opts = {}) {
     names: { [BOT]: botName },
     spectators: new Set(),
     chat: [],
+    private: !!opts.private,
   };
   rooms.set(id, room);
   store.saveActiveRoom(room);
@@ -602,29 +671,93 @@ function createRoom(gameType, addrX, addrO, getSocket, opts = {}) {
   }
 
   broadcastLiveRooms();
+  armRoundTimer(room); // first round starts now — no broadcastState happened yet
   return room;
+}
+
+// If this socket holds a player seat in a live room, that player forfeits:
+// the remaining player is declared the winner and the match completes
+// normally (on-chain record, stats, rewards).
+function maybeForfeit(socket) {
+  for (const room of rooms.values()) {
+    if (room.game.winner) continue;
+    const addr = Object.keys(room.sockets).find(a => room.sockets[a] === socket.id);
+    if (!addr) continue;
+    const seat = room.game.players.X === addr ? 'X' : room.game.players.O === addr ? 'O' : null;
+    if (!seat) continue;
+    room.game.winner = seat === 'X' ? 'O' : 'X';
+    broadcastState(room);
+    finishRoom(room);
+  }
 }
 
 // ---- Socket.IO ----
 // The on-chain module is intentionally disconnected from game logic. It only
 // records finished matches and distributes rewards. Game state, matchmaking,
 // chat, and spectators remain server-side.
+// Playing requires a registered account. Guests may connect and register/log in,
+// but cannot queue, create/join rooms or start bot matches.
+function accountOf(socket) {
+  const address = socketPlayer.get(socket.id);
+  if (address && store.isRegistered(address)) return address;
+  socket.emit('player:error', { error: 'Log in or create an account to play.', code: 'AUTH_REQUIRED' });
+  return null;
+}
+
+// Binds a verified address to this socket and tells the client who it is.
+// Unregistered (guest) wallets get no database row — only registering creates one.
+function bindIdentity(socket, address) {
+  socketPlayer.set(socket.id, address);
+  const profile = store.getPlayer(address);
+  if (profile) socket.emit('player:update', store.withoutPassword(profile));
+  const registered = store.isRegistered(address);
+  socket.emit('player:registered', registered);
+  if (registered) {
+    socket.emit('player:registered:user', { address, username: profile.username, name: profile.name });
+  }
+}
+
+// Throttle password guessing: 8 failed logins per IP in 10 minutes.
+const LOGIN_WINDOW_MS = 10 * 60 * 1000;
+const LOGIN_MAX_FAILS = 8;
+const loginFails = new Map(); // ip -> { count, resetAt }
+const loginBlocked = ip => {
+  const f = loginFails.get(ip);
+  if (!f || Date.now() > f.resetAt) { loginFails.delete(ip); return false; }
+  return f.count >= LOGIN_MAX_FAILS;
+};
+const noteLoginFail = ip => {
+  const f = loginFails.get(ip);
+  if (!f || Date.now() > f.resetAt) loginFails.set(ip, { count: 1, resetAt: Date.now() + LOGIN_WINDOW_MS });
+  else f.count += 1;
+};
+
 io.on('connection', (socket) => {
   liveListeners.add(socket.id);
 
-  socket.on('identify', async ({ address, name, signature } = {}) => {
-    if (!address) return socket.emit('player:error', { error: 'Not identified: no address provided' });
-    // Require a signed message to prove wallet ownership
-    if (!signature || typeof signature !== 'string' || !signature.trim()) return socket.emit('player:error', { error: 'Not identified: signature required (got: ' + JSON.stringify(signature) + ')' });
-    if (!verifyAuthSignature(signature, address)) return socket.emit('player:error', { error: 'Not identified: invalid signature' });
-    // Address verified via signature — now treat as authenticated
-    socketPlayer.set(socket.id, address);
-    const profile = store.getPlayer(address) || store.upsertPlayer(address, name);
-    socket.emit('player:update', store.withoutPassword(profile));
-    socket.emit('player:registered', store.isRegistered(address));
-    if (store.isRegistered(address)) {
-      socket.emit('player:registered:user', { address, username: profile.username, name: profile.name });
+  // Two ways to identify: a session token (after login/registration, works from
+  // any browser) or a wallet signature (guest wallets, MetaMask).
+  socket.on('identify', ({ address, signature, token } = {}) => {
+    if (token) {
+      const sessionAddress = store.addressForSession(token);
+      if (!sessionAddress) return socket.emit('auth:expired');
+      bindIdentity(socket, sessionAddress);
+      // Auto-resume active match on reconnect/refresh/restart
+      for (const room of rooms.values()) {
+        if (!room.game.winner && (room.game.players.X === sessionAddress || room.game.players.O === sessionAddress)) {
+          room.sockets[sessionAddress] = socket.id;
+          socket.join(room.id);
+          socket.emit('match:resumed', serializeRoom(room));
+          socket.emit('game:state', { roomId: room.id, game: room.engine.serialize(room.game) });
+          break;
+        }
+      }
+      return;
     }
+    if (!address) return socket.emit('player:error', { error: 'Not identified: no address provided' });
+    if (!signature || typeof signature !== 'string' || !signature.trim()) return socket.emit('player:error', { error: 'Not identified: signature required' });
+    if (!verifyAuthSignature(signature, address)) return socket.emit('player:error', { error: 'Not identified: invalid signature' });
+    bindIdentity(socket, address);
 
     // Auto-resume active match on reconnect/refresh/restart
     for (const room of rooms.values()) {
@@ -638,28 +771,42 @@ io.on('connection', (socket) => {
     }
   });
 
+  const authSuccess = (result) => {
+    const token = store.createSession(result.address);
+    socket.emit('auth:success', { address: result.address, username: result.username, name: result.name, token });
+  };
+
   // Register a new player identity (wallet + username + password + optional email)
-  socket.on('player:register', async ({ username, name, email, password }) => {
+  socket.on('player:register', async ({ username, name, email, password } = {}) => {
     const address = socketPlayer.get(socket.id);
     if (!address) return socket.emit('player:error', { error: 'Not identified' });
     const result = await store.registerPlayer(address, { name, username, email, password });
     if (result.error) return socket.emit('player:error', { error: result.error, conflict: result.conflict });
-    const safeProfile = store.withoutPassword(result);
-    socket.emit('player:update', safeProfile);
-    socket.emit('player:registered', true);
-    socket.emit('auth:success', { address: result.address, username: result.username, name: result.name });
-    socket.emit('player:registered:user', { address: result.address, username: result.username, name: result.name });
+    bindIdentity(socket, result.address);
+    authSuccess(result);
   });
 
   // Log in by username + password (wallet resolved from the username index).
   socket.on('player:loginByCredentials', async ({ username, password } = {}) => {
+    const ip = socket.handshake.address;
+    if (loginBlocked(ip)) return socket.emit('player:error', { error: 'Too many failed attempts. Try again in a few minutes.' });
     const result = await store.loginPlayerByCredentials({ username, password });
-    if (result.error) return socket.emit('player:error', { error: result.error });
-    socketPlayer.set(socket.id, result.address);
-    socket.emit('player:update', store.withoutPassword(result));
-    socket.emit('player:registered', true);
-    socket.emit('player:registered:user', { address: result.address, username: result.username, name: result.name });
-    socket.emit('auth:success', { address: result.address, username: result.username, name: result.name });
+    if (result.error) {
+      noteLoginFail(ip);
+      return socket.emit('player:error', { error: result.error });
+    }
+    loginFails.delete(ip);
+    bindIdentity(socket, result.address);
+    authSuccess(result);
+  });
+
+  socket.on('auth:logout', ({ token } = {}) => {
+    store.deleteSession(token);
+    socketPlayer.delete(socket.id);
+    dropPendingFor(socket.id);
+    const i = queue.findIndex(q => q.socketId === socket.id);
+    if (i !== -1) queue.splice(i, 1);
+    socket.emit('player:registered', false);
   });
 
   // Log in / claim an existing wallet as a registered identity.
@@ -676,9 +823,9 @@ io.on('connection', (socket) => {
     socket.emit('player:registered:user', { address: result.address, username: result.username, name: result.name });
   });
 
-  socket.on('queue:join', ({ gameType, inviteCode } = {}) => {
-    const address = socketPlayer.get(socket.id);
-    const type = ENGINES[gameType] ? gameType : 'tic-tac-toe';
+  socket.on('queue:join', ({ gameType, deck, inviteCode } = {}) => {
+    const address = accountOf(socket) || socketPlayer.get(socket.id);
+    const type = ENGINES[gameType] ? gameType : 'memory';
     if (!address || queue.some(q => q.socketId === socket.id)) return;
     const p = store.getPlayer(address) || store.upsertPlayer(address);
     if ((p.energy ?? 5) <= 0) {
@@ -687,8 +834,9 @@ io.on('connection', (socket) => {
         needsEnergy: true,
       });
     }
+    dropPendingFor(socket.id);
     const cleanInvite = inviteCode ? String(inviteCode).trim().toUpperCase().slice(0, 8) : null;
-    queue.push({ socketId: socket.id, gameType: type, inviteCode: cleanInvite });
+    queue.push({ socketId: socket.id, gameType: type, deck, inviteCode: cleanInvite });
     socket.emit('queue:waiting', { gameType: type, inviteCode: cleanInvite });
 
     // Pair the first two players waiting for the same game & invite code
@@ -722,18 +870,63 @@ io.on('connection', (socket) => {
         addrA,
         addrB,
         addr => [sockA, sockB].find(s => socketPlayer.get(s.id) === addr),
+        { deck: a.deck },
       );
     }
   });
 
+  // Also cancels a waiting private room — pages emit this when the player leaves.
   socket.on('queue:leave', () => {
     const i = queue.findIndex(q => q.socketId === socket.id);
     if (i !== -1) queue.splice(i, 1);
+    dropPendingFor(socket.id);
+  });
+
+  // ---- Private rooms: host gets a short code, a friend joins with it ----
+  socket.on('room:create', ({ gameType, deck, pairs } = {}) => {
+    const address = accountOf(socket);
+    if (!address) return;
+    const type = ENGINES[gameType] ? gameType : 'memory';
+    const qi = queue.findIndex(q => q.socketId === socket.id);
+    if (qi !== -1) queue.splice(qi, 1);
+    dropPendingFor(socket.id); // one waiting room per player
+    const code = makeRoomCode();
+    const timer = setTimeout(() => {
+      pendingRooms.delete(code);
+      io.to(socket.id).emit('room:expired', { code });
+    }, PENDING_ROOM_MS);
+    pendingRooms.set(code, { code, gameType: type, deck, pairs, hostSocketId: socket.id, hostAddr: address, timer });
+    socket.emit('room:waiting', { code, gameType: type });
+  });
+
+  socket.on('room:join', ({ code } = {}) => {
+    const address = accountOf(socket);
+    if (!address) return;
+    const key = String(code || '').trim().toUpperCase();
+    const pending = pendingRooms.get(key);
+    if (!pending) return socket.emit('player:error', { error: 'Room not found. Check the code and try again.' });
+    if (pending.hostAddr === address) return socket.emit('player:error', { error: 'That is your own room — share the code with a friend.' });
+    const hostSocket = io.sockets.sockets.get(pending.hostSocketId);
+    if (!hostSocket) {
+      dropPendingRoom(key);
+      return socket.emit('player:error', { error: 'The host has left this room.' });
+    }
+    dropPendingRoom(key);
+    const qi = queue.findIndex(q => q.socketId === socket.id);
+    if (qi !== -1) queue.splice(qi, 1);
+    dropPendingFor(socket.id);
+    createRoom(
+      pending.gameType,
+      pending.hostAddr,
+      address,
+      addr => [hostSocket, socket].find(s => socketPlayer.get(s.id) === addr),
+      { deck: pending.deck, pairs: pending.pairs, private: true },
+    );
   });
 
   socket.on('match:bot', ({ gameType, deck, pairs, difficulty } = {}) => {
-    const address = socketPlayer.get(socket.id);
-    const type = ENGINES[gameType] ? gameType : 'tic-tac-toe';
+    const address = accountOf(socket);
+    const type = ENGINES[gameType] ? gameType : 'memory';
     if (!address) return;
     const p = store.getPlayer(address) || store.upsertPlayer(address);
     if ((p.energy ?? 5) <= 0) {
@@ -817,6 +1010,9 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId);
     const address = socketPlayer.get(socket.id);
     if (!room || !address || !text?.trim()) return;
+    // Only players and spectators of this room may post to its chat.
+    const member = room.sockets[address] === socket.id || room.spectators.has(socket.id);
+    if (!member) return;
     const cleanText = sanitizeChatMessage(text);
     if (!cleanText) return;
     const msg = {
@@ -846,18 +1042,8 @@ io.on('connection', (socket) => {
   socket.on('match:leave', ({ roomId }) => {
     socket.leave(roomId);
     const room = rooms.get(roomId);
-    if (room) {
-      room.spectators.delete(socket.id);
-      const address = socketPlayer.get(socket.id);
-      if (address && (room.game.players.X === address || room.game.players.O === address)) {
-        if (room.tickInterval) clearInterval(room.tickInterval);
-        if (!room.game.winner) {
-          const winnerSeat = room.game.players.X === address ? 'O' : 'X';
-          room.game.winner = winnerSeat;
-          finishRoom(room);
-        }
-      }
-    }
+    if (room) room.spectators.delete(socket.id);
+    maybeForfeit(socket); // a player leaving mid-match loses the match
     broadcastLiveRooms();
   });
 
@@ -866,17 +1052,8 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     const i = queue.findIndex(q => q.socketId === socket.id);
     if (i !== -1) queue.splice(i, 1);
-    const address = socketPlayer.get(socket.id);
-    if (address) {
-      for (const room of rooms.values()) {
-        if (!room.game.winner && (room.game.players.X === address || room.game.players.O === address)) {
-          if (room.tickInterval) clearInterval(room.tickInterval);
-          const winnerSeat = room.game.players.X === address ? 'O' : 'X';
-          room.game.winner = winnerSeat;
-          finishRoom(room);
-        }
-      }
-    }
+    dropPendingFor(socket.id);
+    maybeForfeit(socket);
     socketPlayer.delete(socket.id);
     liveListeners.delete(socket.id);
   });
@@ -935,7 +1112,7 @@ function restoreActiveRooms() {
 
 restoreActiveRooms();
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Battle Arena server on http://localhost:${PORT}`);
   console.log(isOnchain()
     ? 'On-chain match recording ENABLED (MatchResult.sol)'

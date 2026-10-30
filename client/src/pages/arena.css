@@ -1197,6 +1197,17 @@
 }
 .receipt-link:hover { text-decoration: underline; }
 
+.receipt-link.recording {
+  color: #7fa7cc;
+  font-style: italic;
+  text-decoration: none;
+}
+
+.reward-tag {
+  color: #fbbf24;
+  font-weight: 700;
+}
+
 .final-actions {
   display: flex;
   flex-wrap: wrap;

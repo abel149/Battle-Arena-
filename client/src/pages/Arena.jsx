@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { API, socket, signAndIdentify } from '../socket.js';
 import { navigate, useRoute } from '../lib/router.js';
 import { short, useProfile } from '../lib/session.js';
+import RoomCode from '../components/RoomCode.jsx';
 import MatchChat from '../components/MatchChat.jsx';
 import './arena.css';
 
@@ -22,9 +23,10 @@ const otherSeat = seat => (seat === 'X' ? 'O' : 'X');
 export default function Arena() {
   const route = useRoute();
   const modeParam = route.params.get('mode');
-  const mode = modeParam === 'bot' ? 'bot' : modeParam === 'watch' ? 'watch' : 'match';
+  const mode = ['bot', 'watch', 'create', 'join'].includes(modeParam) ? modeParam : 'match';
   const watchRoom = route.params.get('room');
   const inviteCode = route.params.get('invite');
+  const joinCode = (route.params.get('code') || route.params.get('invite') || '').toUpperCase();
   const rawDiff = route.params.get('difficulty');
   const initialDiff = ['easy', 'medium', 'hard'].includes(rawDiff) ? rawDiff : 'medium';
   const [difficulty, setDifficulty] = useState(initialDiff);
@@ -33,6 +35,7 @@ export default function Arena() {
   const [room, setRoom] = useState(null);          // { roomId, names, gameType }
   const [game, setGame] = useState(null);
   const [queued, setQueued] = useState(false);
+  const [roomCode, setRoomCode] = useState(null);  // private room code while waiting for a friend
   const [error, setError] = useState(null);
   const [receipt, setReceipt] = useState(null);
   const [tile, setTile] = useState(2);
@@ -65,14 +68,18 @@ export default function Arena() {
 
   /* ------------------------------ connection ------------------------------ */
   useEffect(() => {
-    function start() {
-      signAndIdentify(wallet);
+    async function start() {
+      await signAndIdentify(wallet);
       if (mode === 'watch' && watchRoom) {
         socket.emit('spectate', { roomId: watchRoom });
       } else if (mode === 'bot') {
         socket.emit('match:bot', { gameType: 'math-arena', difficulty });
+      } else if (mode === 'create') {
+        socket.emit('room:create', { gameType: 'math-arena' });
+      } else if (mode === 'join') {
+        socket.emit('room:join', { code: joinCode });
       } else {
-        socket.emit('queue:join', { gameType: 'math-arena', inviteCode });
+        socket.emit('queue:join', { gameType: 'math-arena', inviteCode: inviteCode || joinCode });
         setQueued(true);
       }
     }
@@ -80,7 +87,7 @@ export default function Arena() {
     else socket.once('connect', start);
     return () => socket.off('connect', start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, watchRoom, inviteCode]);
+  }, [mode, watchRoom, inviteCode, joinCode]);
 
   useEffect(() => {
     const onStart = data => {
@@ -91,6 +98,7 @@ export default function Arena() {
       setRoom(next);
       setGame(data.game);
       setQueued(false);
+      setRoomCode(null);
       setReceipt(null);
       setError(null);
       setOppTile(3);
@@ -107,7 +115,9 @@ export default function Arena() {
       setReceipt({ ...(data.receipt || {}), winner: data.winner, result: data.result });
     };
     const onWaiting = () => setQueued(true);
-    const onError = msg => setError(msg);
+    const onRoomWaiting = ({ code }) => setRoomCode(code);
+    const onRoomExpired = () => { setRoomCode(null); setError('This room expired. Go back and create a new one.'); };
+    const onError = msg => setError(typeof msg === 'string' ? msg : msg?.error || 'Something went wrong');
     const onMatchError = data => {
       setError(data?.error || 'Match error');
       setQueued(false);
@@ -117,7 +127,10 @@ export default function Arena() {
     socket.on('game:state', onState);
     socket.on('match:end', onEnd);
     socket.on('queue:waiting', onWaiting);
+    socket.on('room:waiting', onRoomWaiting);
+    socket.on('room:expired', onRoomExpired);
     socket.on('game:error', onError);
+    socket.on('player:error', onError);
     socket.on('match:error', onMatchError);
 
     return () => {
@@ -125,13 +138,26 @@ export default function Arena() {
       socket.off('game:state', onState);
       socket.off('match:end', onEnd);
       socket.off('queue:waiting', onWaiting);
+      socket.off('room:waiting', onRoomWaiting);
+      socket.off('room:expired', onRoomExpired);
       socket.off('game:error', onError);
+      socket.off('player:error', onError);
       socket.off('match:error', onMatchError);
       const r = roomRef.current;
       socket.emit('queue:leave');
       if (r?.roomId) socket.emit('match:leave', { roomId: r.roomId });
     };
   }, []);
+
+  // Bot, create and join answer within moments. Silence means the server is down
+  // or still running old code — say so instead of spinning forever.
+  useEffect(() => {
+    if (mode === 'match' || game || roomCode || error) return;
+    const id = setTimeout(() => setError(
+      'The arena server did not respond. Restart it ("npm start" in the server folder) so it runs the latest code.'
+    ), 6000);
+    return () => clearTimeout(id);
+  }, [mode, game, roomCode, error]);
 
   useEffect(() => {
     document.title = 'Neon Math Arena — Battle Arena';
@@ -168,11 +194,14 @@ export default function Arena() {
   }, [game?.question]);
 
   /* -------------------------------- rounds -------------------------------- */
+  // Boolean on purpose: `game.question` is a brand-new object on every broadcast,
+  // so depending on it would restart the clock each time the rival locks in.
+  const hasQuestion = !!game?.question;
   // Reset position + clock for every new question.
   useEffect(() => {
-    if (!game?.question) return;
+    if (!hasQuestion) return;
     setTimeLeft(ROUND_SECONDS);
-  }, [game?.round, game?.question]);
+  }, [game?.round, hasQuestion]);
 
   // When the round result closes, both players return to their start tiles.
   useEffect(() => {
@@ -185,14 +214,24 @@ export default function Arena() {
   }, [reveal]);
 
   // Show the previous round result for a moment before playing on.
+  // The hide-timer lives in a ref and is NOT cleared by this effect's cleanup:
+  // every game:state broadcast (bot lock-in, chat/spectator refresh...) hands us a
+  // new `lastResult` object, and a cleanup would cancel the timer while the early
+  // return below never re-arms it — leaving the popup stuck forever.
+  const revealTimer = useRef(null);
   useEffect(() => {
     const last = game?.lastResult;
     if (!last || last.round === revealRound.current) return;
     revealRound.current = last.round;
     setReveal(last);
-    const id = setTimeout(() => setReveal(null), 1900);
-    return () => clearTimeout(id);
-  }, [game?.lastResult]);
+    clearTimeout(revealTimer.current);
+    revealTimer.current = setTimeout(() => {
+      revealTimer.current = null;
+      setReveal(null);
+    }, 1900);
+  }, [game?.lastResult?.round]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => () => clearTimeout(revealTimer.current), []);
 
   // The server clears picks as soon as a round resolves, so the rival's tile is
   // read from the round result — otherwise P2 would never leave its start tile.
@@ -223,7 +262,7 @@ export default function Arena() {
   useEffect(() => { answerRef.current = answer; }, [answer]);
 
   useEffect(() => {
-    if (!game?.question || game.winner || reveal) return;
+    if (!hasQuestion || game.winner || reveal) return;
     setTimeLeft(ROUND_SECONDS);
     let left = ROUND_SECONDS;
     const id = setInterval(() => {
@@ -235,7 +274,7 @@ export default function Arena() {
       }
     }, 1000);
     return () => clearInterval(id);
-  }, [game?.round, game?.question, game?.winner, reveal]);
+  }, [game?.round, hasQuestion, game?.winner, reveal]);
 
   function movePlayer(dir) {
     if (locked || !game?.question || game.winner || reveal) return;
@@ -429,7 +468,7 @@ export default function Arena() {
           <div className="stage-hint">
             <span className={`hint-pill ${locked ? 'on' : ''}`}>
               {game?.winner
-                ? 'Match complete'
+                ? (game.winner === mySeat ? '🏆 Victory!' : game.winner === 'draw' ? '🤝 Match Drawn' : '⚔️ Defeat')
                 : locked
                   ? 'Answer locked — waiting for your rival'
                   : 'Move with WASD, then lock in the tile you stand on'}
@@ -438,7 +477,7 @@ export default function Arena() {
 
           {error && <div className="arena-toast">{error}</div>}
 
-          {reveal && q && (
+          {reveal && shownQ && !game?.winner && (
             <RoundResult
               result={reveal}
               question={shownQ}
@@ -448,7 +487,7 @@ export default function Arena() {
             />
           )}
 
-          {receipt && game && (
+          {(game?.winner || receipt) && game && (
             <MatchResult
               game={game}
               mySeat={mySeat}
@@ -464,7 +503,7 @@ export default function Arena() {
           )}
         </div>
 
-        {mode === 'match' && room?.roomId && (
+        {mode !== 'bot' && room?.roomId && (
           <MatchChat roomId={room.roomId} myAddress={wallet.address} />
         )}
 
@@ -507,8 +546,8 @@ export default function Arena() {
 
       {!game && (
         <Waiting
-          bot={mode === 'bot'}
-          queued={queued}
+          mode={mode}
+          code={roomCode}
           error={error}
           inviteCode={inviteCode}
           onSwitchToBot={() => navigate(`arena?mode=bot&difficulty=${difficulty}`)}
@@ -521,9 +560,17 @@ export default function Arena() {
 
 /* ------------------------------- components ------------------------------ */
 
-function Waiting({ bot, error, onCancel, inviteCode, onSwitchToBot }) {
+const WAITING_COPY = {
+  bot: ['Warming up the bot', 'Your rival is stepping onto the arena floor…'],
+  watch: ['Spectator Mode', 'Connecting to the live arena match…'],
+  create: ['Room ready', 'Share this code with a friend — the match starts as soon as they join.'],
+  join: ['Joining room', 'Connecting you to your friend’s room…'],
+  match: ['Finding an opponent', 'Waiting for another player to join Neon Math Arena. Send your invite link to duel directly:'],
+};
+
+function Waiting({ mode, code, error, onCancel, inviteCode, onSwitchToBot }) {
   const [copied, setCopied] = useState(false);
-  const shareCode = inviteCode || (typeof window !== 'undefined' ? (window.arenaInviteCode ??= Math.random().toString(36).slice(2, 6).toUpperCase()) : 'MATH');
+  const shareCode = code || inviteCode || (typeof window !== 'undefined' ? (window.arenaInviteCode ??= Math.random().toString(36).slice(2, 6).toUpperCase()) : 'MATH');
   const inviteUrl = typeof window !== 'undefined'
     ? `${window.location.origin}${window.location.pathname}#arena?mode=match&invite=${shareCode}`
     : '';
@@ -535,35 +582,29 @@ function Waiting({ bot, error, onCancel, inviteCode, onSwitchToBot }) {
     }).catch(() => {});
   }
 
+  const [title, text] = WAITING_COPY[mode] || WAITING_COPY.match;
+
   return (
     <div className="waiting-overlay">
       <div className="waiting-card">
         <div className="waiting-spinner" aria-hidden="true" />
-        <h2>{error ? 'Match error' : bot ? 'Warming up the bot' : inviteCode ? `Friend Match (${inviteCode})` : 'Finding an opponent'}</h2>
-        <p>
-          {error ||
-            (bot
-              ? 'Your rival is stepping onto the arena floor…'
-              : inviteCode
-                ? 'Waiting for your friend to enter this private match room…'
-                : 'Waiting for another player. Send your invite link to a friend to duel directly:')}
-        </p>
-
-        {!bot && !error && (
+        <h2>{error ? 'Match error' : title}</h2>
+        <p>{error || text}</p>
+        {!error && mode === 'create' && code && <RoomCode code={code} />}
+        {!error && (mode === 'match' || inviteCode) && (
           <div className="waiting-invite-box">
             <button type="button" className="btn-copy-invite" onClick={copyInvite}>
               {copied ? '✓ Friend Link Copied!' : '👥 Copy Friend Invite Link'}
             </button>
           </div>
         )}
-
         <div className="waiting-actions-row">
-          {!bot && onSwitchToBot && (
+          {mode !== 'bot' && onSwitchToBot && (
             <button type="button" className="btn-bot-fallback" onClick={onSwitchToBot}>
               🤖 Play vs Bot
             </button>
           )}
-          <button type="button" className="lock-btn" onClick={onCancel}>Cancel</button>
+          <button type="button" className="lock-btn" onClick={onCancel}>{error ? 'Back to hub' : 'Cancel'}</button>
         </div>
       </div>
     </div>
@@ -648,19 +689,29 @@ function MatchResult({ game, mySeat, myName, oppName, receipt, onPlayAgain, canR
   const draw = winner === 'draw';
   const myScore = game.scores?.[mySeat] ?? 0;
   const oppScore = game.scores?.[mySeat === 'X' ? 'O' : 'X'] ?? 0;
+  const myLives = game.lives?.[mySeat] ?? 0;
+  const oppLives = game.lives?.[mySeat === 'X' ? 'O' : 'X'] ?? 0;
+
+  const oppKnockedOut = oppLives <= 0;
+  const meKnockedOut = myLives <= 0;
+  const subtitle = oppKnockedOut
+    ? `${oppName} ran out of health!`
+    : meKnockedOut
+      ? 'You ran out of health!'
+      : 'All rounds complete!';
 
   return (
     <div className="match-overlay">
       <div className={`final-card ${iWon ? 'p1' : draw ? 'draw' : 'p2'}`}>
         <div className="final-trophy"><TrophyIcon /></div>
-        <div className="final-eyebrow">Match over</div>
+        <div className="final-eyebrow">{subtitle}</div>
         <h2>{draw ? 'It’s a draw!' : iWon ? `${myName} wins!` : `${oppName} wins!`}</h2>
         <div className="final-score">
           <span className="p1">{myScore}</span>
           <span className="vs">FINAL</span>
           <span className="p2">{oppScore}</span>
         </div>
-        {receipt && (
+        {receipt ? (
           <a
             className="receipt-link"
             href={`${API}/api/verify/${receipt.matchId}`}
@@ -669,7 +720,14 @@ function MatchResult({ game, mySeat, myName, oppName, receipt, onPlayAgain, canR
             title={`Verify ${receipt.matchId}`}
           >
             ⛓ On-chain: {short(receipt.txHash || receipt.matchId)}
+            {receipt.rewards && receipt.rewards[game.players?.[mySeat]]?.tokens ? (
+              <span className="reward-tag"> (+{receipt.rewards[game.players[mySeat]].tokens} ARENA)</span>
+            ) : null}
           </a>
+        ) : (
+          <div className="receipt-link recording">
+            ⛓ Confirming on blockchain…
+          </div>
         )}
         {canRematch && onSelectDifficulty && (
           <div className="rematch-difficulty">
@@ -689,10 +747,12 @@ function MatchResult({ game, mySeat, myName, oppName, receipt, onPlayAgain, canR
           </div>
         )}
         <div className="final-actions">
-          {canRematch && (
-            <button type="button" className="lock-btn" onClick={onPlayAgain}>Play again</button>
-          )}
-          <button type="button" className="lock-btn ghost" onClick={onLeave}>Back to hub</button>
+          <button type="button" className="lock-btn" onClick={onPlayAgain}>
+            {canRematch ? 'Play again' : 'Play another match'}
+          </button>
+          <button type="button" className="lock-btn ghost" onClick={onLeave}>
+            Back to hub
+          </button>
         </div>
       </div>
     </div>

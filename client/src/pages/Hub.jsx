@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { API, socket, signAndIdentify } from '../socket.js';
+import { API, socket, logout } from '../socket.js';
 import { navigate } from '../lib/router.js';
 import { saveWallet, short, useProfile, clearWalletSession } from '../lib/session.js';
 import ArenaPreview3D from '../components/ArenaPreview3D.jsx';
@@ -8,6 +8,7 @@ import SkinLockerModal from '../components/SkinLockerModal.jsx';
 import ParentApprovalModal from '../components/ParentApprovalModal.jsx';
 import ReplayModal from '../components/ReplayModal.jsx';
 import AccountModal from '../components/AccountModal.jsx';
+import JoinRoomModal from '../components/JoinRoomModal.jsx';
 import './hub.css';
 
 const DEFAULT_DECK = 'flags';
@@ -34,8 +35,8 @@ export default function Hub() {
   const [celebrationToast, setCelebrationToast] = useState(null);
   const [showEnergyModal, setShowEnergyModal] = useState(false);
   const [loadError, setLoadError] = useState(null);
-  const [liveRooms, setLiveRooms] = useState([]);  const [registered, setRegistered] = useState(false);
-  const [showAuth, setShowAuth] = useState(false);
+  const [joinGame, setJoinGame] = useState(null); // 'arena' | 'memory' | null
+  const [liveRooms, setLiveRooms] = useState([]);
 
   function tryPlay(path) {
     if ((profile?.energy ?? 5) <= 0) {
@@ -80,27 +81,8 @@ export default function Hub() {
     };
   }, [refresh]);
 
-  async function connectMetaMask() {
-    if (!window.ethereum) {
-      setLoadError('MetaMask is not installed in this browser.');
-      return;
-    }
-    try {
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      if (accounts?.[0]) {
-        const next = { ...wallet, address: accounts[0], source: 'metamask' };
-        setWallet(next);
-        saveWallet(next);
-        signAndIdentify(next);
-      }
-    } catch {
-      setLoadError('MetaMask connection was cancelled.');
-    }
-  }
-
-  // The server tells us when this socket is logged in to a registered account.
+  // The server tells us which account this socket is logged in to.
   useEffect(() => {
-    const onRegistered = yes => setRegistered(!!yes);
     const onUser = u => {
       if (!u?.address) return;
       setWallet(cur => {
@@ -111,20 +93,14 @@ export default function Hub() {
         return next;
       });
     };
-    socket.on('player:registered', onRegistered);
     socket.on('player:registered:user', onUser);
-    return () => {
-      socket.off('player:registered', onRegistered);
-      socket.off('player:registered:user', onUser);
-    };
+    return () => socket.off('player:registered:user', onUser);
   }, [setWallet]);
 
-  // Logging out just hands this browser a fresh guest wallet.
-  function logout() {
+  function handleLogout() {
     clearWalletSession();
-    window.location.reload();
+    logout();
   }
-
   // Matches in progress. The server pushes this whenever a room starts, ends or gains a viewer.
   useEffect(() => {
     const onList = list => setLiveRooms(Array.isArray(list) ? list : []);
@@ -186,16 +162,12 @@ export default function Hub() {
           <a className="mm-btn ghost" href="#classic" title="Classic lobby with live chat and spectator mode">
             💬 Chat & Spectate
           </a>
-          {registered ? (
-            <button type="button" className="mm-btn" onClick={logout}>Log out</button>
-          ) : (
-            <button type="button" className="mm-btn" onClick={() => setShowAuth(true)}>Log in</button>
-          )}
-          <button type="button" className="mm-btn" onClick={connectMetaMask}>MetaMask</button>
+          {profile?.username && <span className="user-pill">@{profile.username}</span>}
           <button type="button" className="mm-btn key-vault-btn" onClick={() => setShowAccountModal(true)} title="Backup, view keys, or restore account">
             🔑 Keys & Vault
           </button>
-          <span className="addr-pill" title={wallet.address}>{short(wallet.address)}</span>
+          <span className="addr-pill" title={`Profile ID ${wallet.address}`}>{short(wallet.address)}</span>
+          <button type="button" className="mm-btn" onClick={handleLogout}>Log out</button>
         </div>
       </header>
 
@@ -273,6 +245,12 @@ export default function Hub() {
             </button>
             <button type="button" className="btn-bot" onClick={() => tryPlay(`arena?mode=bot&difficulty=${mathDiff}`)}>
               <GamepadIcon /> Play vs Bot
+            </button>
+            <button type="button" className="btn-bot" onClick={() => navigate('arena?mode=create')}>
+              <PlusIcon /> Create Room
+            </button>
+            <button type="button" className="btn-bot" onClick={() => setJoinGame('arena')}>
+              <KeyIcon /> Join Room
             </button>
           </div>
         </section>
@@ -419,6 +397,12 @@ export default function Hub() {
             <button type="button" className="btn-bot" onClick={() => tryPlay(`blaster?mode=bot&difficulty=${blasterDiff}`)}>
               <GamepadIcon /> Play vs Bot
             </button>
+            <button type="button" className="btn-bot" onClick={() => navigate(`memory?mode=create&deck=${deck}`)}>
+              <PlusIcon /> Create Room
+            </button>
+            <button type="button" className="btn-bot" onClick={() => setJoinGame('memory')}>
+              <KeyIcon /> Join Room
+            </button>
           </div>
         </section>
 
@@ -517,8 +501,6 @@ export default function Hub() {
         </div>
       )}
 
-      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
-
       {showSkinLocker && (
         <SkinLockerModal
           kidAddress={wallet?.address}
@@ -549,6 +531,19 @@ export default function Hub() {
         <ReplayModal
           matchId={replayMatchId}
           onClose={() => setReplayMatchId(null)}
+        />
+      )}
+
+      {joinGame && (
+        <JoinRoomModal
+          gameLabel={joinGame === 'arena' ? 'Neon Math Arena' : 'Memory Match'}
+          onClose={() => setJoinGame(null)}
+          onJoin={code => {
+            setJoinGame(null);
+            navigate(joinGame === 'arena'
+              ? `arena?mode=join&code=${code}`
+              : `memory?mode=join&code=${code}&deck=${deck}`);
+          }}
         />
       )}
     </div>
@@ -692,7 +687,6 @@ function LeaderRow({ player, me }) {
 const gameLabel = type => ({
   'math-arena': 'Math Arena',
   memory: 'Memory Match',
-  'tic-tac-toe': 'Tic Tac Toe',
 }[type] || type || 'Arena');
 
 /* --------------------------------- icons --------------------------------- */
@@ -717,6 +711,22 @@ function GamepadIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M7.5 7h9A4.5 4.5 0 0 1 21 11.5v3a3.5 3.5 0 0 1-6.3 2.1l-.7-.9h-4l-.7.9A3.5 3.5 0 0 1 3 14.5v-3A4.5 4.5 0 0 1 7.5 7Zm.5 3v1.6H6.4v1.8H8V15h1.8v-1.6h1.6v-1.8H9.8V10H8Zm7.4.4a1.1 1.1 0 1 0 0 2.2 1.1 1.1 0 0 0 0-2.2Zm2.6 2.9a1.1 1.1 0 1 0 0 2.2 1.1 1.1 0 0 0 0-2.2Z" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7V4Z" />
+    </svg>
+  );
+}
+
+function KeyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M14.5 3a6.5 6.5 0 0 0-6.2 8.4L3 16.7V21h4.3v-2.2H9.5v-2.2h2.2l1-1A6.5 6.5 0 1 0 14.5 3Zm2 3.2a1.8 1.8 0 1 1 0 3.6 1.8 1.8 0 0 1 0-3.6Z" />
     </svg>
   );
 }

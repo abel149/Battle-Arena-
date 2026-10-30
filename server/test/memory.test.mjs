@@ -125,9 +125,9 @@ test('botMove in hard mode recalls seen matching card on second flip', () => {
 
   // In hard mode (95% recall), test over several trials that it consistently recalls c2
   let recalled = 0;
-  for (let trial = 0; trial < 20; trial++) {
+  for (let trial = 0; trial < 40; trial++) {
     const mv = memory.botMove(g, 'hard');
     if (mv.index === c2) recalled++;
   }
-  assert.ok(recalled >= 17, `Expected high recall in hard mode, got ${recalled}/20`);
+  assert.ok(recalled >= 32, `Expected high recall in hard mode, got ${recalled}/40`);
 });

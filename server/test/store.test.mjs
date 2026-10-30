@@ -3,12 +3,40 @@
 // imported because it reads the env at module load.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
+import bcrypt from 'bcryptjs';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
 const tmpDb = path.join(os.tmpdir(), `arena-test-${process.pid}-${Date.now()}.sqlite`);
+const tmpLegacy = path.join(os.tmpdir(), `arena-legacy-${process.pid}-${Date.now()}.json`);
+const legacyAddress = '0x' + 'e'.repeat(40);
 process.env.ARENA_DB_PATH = tmpDb;
+process.env.ARENA_LEGACY_DATA_PATH = tmpLegacy;
+fs.writeFileSync(tmpLegacy, JSON.stringify({
+  players: {
+    [legacyAddress]: {
+      address: legacyAddress,
+      name: 'Legacy Tester',
+      username: 'legacy_tester',
+      email: null,
+      password: await bcrypt.hash('legacy-pass-123', 4),
+      registered: true,
+      wins: 3,
+      losses: 1,
+      draws: 0,
+      matches: 4,
+      tokens: 30,
+      xp: 150,
+      level: 2,
+      streak: 1,
+      bestStreak: 2,
+      memoryWins: 0,
+      deckStats: {},
+      badges: [],
+    },
+  },
+}));
 
 const store = await import('../store.js');
 
@@ -16,6 +44,7 @@ after(() => {
   for (const suffix of ['', '-wal', '-shm']) {
     try { fs.rmSync(tmpDb + suffix, { force: true }); } catch { /* ignore */ }
   }
+  fs.rmSync(tmpLegacy, { force: true });
 });
 
 const A = '0x' + 'a'.repeat(40);
@@ -28,7 +57,7 @@ test('upsertPlayer creates a profile; saveMatch + getReplay round-trips', () => 
   const moves = [{ index: 0, symbol: 'X', address: A, t: 1 }, { index: 4, symbol: 'O', address: B, t: 2 }];
   store.saveMatch({
     matchId: 'match_test1',
-    gameType: 'tic-tac-toe',
+    gameType: 'math-arena',
     deck: null,
     players: { X: A, O: B },
     names: { [A]: 'Alice', [B]: 'Bob' },
@@ -49,7 +78,7 @@ test('upsertPlayer creates a profile; saveMatch + getReplay round-trips', () => 
 
 test('applyResult awards tokens, xp, levels and increments weekly points', () => {
   const before = store.getPlayer(A);
-  const p = store.applyResult(A, 'win', { gameType: 'tic-tac-toe' });
+  const p = store.applyResult(A, 'win', { gameType: 'math-arena' });
   assert.equal(p.tokens, before.tokens + 10);
   assert.equal(p.xp, before.xp + 50);
   assert.equal(p.wins, before.wins + 1);
@@ -115,6 +144,18 @@ test('registration validates username, hashes password and logins verify it', as
 
   const short = await store.registerPlayer('0x' + 'd'.repeat(40), { username: 'x', password: 'longenough1' });
   assert.match(short.error, /3–20/);
+});
+
+test('legacy JSON accounts migrate to SQLite and remain login-capable', async () => {
+  const player = store.getPlayer(legacyAddress);
+  assert.equal(player.username, 'legacy_tester');
+  assert.equal(player.wins, 3);
+
+  const login = await store.loginPlayerByCredentials({
+    username: 'legacy_tester',
+    password: 'legacy-pass-123',
+  });
+  assert.equal(login.address, legacyAddress);
 });
 
 test('withoutPassword strips the hash', () => {

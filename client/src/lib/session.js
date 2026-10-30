@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import { ethers } from 'ethers';
-import { socket, signAndIdentify } from '../socket.js';
+import { socket, signAndIdentify, getSessionToken } from '../socket.js';
 
 const DB_NAME = 'arena_vault_v1';
 const STORE_NAME = 'vault';
@@ -80,7 +80,11 @@ export function getOrCreateWallet() {
     w = null;
   }
 
-  if (!w || !w.address || (!w.privateKey && w.source !== 'metamask')) {
+  const keyless = !w?.privateKey
+    && w?.source !== 'metamask'
+    && !(w?.source === 'account' && getSessionToken());
+
+  if (!w || !w.address || keyless) {
     const wallet = ethers.Wallet.createRandom();
     w = {
       address: wallet.address,
@@ -188,6 +192,35 @@ export function exportKeystoreJson(wallet) {
 }
 
 export const short = a => (a && a.length > 12 ? a.slice(0, 6) + '…' + a.slice(-4) : a || '');
+
+// App-level sign-in state: 'checking' | 'out' (show the sign-in screen) |
+// 'in' (registered account) | 'offline' (server never answered).
+// 'in' is set on `player:registered:user`, which arrives after the wallet in
+// localStorage has been synced to the account — so pages mount with the right address.
+export function useAuth() {
+  const [status, setStatus] = useState('checking');
+
+  useEffect(() => {
+    const identify = () => signAndIdentify(getOrCreateWallet());
+    const onRegistered = yes => {
+      if (!yes && !getSessionToken()) setStatus('out');
+    };
+    const onUser = () => setStatus('in');
+    socket.on('connect', identify);
+    socket.on('player:registered', onRegistered);
+    socket.on('player:registered:user', onUser);
+    if (socket.connected) identify();
+    const timer = setTimeout(() => setStatus(s => (s === 'checking' ? 'offline' : s)), 5000);
+    return () => {
+      clearTimeout(timer);
+      socket.off('connect', identify);
+      socket.off('player:registered', onRegistered);
+      socket.off('player:registered:user', onUser);
+    };
+  }, []);
+
+  return status;
+}
 
 // Identifies this tab with the server and keeps the live profile in sync.
 // Also continuously ensures IndexedDB and LocalStorage are synchronized (auto-healing).

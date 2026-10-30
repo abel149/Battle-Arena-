@@ -3,7 +3,9 @@ import { socket } from '../socket.js';
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
 
-export default function AuthModal({ onClose }) {
+// `gate` mode is the full-screen sign-in shown before the app: it cannot be
+// dismissed (no onClose) and the app takes over once the server confirms the account.
+export default function AuthModal({ onClose, gate = false, extra = null }) {
   const [tab, setTab] = useState('login'); // 'login' | 'register'
   const [username, setUsername] = useState('');
   const [name, setName] = useState('');
@@ -15,12 +17,12 @@ export default function AuthModal({ onClose }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    const onOk = () => { setBusy(false); onClose(); };
+    const onOk = () => { setBusy(false); onClose?.(); };
     const onErr = ({ error: msg } = {}) => {
       setBusy(false);
       setError(msg || 'Something went wrong. Try again.');
     };
-    const onKey = e => { if (e.key === 'Escape') onClose(); };
+    const onKey = e => { if (e.key === 'Escape') onClose?.(); };
     socket.on('auth:success', onOk);
     socket.on('player:error', onErr);
     window.addEventListener('keydown', onKey);
@@ -61,8 +63,15 @@ export default function AuthModal({ onClose }) {
   const isRegister = tab === 'register';
 
   return (
-    <div className="auth-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className={`auth-overlay ${gate ? 'gate' : ''}`}
+      onMouseDown={e => { if (e.target === e.currentTarget) onClose?.(); }}>
       <form className="auth-card" onSubmit={submit}>
+        {gate && (
+          <div className="auth-brand">
+            <h1>Battle Arena</h1>
+            <p>Real-time multiplayer matches with on-chain results, rewards and badges.</p>
+          </div>
+        )}
         <div className="auth-tabs" role="tablist">
           <button type="button" role="tab" aria-selected={!isRegister}
             className={!isRegister ? 'on' : ''} onClick={() => switchTab('login')}>Log in</button>
@@ -72,8 +81,8 @@ export default function AuthModal({ onClose }) {
 
         <p className="auth-note">
           {isRegister
-            ? 'Your current progress (XP, badges, tokens) stays with your new account.'
-            : 'Logging in switches to that account. Your current guest progress stays on this browser’s guest wallet.'}
+            ? 'Your account gets a unique blockchain profile ID for ranked matches, badges and rewards.'
+            : 'Welcome back — log in to jump into a match.'}
         </p>
 
         <label>
@@ -115,8 +124,10 @@ export default function AuthModal({ onClose }) {
 
         {error && <div className="auth-error" role="alert">{error}</div>}
 
+        {isRegister && extra}
+
         <div className="auth-actions">
-          <button type="button" className="auth-cancel" onClick={onClose}>Cancel</button>
+          {onClose && <button type="button" className="auth-cancel" onClick={onClose}>Cancel</button>}
           <button type="submit" className="auth-submit" disabled={busy}>
             {busy ? 'Please wait…' : isRegister ? 'Create account' : 'Log in'}
           </button>

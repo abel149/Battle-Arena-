@@ -6,11 +6,13 @@
 import Database from 'better-sqlite3';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_FILE = process.env.ARENA_DB_PATH || path.join(__dirname, 'data.sqlite');
+const LEGACY_DATA_FILE = process.env.ARENA_LEGACY_DATA_PATH || path.join(__dirname, 'data.json');
 
 export const BATTLE_PASS_TIERS = [
   { tier: 1, xpRequired: 0, name: "Room Cadet", rewardText: "10 ARENA Allowance + Room Commander Badge", voucher: null },
@@ -250,6 +252,12 @@ const SCHEMA = [
     lockedUntil INTEGER NOT NULL DEFAULT 0,
     updatedAt INTEGER NOT NULL DEFAULT 0
   )`,
+  // Login sessions: the client keeps a random token; only its hash is stored.
+  `CREATE TABLE IF NOT EXISTS sessions (
+    tokenHash TEXT PRIMARY KEY,
+    address TEXT NOT NULL,
+    createdAt INTEGER NOT NULL
+  )`,
 ];
 
 let db;
@@ -270,7 +278,40 @@ function open() {
   if (!cols.includes('allowanceBalance')) db.exec('ALTER TABLE players ADD COLUMN allowanceBalance INTEGER NOT NULL DEFAULT 0');
   if (!cols.includes('equippedSkin')) db.exec("ALTER TABLE players ADD COLUMN equippedSkin TEXT NOT NULL DEFAULT 'neon-striker'");
   prepare();
+  migrateLegacyPlayers();
   return db;
+}
+
+function migrateLegacyPlayers() {
+  if (prepared.count.get().c > 0 || !fs.existsSync(LEGACY_DATA_FILE)) return;
+
+  const legacyData = JSON.parse(fs.readFileSync(LEGACY_DATA_FILE, 'utf8'));
+  if (!legacyData.players || typeof legacyData.players !== 'object' || Array.isArray(legacyData.players)) {
+    throw new Error(`Cannot migrate legacy player data from ${LEGACY_DATA_FILE}`);
+  }
+
+  const migrate = db.transaction(() => {
+    for (const [key, legacyPlayer] of Object.entries(legacyData.players)) {
+      if (!legacyPlayer || typeof legacyPlayer !== 'object' || Array.isArray(legacyPlayer)) {
+        throw new Error(`Invalid legacy player record for ${key}`);
+      }
+      const address = legacyPlayer.address || key;
+      if (typeof address !== 'string' || !address) {
+        throw new Error(`Invalid legacy player address for ${key}`);
+      }
+      const player = {
+        ...createPlayer(address, legacyPlayer.name),
+        ...legacyPlayer,
+        address,
+        registered: Boolean(legacyPlayer.registered),
+        username: legacyPlayer.username || null,
+        email: legacyPlayer.email || null,
+        password: legacyPlayer.password || null,
+      };
+      prepared.upsert.run(playerToRow(player));
+    }
+  });
+  migrate();
 }
 
 function prepare() {
@@ -392,7 +433,42 @@ function prepare() {
     getActiveRoom: db.prepare('SELECT * FROM active_rooms WHERE roomId = ?'),
     listActiveRooms: db.prepare('SELECT * FROM active_rooms ORDER BY createdAt DESC'),
     cleanupStaleActiveRooms: db.prepare('DELETE FROM active_rooms WHERE updatedAt < ?'),
+    sessionInsert: db.prepare('INSERT INTO sessions (tokenHash, address, createdAt) VALUES (?, ?, ?)'),
+    sessionGet: db.prepare('SELECT address, createdAt FROM sessions WHERE tokenHash = ?'),
+    sessionDelete: db.prepare('DELETE FROM sessions WHERE tokenHash = ?'),
   };
+}
+
+// ---- Login sessions ----
+
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const hashToken = token => crypto.createHash('sha256').update(String(token)).digest('hex');
+
+/** Create a login session for `address`; returns the opaque token for the client. */
+export function createSession(address) {
+  open();
+  const token = crypto.randomBytes(32).toString('hex');
+  prepared.sessionInsert.run(hashToken(token), address, Date.now());
+  return token;
+}
+
+/** Address a valid, unexpired session token belongs to — or null. */
+export function addressForSession(token) {
+  if (!token || typeof token !== 'string') return null;
+  open();
+  const row = prepared.sessionGet.get(hashToken(token));
+  if (!row) return null;
+  if (Date.now() - row.createdAt > SESSION_TTL_MS) {
+    prepared.sessionDelete.run(hashToken(token));
+    return null;
+  }
+  return row.address;
+}
+
+export function deleteSession(token) {
+  if (!token || typeof token !== 'string') return;
+  open();
+  prepared.sessionDelete.run(hashToken(token));
 }
 
 function rowToPlayer(row) {
@@ -625,7 +701,7 @@ export function isRegistered(address) {
 export function safeProfile(address) {
   const p = getPlayer(address);
   if (!p) return null;
-  const { password, ...safe } = p;
+  const { password, email, ...safe } = p;
   return safe;
 }
 
@@ -637,7 +713,7 @@ export function usernames() {
 
 export function withoutPassword(p) {
   if (!p) return p;
-  const { password, ...safe } = p;
+  const { password, email, ...safe } = p;
   return safe;
 }
 
@@ -702,7 +778,8 @@ export function applyResult(address, result, ctx = {}) {
 
 export function leaderboard() {
   open();
-  return prepared.leaderboard.all().map((row, i) => ({ rank: i + 1, ...rowToPlayer(row) }));
+  return prepared.leaderboard.all()
+    .map((row, i) => withoutPassword({ rank: i + 1, ...rowToPlayer(row) }));
 }
 
 // ---- Finished-match archive (for the replay feature) ----

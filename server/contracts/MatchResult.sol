@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 // Simulated match-result registry.
 // Each completed match produces one record:
 //   matchId  - unique match identifier (the room id, or a server-generated id)
-//   gameType - e.g. "memory" or "tic-tac-toe" (stored as a short string)
+//   gameType - e.g. "memory" or "math-arena" (stored as a short string)
 //   winner   - the winner's address, or address(0) for a draw
 //   players  - packed player addresses (playerA, playerB)
 //   moves    - number of moves in the match
@@ -17,7 +17,7 @@ pragma solidity ^0.8.24;
 contract MatchResult {
     struct Match {
         bytes32 matchId;     // server-side match id, kept as bytes32 for on-chain neutrality
-        string  gameType;    // "memory" | "tic-tac-toe" | ...
+        string  gameType;    // "memory" | "math-arena" | ...
         address winner;      // address(0) for a draw
         address playerA;
         address playerB;

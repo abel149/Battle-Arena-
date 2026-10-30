@@ -2,13 +2,23 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { API, socket, signAndIdentify } from '../socket.js';
 import { navigate, useRoute } from '../lib/router.js';
 import { short, useProfile } from '../lib/session.js';
+import RoomCode from '../components/RoomCode.jsx';
 import MatchChat from '../components/MatchChat.jsx';
 import './memory.css';
+
+const WAITING_COPY = {
+  bot: ['Shuffling the deck', 'The bot is taking its seat across the table…'],
+  create: ['Room ready', 'Share this code with a friend — the match starts as soon as they join.'],
+  join: ['Joining room', 'Connecting you to your friend’s room…'],
+  watch: ['Joining the match', 'Joining the match. If nothing appears, it has already finished.'],
+  match: ['Finding an opponent', 'Waiting for another player to join Memory Match. Open a second window to play against yourself.'],
+};
 
 export default function MemoryMatch() {
   const route = useRoute();
   const modeParam = route.params.get('mode');
-  const mode = modeParam === 'bot' ? 'bot' : modeParam === 'watch' ? 'watch' : 'match';
+  const mode = ['bot', 'create', 'join', 'watch'].includes(modeParam) ? modeParam : 'match';
+  const joinCode = (route.params.get('code') || '').toUpperCase();
   const watching = mode === 'watch';
   const watchRoom = route.params.get('room');
   const deck = route.params.get('deck') || 'flags';
@@ -21,6 +31,7 @@ export default function MemoryMatch() {
   const [room, setRoom] = useState(null);
   const [game, setGame] = useState(null);
   const [queued, setQueued] = useState(false);
+  const [roomCode, setRoomCode] = useState(null);
   const [error, setError] = useState(null);
   const [receipt, setReceipt] = useState(null);
   const [deckLabel, setDeckLabel] = useState('Educational decks');
@@ -29,12 +40,16 @@ export default function MemoryMatch() {
   useEffect(() => { roomRef.current = room; }, [room]);
 
   useEffect(() => {
-    function start() {
-      signAndIdentify(wallet);
+    async function start() {
+      // Await the signed identify — queue:join must arrive after the server
+      // has verified our wallet signature, or it is silently dropped.
+      await signAndIdentify(wallet);
       if (mode === 'watch') socket.emit('spectate', { roomId: watchRoom });
       else if (mode === 'bot') socket.emit('match:bot', { gameType: 'memory', deck, difficulty });
+      else if (mode === 'create') socket.emit('room:create', { gameType: 'memory', deck });
+      else if (mode === 'join') socket.emit('room:join', { code: joinCode });
       else {
-        socket.emit('queue:join', { gameType: 'memory', inviteCode });
+        socket.emit('queue:join', { gameType: 'memory', deck, inviteCode });
         setQueued(true);
       }
     }
@@ -42,7 +57,7 @@ export default function MemoryMatch() {
     else socket.once('connect', start);
     return () => socket.off('connect', start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, deck, inviteCode]);
+  }, [mode, deck, inviteCode, joinCode, watchRoom]);
 
   useEffect(() => {
     const onStart = data => {
@@ -51,6 +66,7 @@ export default function MemoryMatch() {
       setRoom(next);
       setGame(data.game);
       setQueued(false);
+      setRoomCode(null);
       setReceipt(null);
       setError(null);
       if (data.game?.deckLabel) setDeckLabel(data.game.deckLabel);
@@ -62,7 +78,9 @@ export default function MemoryMatch() {
       setReceipt({ ...(data.receipt || {}), winner: data.winner, result: data.result });
     };
     const onWaiting = () => setQueued(true);
-    const onError = msg => setError(msg);
+    const onRoomWaiting = ({ code }) => setRoomCode(code);
+    const onRoomExpired = () => { setRoomCode(null); setError('This room expired. Go back and create a new one.'); };
+    const onError = msg => setError(typeof msg === 'string' ? msg : msg?.error || 'Something went wrong');
     const onMatchError = data => {
       setError(data?.error || 'Match error');
       setQueued(false);
@@ -72,7 +90,10 @@ export default function MemoryMatch() {
     socket.on('game:state', onState);
     socket.on('match:end', onEnd);
     socket.on('queue:waiting', onWaiting);
+    socket.on('room:waiting', onRoomWaiting);
+    socket.on('room:expired', onRoomExpired);
     socket.on('game:error', onError);
+    socket.on('player:error', onError);
     socket.on('match:error', onMatchError);
 
     return () => {
@@ -80,7 +101,10 @@ export default function MemoryMatch() {
       socket.off('game:state', onState);
       socket.off('match:end', onEnd);
       socket.off('queue:waiting', onWaiting);
+      socket.off('room:waiting', onRoomWaiting);
+      socket.off('room:expired', onRoomExpired);
       socket.off('game:error', onError);
+      socket.off('player:error', onError);
       socket.off('match:error', onMatchError);
       const r = roomRef.current;
       socket.emit('queue:leave');
@@ -97,6 +121,16 @@ export default function MemoryMatch() {
       })
       .catch(() => {});
   }, [deck]);
+
+  // Bot, create and join answer within moments. Silence means the server is down
+  // or still running old code — say so instead of spinning forever.
+  useEffect(() => {
+    if (mode === 'match' || mode === 'watch' || game || roomCode || error) return;
+    const id = setTimeout(() => setError(
+      'The arena server did not respond. Restart it ("npm start" in the server folder) so it runs the latest code.'
+    ), 6000);
+    return () => clearTimeout(id);
+  }, [mode, game, roomCode, error]);
 
   useEffect(() => {
     document.title = 'Memory Match — Battle Arena';
@@ -216,21 +250,21 @@ export default function MemoryMatch() {
           </>
         )}
 
-        {mode === 'match' && room?.roomId && (
+        {mode !== 'bot' && !watching && room?.roomId && (
           <MatchChat roomId={room.roomId} myAddress={wallet.address} />
         )}
 
         {error && <div className="mem-error">{error}</div>}
 
-        {receipt && (
+        {(game?.winner || receipt) && (
           <div className={`mem-result ${iWon ? 'win' : isDraw ? 'draw' : 'loss'}`}>
             <div className="mem-result-head">
               <span className="mem-result-icon">{iWon ? '🏆' : isDraw ? '🤝' : '⚔️'}</span>
               <div>
-             <h2>{isDraw ? 'It’s a draw!' : watching ? `${winnerName} wins!` : iWon ? 'You win!' : 'You lose this one'}</h2>
+                <h2>{isDraw ? 'It’s a draw!' : watching ? `${winnerName} wins!` : iWon ? 'You win!' : 'You lose this one'}</h2>
                 <p>
                   {myScore} : {oppScore} pairs
-                  {receipt.gameType ? ` · ${receipt.gameType}` : ''}
+                  {receipt?.gameType ? ` · ${receipt.gameType}` : ''}
                 </p>
               </div>
             </div>
@@ -252,14 +286,20 @@ export default function MemoryMatch() {
               </div>
             )}
             <div className="mem-result-actions">
-              <a
-                className="mem-btn ghost"
-                href={`${API}/api/verify/${receipt.matchId}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                ⛓ {short(receipt.txHash || receipt.matchId)}
-              </a>
+              {receipt ? (
+                <a
+                  className="mem-btn ghost"
+                  href={`${API}/api/verify/${receipt.matchId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  ⛓ {short(receipt.txHash || receipt.matchId)}
+                </a>
+              ) : (
+                <span className="mem-btn ghost" style={{ opacity: 0.7 }}>
+                  ⛓ Confirming on blockchain…
+                </span>
+              )}
               {mode === 'bot' && (
                 <button type="button" className="mem-btn" onClick={() => playAgain(difficulty)}>Play again</button>
               )}
@@ -273,14 +313,10 @@ export default function MemoryMatch() {
         <div className="mem-waiting">
           <div className="mem-waiting-card">
             <div className="mem-spinner" aria-hidden="true" />
-            <h2>{error ? 'Match error' : mode === 'bot' ? 'Shuffling the deck' : 'Finding an opponent'}</h2>
-            <p>
-              {error || (watching ? 'Joining the match. If nothing appears, it has already finished.' : null) ||
-                (mode === 'bot'
-                  ? 'The bot is taking its seat across the table…'
-                  : 'Waiting for another player to join Memory Match. Open a second window to play against yourself.')}
-            </p>
-            <button type="button" className="mem-btn" onClick={leave}>Cancel</button>
+            <h2>{error ? 'Match error' : WAITING_COPY[mode][0]}</h2>
+            <p>{error || WAITING_COPY[mode][1]}</p>
+            {!error && mode === 'create' && roomCode && <RoomCode code={roomCode} />}
+            <button type="button" className="mem-btn" onClick={leave}>{error ? 'Back to hub' : 'Cancel'}</button>
           </div>
         </div>
       )}
