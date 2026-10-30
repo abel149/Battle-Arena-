@@ -23,7 +23,7 @@ import {
 import { ENGINES, DECKS, dailyDeckId } from './games/index.js';
 import { defaultRecorder } from './result-recorder.js';
 import { registerChatHandlers } from './sockets/chat.js';
-import { registerAuthHandlers, bindIdentity } from './sockets/auth.js';
+import { registerAuthHandlers } from './sockets/auth.js';
 import { registerMatchmakingHandlers } from './sockets/matchmaking.js';
 import { registerGameplayHandlers } from './sockets/gameplay.js';
 import { registerProgressionHandlers } from './sockets/progression.js';
@@ -35,10 +35,10 @@ import {
 } from './chain-tokens.js';
 import { recordChoreVerification, verifyParentAttestation } from './chain-chore.js';
 import * as store from './store.js';
-import { SOCKET_EVENTS, GAME_TYPES, ENERGY_CONFIG } from '../shared/constants.js';
+import { ENERGY_CONFIG, BOT_ADDRESS } from '../shared/constants.js';
 
 const PORT = process.env.PORT || 3001;
-const BOT = '0xB07000000000000000000000000000000000000B';
+const BOT = BOT_ADDRESS;
 const BOT_STEP_MS = 700;
 const ROOM_RETENTION_MS = 10 * 60 * 1000; // finished rooms expire after 10 min
 

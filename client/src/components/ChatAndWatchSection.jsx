@@ -8,8 +8,7 @@ import { socket } from '../socket.js';
 import { navigate } from '../lib/router.js';
 import { short } from '../lib/session.js';
 import { ChatIcon, EyeIcon } from './Icons.jsx';
-
-const BOT_ADDRESS = '0xB07000000000000000000000000000000000000B'; // same constant as the server
+import { BOT_ADDRESS } from '../../../shared/constants.js';
 
 const GAME_LABELS = {
   memory: 'Memory Match',

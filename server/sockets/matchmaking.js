@@ -5,8 +5,9 @@
 
 import * as store from '../store.js';
 import { ENGINES } from '../games/index.js';
+import { BOT_ADDRESS } from '../../shared/constants.js';
 
-const BOT = '0x0000000000000000000000000000000000000000';
+const BOT = BOT_ADDRESS;
 
 /**
  * Registers matchmaking and room lifecycle socket event listeners.
