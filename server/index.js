@@ -844,6 +844,24 @@ const noteLoginFail = ip => {
   else f.count += 1;
 };
 
+// Chat rate limiting (max 1 message per 800ms per connection)
+const socketChatTimes = new Map(); // socketId -> timestamp
+function isChatRateLimited(socketId) {
+  const now = Date.now();
+  const last = socketChatTimes.get(socketId) || 0;
+  if (now - last < 800) return true;
+  socketChatTimes.set(socketId, now);
+  return false;
+}
+
+// Global crash protection against malformed event unhandled exceptions
+process.on('uncaughtException', (err) => {
+  console.error('[Process] Uncaught Exception caught safely:', err.message);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[Process] Unhandled Rejection caught safely:', reason);
+});
+
 io.on('connection', (socket) => {
   liveListeners.add(socket.id);
 
@@ -1076,7 +1094,9 @@ io.on('connection', (socket) => {
     else socket.emit('chores:data', payload);
   });
 
-  socket.on('game:move', ({ roomId, ...move }) => {
+  socket.on('game:move', (payload = {}) => {
+    const { roomId, ...move } = payload || {};
+    if (!roomId) return;
     const room = rooms.get(roomId);
     const address = socketPlayer.get(socket.id);
     if (!room || !address) return;
@@ -1086,7 +1106,9 @@ io.on('connection', (socket) => {
     afterEngineMove(room, res);
   });
 
-  socket.on('blaster:input', ({ roomId, ...move }) => {
+  socket.on('blaster:input', (payload = {}) => {
+    const { roomId, ...move } = payload || {};
+    if (!roomId) return;
     const room = rooms.get(roomId);
     const address = socketPlayer.get(socket.id);
     if (!room || !address || room.game.winner) return;
@@ -1100,7 +1122,8 @@ io.on('connection', (socket) => {
     else socket.emit('skins:list', skins);
   });
 
-  socket.on('skins:equip', ({ skinId } = {}, ack) => {
+  socket.on('skins:equip', (payload = {}, ack) => {
+    const { skinId } = payload || {};
     const addr = socketPlayer.get(socket.id);
     if (!addr) return ack && ack({ error: 'Identify required' });
     const res = store.equipSkin(addr, skinId);
@@ -1110,9 +1133,14 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('spectate', ({ roomId }) => {
+  socket.on('spectate', (payload = {}) => {
+    const { roomId } = payload || {};
+    if (!roomId) return;
     const room = rooms.get(roomId);
     if (!room) return;
+    if (room.private) {
+      return socket.emit('player:error', { error: 'Cannot spectate a private match.' });
+    }
     room.spectators.add(socket.id);
     socket.join(roomId);
     socket.emit('match:start', serializeRoom(room)); // spectator joins mid-game
@@ -1123,9 +1151,13 @@ io.on('connection', (socket) => {
     socket.emit('lobby:chat:history', lobbyChat.slice(-30));
   });
 
-  socket.on('lobby:chat:send', ({ text }) => {
+  socket.on('lobby:chat:send', (payload = {}) => {
+    const { text } = payload || {};
     const address = socketPlayer.get(socket.id);
     if (!address || !text?.trim()) return;
+    if (isChatRateLimited(socket.id)) {
+      return socket.emit('chat:rate_limited', { error: 'Please wait a moment before sending another message.' });
+    }
     const cleanText = sanitizeChatMessage(text);
     if (!cleanText) return;
     const p = store.getPlayer(address);
@@ -1141,9 +1173,13 @@ io.on('connection', (socket) => {
     io.emit('lobby:chat:message', msg);
   });
 
-  socket.on('chat:send', ({ roomId, text }) => {
+  socket.on('chat:send', (payload = {}) => {
+    const { roomId, text } = payload || {};
     const address = socketPlayer.get(socket.id);
     if (!address || !text?.trim()) return;
+    if (isChatRateLimited(socket.id)) {
+      return socket.emit('chat:rate_limited', { error: 'Please wait a moment before sending another message.' });
+    }
     const cleanText = sanitizeChatMessage(text);
     if (!cleanText) return;
 
@@ -1178,7 +1214,8 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('chat:message', msg);
   });
 
-  socket.on('room:reconnect', ({ roomId }, ack) => {
+  socket.on('room:reconnect', (payload = {}, ack) => {
+    const { roomId } = payload || {};
     const room = rooms.get(roomId);
     if (!room) return ack?.({ error: 'Room not found or match already concluded' });
     const address = socketPlayer.get(socket.id);
@@ -1191,8 +1228,9 @@ io.on('connection', (socket) => {
     ack?.({ ok: true, room: serializeRoom(room) });
   });
 
-  socket.on('match:leave', ({ roomId }) => {
-    socket.leave(roomId);
+  socket.on('match:leave', (payload = {}) => {
+    const { roomId } = payload || {};
+    if (roomId) socket.leave(roomId);
     const room = rooms.get(roomId);
     if (room) room.spectators.delete(socket.id);
     maybeForfeit(socket); // a player leaving mid-match loses the match
@@ -1207,6 +1245,7 @@ io.on('connection', (socket) => {
     dropPendingFor(socket.id);
     maybeForfeit(socket);
     socketPlayer.delete(socket.id);
+    socketChatTimes.delete(socket.id);
     liveListeners.delete(socket.id);
   });
 });
