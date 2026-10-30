@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { API, socket, logout } from '../socket.js';
 import { navigate } from '../lib/router.js';
 import { saveWallet, short, useProfile, clearWalletSession } from '../lib/session.js';
@@ -135,7 +135,20 @@ export default function Hub() {
             <a className="hub-nav-item" href="#battlepass">Quests & Pass</a>
             <button type="button" className="hub-nav-item" onClick={() => setShowSkinLocker(true)}>Skins</button>
             <button type="button" className="hub-nav-item" onClick={() => setShowParentModal(true)}>Parents</button>
-            <a className="hub-nav-item ghost" href="#classic">Chat & Watch</a>
+            <button
+              type="button"
+              className="hub-nav-item ghost"
+              onClick={() => {
+                const el = document.getElementById('chat-and-watch');
+                if (el) {
+                  el.scrollIntoView({ behavior: 'smooth' });
+                  el.classList.add('cw-highlight');
+                  setTimeout(() => el.classList.remove('cw-highlight'), 1200);
+                }
+              }}
+            >
+              <ChatIcon /> Chat &amp; Watch
+            </button>
           </nav>
         </div>
 
@@ -482,8 +495,8 @@ export default function Hub() {
           {/* 2. Player Desk right below */}
           {profile && <ProfileCard profile={profile} />}
 
-          {/* 3. Live Matches */}
-          <LiveMatches rooms={liveRooms} />
+          {/* 3. Live Matches & Chat */}
+          <ChatAndWatchSection rooms={liveRooms} wallet={wallet} profile={profile} />
 
           {/* 4. Verified Match Records */}
           <section className="side-panel onchain">
@@ -620,8 +633,12 @@ const GAME_LABELS = {
   'tic-tac-toe': 'Tic Tac Toe',
 };
 
-function LiveMatches({ rooms }) {
-  // The server lists every room, bot games included. Only show games between two people.
+function ChatAndWatchSection({ rooms, wallet, profile }) {
+  const [tab, setTab] = useState('watch'); // 'watch' | 'chat'
+  const [messages, setMessages] = useState([]);
+  const [text, setText] = useState('');
+  const logRef = useRef(null);
+
   const live = rooms
     .map(r => ({
       ...r,
@@ -631,52 +648,171 @@ function LiveMatches({ rooms }) {
     }))
     .filter(r => r.humans.length >= 2);
 
+  useEffect(() => {
+    const onHist = (list) => {
+      if (Array.isArray(list)) setMessages(list);
+    };
+    const onMsg = (m) => {
+      setMessages(prev => [...prev, m]);
+    };
+
+    socket.on('lobby:chat:history', onHist);
+    socket.on('lobby:chat:message', onMsg);
+    socket.emit('lobby:chat:history');
+
+    return () => {
+      socket.off('lobby:chat:history', onHist);
+      socket.off('lobby:chat:message', onMsg);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (tab === 'chat') {
+      logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: 'smooth' });
+    }
+  }, [messages, tab]);
+
+  function handleSend(content) {
+    const clean = String(content || '').trim();
+    if (!clean) return;
+    socket.emit('lobby:chat:send', { text: clean });
+    setText('');
+  }
+
+  const PRESETS = [
+    '👋 Hello!',
+    '🎮 Duel anyone?',
+    '👍 Good luck!',
+    '⚡ GG!',
+    '🏆 Great match!',
+    '🔥 Rematch?',
+  ];
+
+  function watchRoom(r) {
+    if (r.gameType === 'memory') navigate(`memory?mode=watch&room=${r.roomId}`);
+    else if (r.gameType === 'connect-four') navigate(`connectfour?mode=watch&room=${r.roomId}`);
+    else if (r.gameType === 'math-arena') navigate(`arena?mode=watch&room=${r.roomId}`);
+    else if (r.gameType === 'cyber-blaster') navigate(`blaster?mode=watch&room=${r.roomId}`);
+  }
+
   return (
-    <section className="side-panel">
-      <h3 className="side-title">Live Matches</h3>
-      {live.length === 0 ? (
-        <p className="side-empty">No player matches right now. Start one and ask a friend to watch.</p>
+    <section id="chat-and-watch" className="side-panel chat-watch-panel">
+      <div className="chat-watch-header">
+        <h3 className="side-title">
+          <ChatIcon /> Chat &amp; Watch
+        </h3>
+        <div className="cw-tabs" role="tablist" aria-label="Chat and Spectate Views">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'watch'}
+            className={`cw-tab ${tab === 'watch' ? 'active' : ''}`}
+            onClick={() => setTab('watch')}
+          >
+            <EyeIcon /> Watch ({live.length})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'chat'}
+            className={`cw-tab ${tab === 'chat' ? 'active' : ''}`}
+            onClick={() => setTab('chat')}
+          >
+            💬 Chat
+          </button>
+        </div>
+      </div>
+
+      {tab === 'watch' ? (
+        <div className="cw-watch-content">
+          {live.length === 0 ? (
+            <div className="cw-empty-state">
+              <span className="cw-empty-icon" aria-hidden="true">🎯</span>
+              <p className="side-empty">
+                No player duels in progress right now. Start a match on the shelf or invite a friend to play!
+              </p>
+            </div>
+          ) : (
+            <ul className="live-list">
+              {live.map(r => (
+                <li key={r.roomId} className="live-row">
+                  <div className="live-info">
+                    <span className="live-game">{GAME_LABELS[r.gameType] || r.gameType}</span>
+                    <span className="live-players">
+                      {r.humans.map(([addr, name]) => name || short(addr)).join(' vs ')}
+                    </span>
+                    <span className="live-watchers">{r.spectators || 0} watching</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="live-watch"
+                    onClick={() => watchRoom(r)}
+                  >
+                    Watch
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       ) : (
-        <ul className="live-list">
-          {live.map(r => (
-            <li key={r.roomId} className="live-row">
-              <div className="live-info">
-                <span className="live-game">{GAME_LABELS[r.gameType] || r.gameType}</span>
-                <span className="live-players">
-                  {r.humans.map(([addr, name]) => name || short(addr)).join(' vs ')}
-                </span>
-                <span className="live-watchers">{r.spectators} watching</span>
-              </div>
-              {r.gameType === 'memory' ? (
-                <button
-                  type="button"
-                  className="live-watch"
-                  onClick={() => navigate(`memory?mode=watch&room=${r.roomId}`)}
-                >
-                  Watch
-                </button>
-              ) : r.gameType === 'connect-four' ? (
-                <button
-                  type="button"
-                  className="live-watch"
-                  onClick={() => navigate(`connectfour?mode=watch&room=${r.roomId}`)}
-                >
-                  Watch
-                </button>
-              ) : r.gameType === 'math-arena' ? (
-                <button
-                  type="button"
-                  className="live-watch"
-                  onClick={() => navigate(`arena?mode=watch&room=${r.roomId}`)}
-                >
-                  Watch
-                </button>
-              ) : (
-                <span className="live-soon">Duel in progress</span>
-              )}
-            </li>
-          ))}
-        </ul>
+        <div className="cw-chat-content">
+          <div className="lobby-chat-log" ref={logRef} aria-live="polite">
+            {messages.length === 0 ? (
+              <p className="side-empty">No chatter yet — say hi to everyone in the Arena!</p>
+            ) : (
+              messages.map((m, idx) => {
+                const isMe = m.address?.toLowerCase() === wallet?.address?.toLowerCase();
+                const timeStr = m.t || m.time
+                  ? new Date(m.t || m.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  : '';
+                return (
+                  <div key={idx} className={`lobby-msg ${isMe ? 'mine' : ''}`}>
+                    <div className="lobby-msg-head">
+                      <span className="lobby-msg-avatar">{(m.from || '?').slice(0, 1).toUpperCase()}</span>
+                      <span className="lobby-msg-sender">{isMe ? 'You' : m.from}</span>
+                      {timeStr && <span className="lobby-msg-time">{timeStr}</span>}
+                    </div>
+                    <div className="lobby-msg-bubble">{m.text}</div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="lobby-chat-presets">
+            {PRESETS.map(preset => (
+              <button
+                key={preset}
+                type="button"
+                className="preset-chip"
+                onClick={() => handleSend(preset)}
+              >
+                {preset}
+              </button>
+            ))}
+          </div>
+
+          <form
+            className="lobby-chat-form"
+            onSubmit={e => {
+              e.preventDefault();
+              handleSend(text);
+            }}
+          >
+            <input
+              type="text"
+              className="lobby-chat-input"
+              value={text}
+              onChange={e => setText(e.target.value)}
+              placeholder="Friendly message…"
+              maxLength={200}
+            />
+            <button type="submit" className="lobby-chat-send-btn" disabled={!text.trim()}>
+              Send
+            </button>
+          </form>
+        </div>
       )}
     </section>
   );
@@ -805,6 +941,23 @@ function ChainIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M9.6 14.4a1 1 0 0 1 0-1.4l3.4-3.4a1 1 0 0 1 1.4 1.4L11 14.4a1 1 0 0 1-1.4 0Zm-2.5.3a4 4 0 0 1 0-5.7l2.4-2.4a4 4 0 0 1 5.7 0 1 1 0 0 1-1.4 1.5 2 2 0 0 0-2.9 0L8.5 10.5a2 2 0 0 0 0 2.9 1 1 0 1 1-1.4 1.4Zm9.8-5.4a1 1 0 0 1 1.4 0 4 4 0 0 1 0 5.7l-2.4 2.4a4 4 0 0 1-5.7 0 1 1 0 0 1 1.4-1.5 2 2 0 0 0 2.9 0l2.4-2.4a2 2 0 0 0 0-2.9 1 1 0 0 1 0-1.3Z" />
+    </svg>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function ChatIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </svg>
   );
 }

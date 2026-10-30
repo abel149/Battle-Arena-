@@ -71,6 +71,9 @@ function notifyPlayer(address, event, payload) {
 }
 const liveListeners = new Set();  // socketIds in the lobby (for rooms:live push)
 const pendingRooms = new Map();   // room code -> host waiting for a friend to join
+const lobbyChat = [
+  { from: 'ArenaBot', address: '0xB07000000000000000000000000000000000000B', text: '👋 Welcome to Battle Arena! Challenge a rival or cheer on live matches.', t: Date.now() - 30000, time: Date.now() - 30000 },
+];
 
 const PENDING_ROOM_MS = 10 * 60 * 1000;
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I lookalikes
@@ -1010,15 +1013,54 @@ io.on('connection', (socket) => {
     broadcastLiveRooms();
   });
 
-  socket.on('chat:send', ({ roomId, text }) => {
-    const room = rooms.get(roomId);
+  socket.on('lobby:chat:history', () => {
+    socket.emit('lobby:chat:history', lobbyChat.slice(-30));
+  });
+
+  socket.on('lobby:chat:send', ({ text }) => {
     const address = socketPlayer.get(socket.id);
-    if (!room || !address || !text?.trim()) return;
+    if (!address || !text?.trim()) return;
+    const cleanText = sanitizeChatMessage(text);
+    if (!cleanText) return;
+    const p = store.getPlayer(address);
+    const msg = {
+      from: p?.name || address.slice(0, 8),
+      address,
+      text: cleanText,
+      t: Date.now(),
+      time: Date.now(),
+    };
+    lobbyChat.push(msg);
+    if (lobbyChat.length > 50) lobbyChat.shift();
+    io.emit('lobby:chat:message', msg);
+  });
+
+  socket.on('chat:send', ({ roomId, text }) => {
+    const address = socketPlayer.get(socket.id);
+    if (!address || !text?.trim()) return;
+    const cleanText = sanitizeChatMessage(text);
+    if (!cleanText) return;
+
+    if (!roomId || roomId === 'lobby') {
+      const p = store.getPlayer(address);
+      const msg = {
+        from: p?.name || address.slice(0, 8),
+        address,
+        text: cleanText,
+        t: Date.now(),
+        time: Date.now(),
+      };
+      lobbyChat.push(msg);
+      if (lobbyChat.length > 50) lobbyChat.shift();
+      io.emit('lobby:chat:message', msg);
+      return;
+    }
+
+    const room = rooms.get(roomId);
+    if (!room) return;
     // Only players and spectators of this room may post to its chat.
     const member = room.sockets[address] === socket.id || room.spectators.has(socket.id);
     if (!member) return;
-    const cleanText = sanitizeChatMessage(text);
-    if (!cleanText) return;
     const msg = {
       from: store.getPlayer(address)?.name || address.slice(0, 8),
       address,

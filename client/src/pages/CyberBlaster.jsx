@@ -109,7 +109,9 @@ function playPowerupSound() {
 export default function CyberBlaster() {
   const route = useRoute();
   const modeParam = route.params.get('mode');
-  const mode = ['bot', 'match', 'create', 'join'].includes(modeParam) ? modeParam : 'bot';
+  const mode = ['bot', 'match', 'create', 'join', 'watch'].includes(modeParam) ? modeParam : 'bot';
+  const watchRoom = route.params.get('room');
+  const watching = mode === 'watch';
   const joinCode = (route.params.get('code') || route.params.get('invite') || '').toUpperCase();
   const inviteCode = route.params.get('invite');
   const rawDiff = route.params.get('difficulty');
@@ -143,7 +145,9 @@ export default function CyberBlaster() {
 
     await signAndIdentify(wallet);
 
-    if (mode === 'bot') {
+    if (mode === 'watch' && watchRoom) {
+      socket.emit('spectate', { roomId: watchRoom });
+    } else if (mode === 'bot') {
       socket.emit('match:bot', { gameType: 'cyber-blaster', difficulty });
     } else if (mode === 'create') {
       socket.emit('room:create', { gameType: 'cyber-blaster' });
@@ -153,7 +157,7 @@ export default function CyberBlaster() {
       setQueued(true);
       socket.emit('queue:join', { gameType: 'cyber-blaster', inviteCode });
     }
-  }, [mode, difficulty, joinCode, inviteCode, wallet]);
+  }, [mode, difficulty, joinCode, inviteCode, watchRoom, wallet]);
 
   useEffect(() => {
     if (socket.connected) startMatch();
@@ -309,7 +313,7 @@ export default function CyberBlaster() {
 
   // Send input tick to server every 40ms
   useEffect(() => {
-    if (!room?.roomId || matchEnd) return;
+    if (!room?.roomId || matchEnd || watching) return;
 
     const interval = setInterval(() => {
       let vx = 0;
@@ -535,12 +539,14 @@ export default function CyberBlaster() {
 
       {/* Main Game Stage */}
       <main className="blaster-arena-container">
-        {!gameState && (queued || mode === 'create' || mode === 'join' || error) ? (
+        {!gameState && (queued || mode === 'create' || mode === 'join' || mode === 'watch' || error) ? (
           <div className="blaster-queue-card">
             <div className="queue-spinner" aria-hidden="true" />
             <h2>
               {error
                 ? 'Match error'
+                : mode === 'watch'
+                ? 'Spectator Mode'
                 : mode === 'create'
                 ? 'Room Ready'
                 : mode === 'join'
@@ -548,7 +554,9 @@ export default function CyberBlaster() {
                 : 'Searching for Opponent...'}
             </h2>
             <p>
-              {error || (mode === 'create'
+              {error || (mode === 'watch'
+                ? 'Connecting to live arena match as spectator…'
+                : mode === 'create'
                 ? 'Share this code with a friend — your duel begins as soon as they join.'
                 : mode === 'join'
                 ? 'Connecting to your friend’s arena room…'
