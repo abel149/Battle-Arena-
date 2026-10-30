@@ -1,0 +1,276 @@
+.replay-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 9, 20, 0.88);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.replay-modal {
+  background: #081226;
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  box-shadow: 0 0 35px rgba(0, 240, 255, 0.25);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 620px;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.replay-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.15);
+}
+
+.replay-tag {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: #00f0ff;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+}
+
+.replay-head-title h3 {
+  margin: 0.25rem 0 0 0;
+  font-size: 1.25rem;
+  color: #fff;
+}
+
+.replay-close-btn {
+  background: transparent;
+  border: none;
+  color: #7b8ea5;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.replay-close-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.replay-body {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.replay-loading, .replay-error {
+  padding: 3rem;
+  text-align: center;
+  color: #7b8ea5;
+}
+
+.replay-info-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(0, 240, 255, 0.05);
+  border: 1px solid rgba(0, 240, 255, 0.15);
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+}
+
+.replay-status {
+  font-weight: 600;
+  color: #e2f1ff;
+  font-size: 0.95rem;
+}
+
+.replay-badge-pill {
+  font-size: 0.8rem;
+  background: rgba(0, 240, 255, 0.15);
+  color: #00f0ff;
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+}
+
+/* Memory cards */
+.replay-memory-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.replay-score-row {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.replay-score-chip {
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 0.85rem;
+  color: #9ab4cf;
+}
+
+.replay-score-chip.active {
+  background: rgba(0, 240, 255, 0.2);
+  color: #00f0ff;
+  border: 1px solid rgba(0, 240, 255, 0.4);
+}
+
+.replay-memory-grid {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+
+.replay-card {
+  aspect-ratio: 1;
+  background: #0d1e38;
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  color: #557291;
+  font-weight: 700;
+  transition: all 0.2s;
+}
+
+.replay-card.flipped {
+  background: #143560;
+  color: #00f0ff;
+  border-color: #00f0ff;
+}
+
+.replay-card.matched {
+  background: rgba(0, 255, 136, 0.15);
+  color: #00ff88;
+  border-color: #00ff88;
+}
+
+/* Tic Tac Toe Grid */
+.replay-ttt-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.replay-ttt-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 85px);
+  gap: 8px;
+}
+
+.replay-ttt-cell {
+  width: 85px;
+  height: 85px;
+  background: #0d1e38;
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.replay-ttt-cell.x {
+  color: #00f0ff;
+}
+
+.replay-ttt-cell.o {
+  color: #ff0077;
+}
+
+.replay-ttt-cell.win {
+  background: rgba(0, 255, 136, 0.2);
+  border-color: #00ff88;
+}
+
+/* Generic move list */
+.replay-generic-list {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 1rem;
+  border-radius: 10px;
+}
+
+.generic-desc {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.85rem;
+  color: #7b8ea5;
+}
+
+.replay-moves-scroll {
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.replay-move-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.35rem 0.6rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #9ab4cf;
+}
+
+.replay-control-dock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-replay-ctrl {
+  background: #0d1e38;
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  color: #00f0ff;
+  border-radius: 8px;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-replay-ctrl:hover {
+  background: #143560;
+  border-color: #00f0ff;
+}
+
+.btn-replay-play {
+  background: #00f0ff;
+  color: #040914;
+  border: none;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-replay-play:hover {
+  box-shadow: 0 0 15px #00f0ff;
+  background: #63f0ff;
+}
+
+.replay-step-count {
+  font-size: 0.85rem;
+  color: #7b8ea5;
+  margin-left: 0.75rem;
+}

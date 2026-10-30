@@ -50,3 +50,18 @@ test('botMove accuracy differs between easy and hard difficulty', () => {
   assert.ok(hardCorrect >= 85, `Hard accuracy should be high (~95%), got ${hardCorrect}/100`);
   assert.ok(hardCorrect > easyCorrect, 'Hard bot must outperform easy bot');
 });
+
+test('timeoutRound deducts life from unanswered seats and resolves round', () => {
+  const g = mathArena.createGame('0xA', '0xB');
+  // 0xA answers correctly, 0xB does not answer
+  const correct = g.questions[0].correct;
+  mathArena.applyMove(g, '0xA', { index: correct });
+  assert.equal(g.round, 0);
+
+  const res = mathArena.timeoutRound(g);
+  assert.ok(res.ok);
+  assert.equal(res.timedOut, true);
+  assert.equal(g.round, 1);
+  assert.equal(g.scores.X, 20);
+  assert.equal(g.lives.O, 2); // 0xB lost life on timeout
+});

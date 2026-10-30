@@ -25,6 +25,7 @@ export default function MemoryMatch() {
   const rawDiff = route.params.get('difficulty');
   const initialDiff = ['easy', 'medium', 'hard'].includes(rawDiff) ? rawDiff : 'medium';
   const [difficulty, setDifficulty] = useState(initialDiff);
+  const inviteCode = route.params.get('invite');
   const { wallet } = useProfile();
 
   const [room, setRoom] = useState(null);
@@ -48,7 +49,7 @@ export default function MemoryMatch() {
       else if (mode === 'create') socket.emit('room:create', { gameType: 'memory', deck });
       else if (mode === 'join') socket.emit('room:join', { code: joinCode });
       else {
-        socket.emit('queue:join', { gameType: 'memory', deck });
+        socket.emit('queue:join', { gameType: 'memory', deck, inviteCode });
         setQueued(true);
       }
     }
@@ -56,7 +57,7 @@ export default function MemoryMatch() {
     else socket.once('connect', start);
     return () => socket.off('connect', start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, deck, joinCode, watchRoom]);
+  }, [mode, deck, inviteCode, joinCode, watchRoom]);
 
   useEffect(() => {
     const onStart = data => {
@@ -80,6 +81,10 @@ export default function MemoryMatch() {
     const onRoomWaiting = ({ code }) => setRoomCode(code);
     const onRoomExpired = () => { setRoomCode(null); setError('This room expired. Go back and create a new one.'); };
     const onError = msg => setError(typeof msg === 'string' ? msg : msg?.error || 'Something went wrong');
+    const onMatchError = data => {
+      setError(data?.error || 'Match error');
+      setQueued(false);
+    };
 
     socket.on('match:start', onStart);
     socket.on('game:state', onState);
@@ -89,6 +94,7 @@ export default function MemoryMatch() {
     socket.on('room:expired', onRoomExpired);
     socket.on('game:error', onError);
     socket.on('player:error', onError);
+    socket.on('match:error', onMatchError);
 
     return () => {
       socket.off('match:start', onStart);
@@ -99,6 +105,7 @@ export default function MemoryMatch() {
       socket.off('room:expired', onRoomExpired);
       socket.off('game:error', onError);
       socket.off('player:error', onError);
+      socket.off('match:error', onMatchError);
       const r = roomRef.current;
       socket.emit('queue:leave');
       if (r?.roomId) socket.emit('match:leave', { roomId: r.roomId });

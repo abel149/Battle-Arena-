@@ -24,6 +24,7 @@ function verifyAuthSignature(signature, address) {
 import { ENGINES, DECKS, dailyDeckId } from './games/index.js';
 import { recordMatch, getLedger, isOnchain, normalizeLedgerEntry, ONCHAIN_LABELS } from './chain-onchain.js';
 import { distributeRewards, isTokensOnchain, tokenAddresses, tokenBalance } from './chain-tokens.js';
+import { recordChoreVerification, verifyParentAttestation, getChoreLedger, isChoreOnchain } from './chain-chore.js';
 import * as store from './store.js';
 
 const PORT = process.env.PORT || 3001;
@@ -34,6 +35,18 @@ const ROOM_RETENTION_MS = 10 * 60 * 1000; // finished rooms expire after 10 min
 // Shared auth message: client (MetaMask personal_sign or local key) must sign
 // exactly this string; verification is standard EIP-191 via ethers.verifyMessage.
 const AUTH_MESSAGE = a => `Battle Arena login for ${a}`;
+
+// Kid safety: profanity filtering & preset moderation pattern
+const PROFANITY_PATTERN = /\b(fuck|shit|bitch|ass|asshole|dick|pussy|cunt|bastard|damn|crap|whore|slut|nigger|nigga|faggot|retard|idiot|stupid|kill|die)\b/i;
+
+function sanitizeChatMessage(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (PROFANITY_PATTERN.test(trimmed)) {
+    return '🎮 [Family Friendly Message]';
+  }
+  return trimmed.slice(0, 100);
+}
 
 const app = express();
 app.use(cors());
@@ -46,6 +59,16 @@ const io = new Server(server, { cors: { origin: '*' } });
 const rooms = new Map();          // roomId -> room
 const queue = [];                 // { socketId, gameType } waiting for a match
 const socketPlayer = new Map();   // socketId -> address
+
+function notifyPlayer(address, event, payload) {
+  if (!address) return;
+  for (const [sId, addr] of socketPlayer.entries()) {
+    if (addr?.toLowerCase() === address.toLowerCase()) {
+      const s = io.sockets.sockets.get(sId);
+      if (s) s.emit(event, payload);
+    }
+  }
+}
 const liveListeners = new Set();  // socketIds in the lobby (for rooms:live push)
 const pendingRooms = new Map();   // room code -> host waiting for a friend to join
 
@@ -79,6 +102,25 @@ function dropPendingFor(socketId) {
 // ---- REST ----
 app.get('/api/leaderboard', (_req, res) => res.json(store.leaderboard()));
 app.get('/api/leaderboard/weekly', (_req, res) => res.json(store.leaderboardWeekly()));
+
+app.get('/api/tournament', (_req, res) => {
+  const standings = store.leaderboardWeekly();
+  const topPlayers = standings.slice(0, 3);
+  res.json({
+    title: 'Weekly Arena Championship',
+    season: 'Season 1',
+    status: 'active',
+    prizePoolArena: 500,
+    prizes: [
+      { rank: 1, arenaReward: 250, badge: 'Gold Arena Champion', xp: 500 },
+      { rank: 2, arenaReward: 150, badge: 'Silver Arena Duelist', xp: 300 },
+      { rank: 3, arenaReward: 100, badge: 'Bronze Arena Contender', xp: 150 },
+    ],
+    rules: 'Top 3 players on the weekly leaderboard at Sunday 23:59 UTC receive ARENA token mints and exclusive on-chain championship badges.',
+    standings: topPlayers,
+    totalContenders: standings.length,
+  });
+});
 
 // Match ledger and verification expose the normalized on-chain shape.
 // matchId is the stable lookup key used by the game flow; matchIdRaw is the
@@ -187,6 +229,165 @@ app.get('/api/me', (_req, res) => {
   res.json({ note: 'Use /api/player/:address or socket identify to get a profile' });
 });
 
+// ---- Proof-of-Chore & Battle Pass Endpoints ----
+app.get('/api/battlepass/tiers', (_req, res) => {
+  res.json(store.BATTLE_PASS_TIERS);
+});
+
+app.get('/api/chores/:address', (req, res) => {
+  const address = req.params.address;
+  const p = store.getPlayer(address) || store.upsertPlayer(address);
+  const chores = store.getChores(address);
+  const vouchers = store.getVouchers(address);
+  res.json({
+    kidAddress: address,
+    energy: p.energy ?? 5,
+    battlePassXp: p.battlePassXp ?? 0,
+    battlePassTier: p.battlePassTier ?? 1,
+    allowanceBalance: p.allowanceBalance ?? 0,
+    parentAddress: p.parentAddress,
+    tiers: store.BATTLE_PASS_TIERS,
+    chores,
+    vouchers,
+  });
+});
+
+app.post('/api/chores/submit', (req, res) => {
+  const { kidAddress, choreId, notes } = req.body || {};
+  if (!kidAddress || !choreId) return res.status(400).json({ error: 'kidAddress and choreId required' });
+  const result = store.submitChore(kidAddress, choreId, notes);
+  if (result.error) return res.status(400).json(result);
+  const p = store.getPlayer(kidAddress);
+  if (p?.parentAddress) {
+    notifyPlayer(p.parentAddress, 'chore:submitted', result);
+  }
+  notifyPlayer(kidAddress, 'chore:updated', result);
+  res.json(result);
+});
+
+app.post('/api/chores/verify', async (req, res) => {
+  const { choreId, parentAddress, signature, message } = req.body || {};
+  if (!choreId || !parentAddress) return res.status(400).json({ error: 'choreId and parentAddress required' });
+
+  // If signed attestation provided, verify it
+  if (signature && message) {
+    const valid = verifyParentAttestation(signature, parentAddress, message);
+    if (!valid) return res.status(401).json({ error: 'Invalid parent oracle signature' });
+  }
+
+  const result = store.verifyChore(choreId, parentAddress);
+  if (result.error) return res.status(400).json(result);
+
+  // Record on-chain or to simulated proof ledger
+  let onchainRecord = null;
+  try {
+    onchainRecord = await recordChoreVerification({
+      choreId: result.chore.id,
+      kidAddress: result.chore.kidAddress,
+      parentAddress,
+      title: result.chore.title,
+      category: result.chore.category,
+      energyGranted: result.chore.energyReward,
+      allowanceGranted: result.chore.allowanceReward,
+    });
+  } catch (err) {
+    console.warn('Chore verification record warning:', err.message);
+  }
+
+  const kid = store.getPlayer(result.chore.kidAddress);
+  if (kid) {
+    notifyPlayer(result.chore.kidAddress, 'player:update', store.withoutPassword(kid));
+    notifyPlayer(result.chore.kidAddress, 'chore:verified', { ...result, onchainRecord });
+    if (result.unlockedSkin) {
+      notifyPlayer(result.chore.kidAddress, 'skin:unlocked', {
+        skin: result.unlockedSkin,
+        message: `🎉 Your parent verified your chore! You unlocked the '${result.unlockedSkin.name}' skin!`,
+      });
+    }
+  }
+  notifyPlayer(parentAddress, 'chore:verified', { ...result, onchainRecord });
+
+  res.json({ ...result, onchainRecord });
+});
+
+app.post('/api/chores/create', (req, res) => {
+  const { kidAddress, parentAddress, title, category, energyReward, xpReward, allowanceReward } = req.body || {};
+  if (!kidAddress || !title) return res.status(400).json({ error: 'kidAddress and title required' });
+  const chore = store.createCustomChore({
+    kidAddress,
+    parentAddress,
+    title,
+    category,
+    energyReward,
+    xpReward,
+    allowanceReward,
+  });
+  notifyPlayer(kidAddress, 'chore:created', chore);
+  res.json(chore);
+});
+
+app.post('/api/chores/quiz-complete', (req, res) => {
+  const { kidAddress, score } = req.body || {};
+  if (!kidAddress) return res.status(400).json({ error: 'kidAddress required' });
+  if (score < 4) return res.status(400).json({ error: 'Need at least 4/5 correct answers to pass' });
+  const result = store.completeBrainQuiz(kidAddress);
+  if (result.error) return res.status(400).json(result);
+  const updated = store.getPlayer(kidAddress);
+  if (updated) {
+    notifyPlayer(kidAddress, 'player:update', store.withoutPassword(updated));
+  }
+  res.json(result);
+});
+
+app.post('/api/parent/link', (req, res) => {
+  const { kidAddress, parentAddress } = req.body || {};
+  if (!kidAddress || !parentAddress) return res.status(400).json({ error: 'kidAddress and parentAddress required' });
+  const kid = store.linkParent(kidAddress, parentAddress);
+  res.json(store.withoutPassword(kid));
+});
+
+app.get('/api/parent/:parentAddress/dashboard', (req, res) => {
+  const parentAddress = req.params.parentAddress;
+  const data = store.getParentKids(parentAddress);
+  res.json(data);
+});
+
+app.post('/api/vouchers/redeem', (req, res) => {
+  const { voucherId, parentAddress } = req.body || {};
+  if (!voucherId) return res.status(400).json({ error: 'voucherId required' });
+  const result = store.redeemVoucher(voucherId, parentAddress);
+  if (result.error) return res.status(400).json(result);
+  res.json(result);
+});
+
+// ---- Skin & Parent PIN Endpoints ----
+
+app.get('/api/skins/:address', (req, res) => {
+  const skins = store.getSkins(req.params.address);
+  res.json(skins);
+});
+
+app.post('/api/skins/equip', (req, res) => {
+  const { address, skinId } = req.body || {};
+  if (!address || !skinId) return res.status(400).json({ error: 'address and skinId required' });
+  const result = store.equipSkin(address, skinId);
+  if (result.error) return res.status(400).json(result);
+  res.json(result);
+});
+
+app.post('/api/parent/verify-pin', (req, res) => {
+  const { address, pin } = req.body || {};
+  const result = store.verifyParentPin(address, pin);
+  res.json(result);
+});
+
+app.post('/api/parent/set-pin', (req, res) => {
+  const { address, pin } = req.body || {};
+  const result = store.setParentPin(address, pin);
+  if (result.error) return res.status(400).json(result);
+  res.json(result);
+});
+
 // ---- Helpers ----
 function serializeRoom(room) {
   return {
@@ -201,6 +402,7 @@ function serializeRoom(room) {
 
 function broadcastState(room) {
   io.to(room.id).emit('game:state', { roomId: room.id, game: room.engine.serialize(room.game) });
+  store.saveActiveRoom(room);
   armRoundTimer(room);
 }
 
@@ -209,16 +411,20 @@ function broadcastState(room) {
 // the deadline, so a stalling opponent can never freeze the match.
 function armRoundTimer(room) {
   clearTimeout(room.roundTimer);
+  if (room.mathTimer) clearTimeout(room.mathTimer);
   room.roundTimer = null;
-  if (!room.engine.ROUND_MS || room.game.winner) return;
+  const timeoutMs = room.engine.ROUND_MS || (room.gameType === 'math-arena' ? 12000 : null);
+  if (!timeoutMs || room.game.winner) return;
   const armedRound = room.game.round;
   room.roundTimer = setTimeout(() => {
     room.roundTimer = null;
     if (room.game.winner || room.game.round !== armedRound) return;
-    room.engine.timeoutMove(room.game);
+    if (room.engine.timeoutRound) room.engine.timeoutRound(room.game);
+    else if (room.engine.timeoutMove) room.engine.timeoutMove(room.game);
     broadcastState(room);
     afterEngineMove(room);
-  }, room.engine.ROUND_MS);
+  }, timeoutMs);
+  room.mathTimer = room.roundTimer;
 }
 
 function broadcastLiveRooms() {
@@ -230,6 +436,8 @@ function broadcastLiveRooms() {
 }
 
 async function finishRoom(room) {
+  if (room.tickInterval) clearInterval(room.tickInterval);
+  if (room.mathTimer) clearTimeout(room.mathTimer);
   clearTimeout(room.roundTimer);
   room.roundTimer = null;
   const { game } = room;
@@ -252,15 +460,26 @@ async function finishRoom(room) {
       moves: game.moves,
     });
   } catch (err) {
-    console.warn('On-chain match recording failed:', err.message);
-    receipt = {
-      matchId: room.id,
-      gameType: room.gameType,
-      players: { X: addrX, O: addrO },
-      winner: winnerAddr || 'draw',
-      timestamp: Date.now(),
-      error: err.message,
-    };
+    console.warn('On-chain match recording failed, falling back to simulated ledger:', err.message);
+    try {
+      const { recordMatchSimulated, normalizeLedgerEntry } = await import('./chain-onchain.js');
+      receipt = normalizeLedgerEntry(recordMatchSimulated({
+        matchId: room.id,
+        gameType: room.gameType,
+        players: { X: addrX, O: addrO },
+        winner: winnerAddr || 'draw',
+        moves: game.moves,
+      }));
+    } catch {
+      receipt = {
+        matchId: room.id,
+        gameType: room.gameType,
+        players: { X: addrX, O: addrO },
+        winner: winnerAddr || 'draw',
+        timestamp: Date.now(),
+        error: err.message,
+      };
+    }
   }
 
   // Update stats for human players and compute on-chain reward deltas
@@ -321,12 +540,28 @@ async function finishRoom(room) {
     result: game.winner,
     receipt: { ...receipt, rewards: rewardReceipts }, // { matchId, matchIdRaw?, winner, timestamp, resultHash, txHash, rewards? }
   });
+  // Clean up persisted active room and memory
+  store.removeActiveRoom(room.id);
   // Free finished rooms after a grace period so the map does not grow forever.
   setTimeout(() => rooms.delete(room.id), ROOM_RETENTION_MS);
-  // Note: the on-chain record and the DB writes below are intentionally
-  // independent. The chain is the proof layer; SQLite is the operational store.
-  // If one fails, the other can still stand on its own.
   broadcastLiveRooms();
+}
+
+function scheduleMathRoundTimer(room) {
+  if (room.mathTimer) clearTimeout(room.mathTimer);
+  if (room.game.winner) return;
+  const currentRound = room.game.round;
+  room.mathTimer = setTimeout(() => {
+    const r = rooms.get(room.id);
+    if (!r || r.game.winner || r.game.round !== currentRound) return;
+    if (!r.game.answered.X || !r.game.answered.O) {
+      if (r.engine.timeoutRound) {
+        r.engine.timeoutRound(r.game);
+        broadcastState(r);
+        afterEngineMove(r);
+      }
+    }
+  }, 12000);
 }
 
 // Advance game flow after any move: resolve pending state, then run the bot
@@ -334,6 +569,9 @@ async function finishRoom(room) {
 // The on-chain path is called only when the room ends, in finishRoom().
 function afterEngineMove(room, res) {
   if (room.game.winner) return finishRoom(room);
+  if (room.gameType === 'math-arena') {
+    scheduleMathRoundTimer(room);
+  }
   if (res?.pendingMs && room.engine.resolve) {
     setTimeout(() => {
       if (room.game.winner) return;
@@ -371,12 +609,16 @@ function createRoom(gameType, addrX, addrO, getSocket, opts = {}) {
     : 'medium';
   const diffLabel = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
   const botName = `ArenaBot (${diffLabel})`;
+
+  const skinX = store.getEquippedSkin(addrX)?.id || 'neon-striker';
+  const skinO = (addrO === BOT) ? (opts?.skinO || 'crimson-phoenix') : (store.getEquippedSkin(addrO)?.id || 'neon-striker');
+
   const room = {
     id,
     gameType,
     difficulty,
     engine,
-    game: engine.createGame(addrX, addrO, { ...opts, difficulty }),
+    game: engine.createGame(addrX, addrO, { ...opts, difficulty, skins: { X: skinX, O: skinO } }),
     sockets: {},
     names: { [BOT]: botName },
     spectators: new Set(),
@@ -384,15 +626,50 @@ function createRoom(gameType, addrX, addrO, getSocket, opts = {}) {
     private: !!opts.private,
   };
   rooms.set(id, room);
+  store.saveActiveRoom(room);
   for (const addr of [addrX, addrO]) {
+    if (addr && addr !== BOT) {
+      store.consumeEnergy(addr, 1);
+    }
     const s = getSocket(addr);
     if (s) {
       room.sockets[addr] = s.id;
-      room.names[addr] = store.getPlayer(addr)?.name;
+      const p = store.getPlayer(addr);
+      room.names[addr] = p?.name;
       s.join(id);
       s.emit('match:start', serializeRoom(room));
+      if (p) {
+        s.emit('player:update', store.withoutPassword(p));
+      }
     }
   }
+
+  // Real-time tick loop for Cyber Blaster
+  if (gameType === 'cyber-blaster') {
+    room.tickInterval = setInterval(() => {
+      if (room.game.winner) {
+        clearInterval(room.tickInterval);
+        return;
+      }
+      if (room.game.players.O === BOT) {
+        const bMove = room.engine.botMove(room.game, room.difficulty);
+        if (bMove) room.engine.applyMove(room.game, BOT, bMove);
+      }
+      room.engine.tick(room.game, 40);
+      const tickData = room.engine.serializeTick ? room.engine.serializeTick(room.game) : room.engine.serialize(room.game);
+      io.to(room.id).emit('blaster:tick', tickData);
+      if (room.game.winner) {
+        clearInterval(room.tickInterval);
+        finishRoom(room);
+      }
+    }, 40);
+  }
+
+  // Authoritative round timer for Neon Math Arena
+  if (gameType === 'math-arena') {
+    scheduleMathRoundTimer(room);
+  }
+
   broadcastLiveRooms();
   armRoundTimer(room); // first round starts now — no broadcastState happened yet
   return room;
@@ -464,12 +741,34 @@ io.on('connection', (socket) => {
     if (token) {
       const sessionAddress = store.addressForSession(token);
       if (!sessionAddress) return socket.emit('auth:expired');
-      return bindIdentity(socket, sessionAddress);
+      bindIdentity(socket, sessionAddress);
+      // Auto-resume active match on reconnect/refresh/restart
+      for (const room of rooms.values()) {
+        if (!room.game.winner && (room.game.players.X === sessionAddress || room.game.players.O === sessionAddress)) {
+          room.sockets[sessionAddress] = socket.id;
+          socket.join(room.id);
+          socket.emit('match:resumed', serializeRoom(room));
+          socket.emit('game:state', { roomId: room.id, game: room.engine.serialize(room.game) });
+          break;
+        }
+      }
+      return;
     }
     if (!address) return socket.emit('player:error', { error: 'Not identified: no address provided' });
     if (!signature || typeof signature !== 'string' || !signature.trim()) return socket.emit('player:error', { error: 'Not identified: signature required' });
     if (!verifyAuthSignature(signature, address)) return socket.emit('player:error', { error: 'Not identified: invalid signature' });
     bindIdentity(socket, address);
+
+    // Auto-resume active match on reconnect/refresh/restart
+    for (const room of rooms.values()) {
+      if (!room.game.winner && (room.game.players.X === address || room.game.players.O === address)) {
+        room.sockets[address] = socket.id;
+        socket.join(room.id);
+        socket.emit('match:resumed', serializeRoom(room));
+        socket.emit('game:state', { roomId: room.id, game: room.engine.serialize(room.game) });
+        break;
+      }
+    }
   });
 
   const authSuccess = (result) => {
@@ -524,28 +823,52 @@ io.on('connection', (socket) => {
     socket.emit('player:registered:user', { address: result.address, username: result.username, name: result.name });
   });
 
-  socket.on('queue:join', ({ gameType, deck } = {}) => {
-    const address = accountOf(socket);
+  socket.on('queue:join', ({ gameType, deck, inviteCode } = {}) => {
+    const address = accountOf(socket) || socketPlayer.get(socket.id);
     const type = ENGINES[gameType] ? gameType : 'memory';
     if (!address || queue.some(q => q.socketId === socket.id)) return;
+    const p = store.getPlayer(address) || store.upsertPlayer(address);
+    if ((p.energy ?? 5) <= 0) {
+      return socket.emit('match:error', {
+        error: '⚡ Out of Arena Energy! Complete a chore or pass the Brain Quiz to earn Energy.',
+        needsEnergy: true,
+      });
+    }
     dropPendingFor(socket.id);
-    queue.push({ socketId: socket.id, gameType: type, deck });
-    socket.emit('queue:waiting', { gameType: type });
+    const cleanInvite = inviteCode ? String(inviteCode).trim().toUpperCase().slice(0, 8) : null;
+    queue.push({ socketId: socket.id, gameType: type, deck, inviteCode: cleanInvite });
+    socket.emit('queue:waiting', { gameType: type, inviteCode: cleanInvite });
 
-    // Pair the first two players waiting for the same game
-    const peers = queue.filter(q => q.gameType === type);
+    // Pair the first two players waiting for the same game & invite code
+    const peers = queue.filter(q => q.gameType === type && (cleanInvite ? q.inviteCode === cleanInvite : !q.inviteCode));
     if (peers.length >= 2) {
+      const [a, b] = peers;
+      const addrA = socketPlayer.get(a.socketId);
+      const addrB = socketPlayer.get(b.socketId);
+      const pA = store.getPlayer(addrA);
+      const pB = store.getPlayer(addrB);
+      if ((pA?.energy ?? 5) <= 0) {
+        queue.splice(queue.indexOf(a), 1);
+        const sockA = io.sockets.sockets.get(a.socketId);
+        if (sockA) sockA.emit('match:error', { error: '⚡ Out of Arena Energy!', needsEnergy: true });
+        return;
+      }
+      if ((pB?.energy ?? 5) <= 0) {
+        queue.splice(queue.indexOf(b), 1);
+        const sockB = io.sockets.sockets.get(b.socketId);
+        if (sockB) sockB.emit('match:error', { error: '⚡ Out of Arena Energy!', needsEnergy: true });
+        return;
+      }
       for (const p of peers.slice(0, 2)) {
         queue.splice(queue.indexOf(p), 1);
       }
-      const [a, b] = peers;
       const sockA = io.sockets.sockets.get(a.socketId);
       const sockB = io.sockets.sockets.get(b.socketId);
       if (!sockA || !sockB) return;
       createRoom(
         type,
-        socketPlayer.get(a.socketId),
-        socketPlayer.get(b.socketId),
+        addrA,
+        addrB,
         addr => [sockA, sockB].find(s => socketPlayer.get(s.id) === addr),
         { deck: a.deck },
       );
@@ -605,11 +928,39 @@ io.on('connection', (socket) => {
     const address = accountOf(socket);
     const type = ENGINES[gameType] ? gameType : 'memory';
     if (!address) return;
+    const p = store.getPlayer(address) || store.upsertPlayer(address);
+    if ((p.energy ?? 5) <= 0) {
+      return socket.emit('match:error', {
+        error: '⚡ Out of Arena Energy! Complete a chore or pass the Brain Quiz to earn Energy.',
+        needsEnergy: true,
+      });
+    }
     const diff = ['easy', 'medium', 'hard'].includes(difficulty) ? difficulty : 'medium';
     const room = createRoom(type, address, BOT,
       addr => (addr === address ? socket : null), { deck, pairs, difficulty: diff });
     // If the bot ever has the first turn, drive it
     afterEngineMove(room);
+  });
+
+  socket.on('chores:get', ({ kidAddress } = {}, ack) => {
+    const target = kidAddress || socketPlayer.get(socket.id);
+    if (!target) return ack?.({ error: 'No address' });
+    const p = store.getPlayer(target) || store.upsertPlayer(target);
+    const chores = store.getChores(target);
+    const vouchers = store.getVouchers(target);
+    const payload = {
+      kidAddress: target,
+      energy: p.energy ?? 5,
+      battlePassXp: p.battlePassXp ?? 0,
+      battlePassTier: p.battlePassTier ?? 1,
+      allowanceBalance: p.allowanceBalance ?? 0,
+      parentAddress: p.parentAddress,
+      tiers: store.BATTLE_PASS_TIERS,
+      chores,
+      vouchers,
+    };
+    if (ack) ack(payload);
+    else socket.emit('chores:data', payload);
   });
 
   socket.on('game:move', ({ roomId, ...move }) => {
@@ -620,6 +971,30 @@ io.on('connection', (socket) => {
     if (res.error) return socket.emit('game:error', res.error);
     broadcastState(room);
     afterEngineMove(room, res);
+  });
+
+  socket.on('blaster:input', ({ roomId, ...move }) => {
+    const room = rooms.get(roomId);
+    const address = socketPlayer.get(socket.id);
+    if (!room || !address || room.game.winner) return;
+    room.engine.applyMove(room.game, address, { type: 'input', ...move });
+  });
+
+  socket.on('skins:get', ({ address } = {}, ack) => {
+    const target = address || socketPlayer.get(socket.id);
+    const skins = store.getSkins(target);
+    if (typeof ack === 'function') ack(skins);
+    else socket.emit('skins:list', skins);
+  });
+
+  socket.on('skins:equip', ({ skinId } = {}, ack) => {
+    const addr = socketPlayer.get(socket.id);
+    if (!addr) return ack && ack({ error: 'Identify required' });
+    const res = store.equipSkin(addr, skinId);
+    if (ack) ack(res);
+    if (res.ok) {
+      socket.emit('player:update', store.withoutPassword(res.player));
+    }
   });
 
   socket.on('spectate', ({ roomId }) => {
@@ -638,14 +1013,30 @@ io.on('connection', (socket) => {
     // Only players and spectators of this room may post to its chat.
     const member = room.sockets[address] === socket.id || room.spectators.has(socket.id);
     if (!member) return;
+    const cleanText = sanitizeChatMessage(text);
+    if (!cleanText) return;
     const msg = {
       from: store.getPlayer(address)?.name || address.slice(0, 8),
       address,
-      text: text.trim().slice(0, 300),
+      text: cleanText,
       t: Date.now(),
     };
     room.chat.push(msg);
+    store.saveActiveRoom(room);
     io.to(roomId).emit('chat:message', msg);
+  });
+
+  socket.on('room:reconnect', ({ roomId }, ack) => {
+    const room = rooms.get(roomId);
+    if (!room) return ack?.({ error: 'Room not found or match already concluded' });
+    const address = socketPlayer.get(socket.id);
+    if (address && (room.game.players.X === address || room.game.players.O === address)) {
+      room.sockets[address] = socket.id;
+    }
+    socket.join(room.id);
+    socket.emit('match:start', serializeRoom(room));
+    socket.emit('game:state', { roomId: room.id, game: room.engine.serialize(room.game) });
+    ack?.({ ok: true, room: serializeRoom(room) });
   });
 
   socket.on('match:leave', ({ roomId }) => {
@@ -667,6 +1058,59 @@ io.on('connection', (socket) => {
     liveListeners.delete(socket.id);
   });
 });
+
+function restoreActiveRooms() {
+  store.cleanupStaleActiveRooms(30 * 60 * 1000);
+  const saved = store.listActiveRooms();
+  for (const r of saved) {
+    const engine = ENGINES[r.gameType];
+    if (!engine || r.game.winner) {
+      store.removeActiveRoom(r.roomId);
+      continue;
+    }
+    const room = {
+      id: r.roomId,
+      gameType: r.gameType,
+      difficulty: r.game.difficulty || 'medium',
+      engine,
+      deck: r.deck,
+      names: r.names,
+      game: r.game,
+      sockets: {},
+      spectators: new Set(r.spectators || []),
+      chat: r.chat || [],
+      createdAt: r.createdAt,
+    };
+    if (r.gameType === 'cyber-blaster') {
+      room.tickInterval = setInterval(() => {
+        if (room.game.winner) {
+          clearInterval(room.tickInterval);
+          return;
+        }
+        if (room.game.players.O === BOT) {
+          const bMove = room.engine.botMove(room.game, room.difficulty);
+          if (bMove) room.engine.applyMove(room.game, BOT, bMove);
+        }
+        room.engine.tick(room.game, 40);
+        const tickData = room.engine.serializeTick ? room.engine.serializeTick(room.game) : room.engine.serialize(room.game);
+        io.to(room.id).emit('blaster:tick', tickData);
+        if (room.game.winner) {
+          clearInterval(room.tickInterval);
+          finishRoom(room);
+        }
+      }, 40);
+    }
+    if (r.gameType === 'math-arena') {
+      scheduleMathRoundTimer(room);
+    }
+    rooms.set(room.id, room);
+  }
+  if (saved.length > 0) {
+    console.log(`[Persistence] Restored ${rooms.size} active room(s) from SQLite on boot.`);
+  }
+}
+
+restoreActiveRooms();
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Battle Arena server on http://localhost:${PORT}`);

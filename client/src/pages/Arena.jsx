@@ -23,8 +23,10 @@ const otherSeat = seat => (seat === 'X' ? 'O' : 'X');
 export default function Arena() {
   const route = useRoute();
   const modeParam = route.params.get('mode');
-  const mode = ['bot', 'create', 'join'].includes(modeParam) ? modeParam : 'match';
-  const joinCode = (route.params.get('code') || '').toUpperCase();
+  const mode = ['bot', 'watch', 'create', 'join'].includes(modeParam) ? modeParam : 'match';
+  const watchRoom = route.params.get('room');
+  const inviteCode = route.params.get('invite');
+  const joinCode = (route.params.get('code') || route.params.get('invite') || '').toUpperCase();
   const rawDiff = route.params.get('difficulty');
   const initialDiff = ['easy', 'medium', 'hard'].includes(rawDiff) ? rawDiff : 'medium';
   const [difficulty, setDifficulty] = useState(initialDiff);
@@ -67,14 +69,17 @@ export default function Arena() {
   /* ------------------------------ connection ------------------------------ */
   useEffect(() => {
     async function start() {
-      // Await the signed identify — queue:join must arrive after the server
-      // has verified our wallet signature, or it is silently dropped.
       await signAndIdentify(wallet);
-      if (mode === 'bot') socket.emit('match:bot', { gameType: 'math-arena', difficulty });
-      else if (mode === 'create') socket.emit('room:create', { gameType: 'math-arena' });
-      else if (mode === 'join') socket.emit('room:join', { code: joinCode });
-      else {
-        socket.emit('queue:join', { gameType: 'math-arena' });
+      if (mode === 'watch' && watchRoom) {
+        socket.emit('spectate', { roomId: watchRoom });
+      } else if (mode === 'bot') {
+        socket.emit('match:bot', { gameType: 'math-arena', difficulty });
+      } else if (mode === 'create') {
+        socket.emit('room:create', { gameType: 'math-arena' });
+      } else if (mode === 'join') {
+        socket.emit('room:join', { code: joinCode });
+      } else {
+        socket.emit('queue:join', { gameType: 'math-arena', inviteCode: inviteCode || joinCode });
         setQueued(true);
       }
     }
@@ -82,7 +87,7 @@ export default function Arena() {
     else socket.once('connect', start);
     return () => socket.off('connect', start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, joinCode]);
+  }, [mode, watchRoom, inviteCode, joinCode]);
 
   useEffect(() => {
     const onStart = data => {
@@ -113,6 +118,10 @@ export default function Arena() {
     const onRoomWaiting = ({ code }) => setRoomCode(code);
     const onRoomExpired = () => { setRoomCode(null); setError('This room expired. Go back and create a new one.'); };
     const onError = msg => setError(typeof msg === 'string' ? msg : msg?.error || 'Something went wrong');
+    const onMatchError = data => {
+      setError(data?.error || 'Match error');
+      setQueued(false);
+    };
 
     socket.on('match:start', onStart);
     socket.on('game:state', onState);
@@ -122,6 +131,7 @@ export default function Arena() {
     socket.on('room:expired', onRoomExpired);
     socket.on('game:error', onError);
     socket.on('player:error', onError);
+    socket.on('match:error', onMatchError);
 
     return () => {
       socket.off('match:start', onStart);
@@ -132,6 +142,7 @@ export default function Arena() {
       socket.off('room:expired', onRoomExpired);
       socket.off('game:error', onError);
       socket.off('player:error', onError);
+      socket.off('match:error', onMatchError);
       const r = roomRef.current;
       socket.emit('queue:leave');
       if (r?.roomId) socket.emit('match:leave', { roomId: r.roomId });
@@ -231,9 +242,10 @@ export default function Arena() {
     if (Number.isInteger(pick)) setOppTile(pick);
   }, [game?.lastResult, oppSeat]);
 
-  const locked = !!(game && mySeat && game.answered?.[mySeat]);
+  const locked = mode === 'watch' || !!(game && mySeat && game.answered?.[mySeat]);
 
   const answer = useCallback(index => {
+    if (mode === 'watch') return;
     const g = gameRef.current;
     const r = roomRef.current;
     const seat = seatOf(g, wallet.address);
@@ -537,6 +549,8 @@ export default function Arena() {
           mode={mode}
           code={roomCode}
           error={error}
+          inviteCode={inviteCode}
+          onSwitchToBot={() => navigate(`arena?mode=bot&difficulty=${difficulty}`)}
           onCancel={leave}
         />
       )}
@@ -548,13 +562,28 @@ export default function Arena() {
 
 const WAITING_COPY = {
   bot: ['Warming up the bot', 'Your rival is stepping onto the arena floor…'],
+  watch: ['Spectator Mode', 'Connecting to the live arena match…'],
   create: ['Room ready', 'Share this code with a friend — the match starts as soon as they join.'],
   join: ['Joining room', 'Connecting you to your friend’s room…'],
-  match: ['Finding an opponent', 'Waiting for another player to join Neon Math Arena. Open the arena in a second window to test.'],
+  match: ['Finding an opponent', 'Waiting for another player to join Neon Math Arena. Send your invite link to duel directly:'],
 };
 
-function Waiting({ mode, code, error, onCancel }) {
+function Waiting({ mode, code, error, onCancel, inviteCode, onSwitchToBot }) {
+  const [copied, setCopied] = useState(false);
+  const shareCode = code || inviteCode || (typeof window !== 'undefined' ? (window.arenaInviteCode ??= Math.random().toString(36).slice(2, 6).toUpperCase()) : 'MATH');
+  const inviteUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}${window.location.pathname}#arena?mode=match&invite=${shareCode}`
+    : '';
+
+  function copyInvite() {
+    navigator.clipboard?.writeText(inviteUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    }).catch(() => {});
+  }
+
   const [title, text] = WAITING_COPY[mode] || WAITING_COPY.match;
+
   return (
     <div className="waiting-overlay">
       <div className="waiting-card">
@@ -562,7 +591,21 @@ function Waiting({ mode, code, error, onCancel }) {
         <h2>{error ? 'Match error' : title}</h2>
         <p>{error || text}</p>
         {!error && mode === 'create' && code && <RoomCode code={code} />}
-        <button type="button" className="lock-btn" onClick={onCancel}>{error ? 'Back to hub' : 'Cancel'}</button>
+        {!error && (mode === 'match' || inviteCode) && (
+          <div className="waiting-invite-box">
+            <button type="button" className="btn-copy-invite" onClick={copyInvite}>
+              {copied ? '✓ Friend Link Copied!' : '👥 Copy Friend Invite Link'}
+            </button>
+          </div>
+        )}
+        <div className="waiting-actions-row">
+          {mode !== 'bot' && onSwitchToBot && (
+            <button type="button" className="btn-bot-fallback" onClick={onSwitchToBot}>
+              🤖 Play vs Bot
+            </button>
+          )}
+          <button type="button" className="lock-btn" onClick={onCancel}>{error ? 'Back to hub' : 'Cancel'}</button>
+        </div>
       </div>
     </div>
   );

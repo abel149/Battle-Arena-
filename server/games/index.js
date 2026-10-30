@@ -8,10 +8,14 @@
 
 import * as memory from './memory.js';
 import * as mathArena from './math-arena.js';
+import * as connectFour from './connectfour.js';
+import * as cyberBlaster from './cyber-blaster.js';
 
 export const ENGINES = {
   memory,
   'math-arena': mathArena,
+  'connect-four': connectFour,
+  'cyber-blaster': cyberBlaster,
 };
 
 export { DECKS, dailyDeckId } from './decks.js';

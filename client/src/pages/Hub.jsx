@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { API, socket, logout } from '../socket.js';
 import { navigate } from '../lib/router.js';
-import { saveWallet, short, useProfile } from '../lib/session.js';
+import { saveWallet, short, useProfile, clearWalletSession } from '../lib/session.js';
 import ArenaPreview3D from '../components/ArenaPreview3D.jsx';
+import AuthModal from '../components/AuthModal.jsx';
+import SkinLockerModal from '../components/SkinLockerModal.jsx';
+import ParentApprovalModal from '../components/ParentApprovalModal.jsx';
+import ReplayModal from '../components/ReplayModal.jsx';
+import AccountModal from '../components/AccountModal.jsx';
 import JoinRoomModal from '../components/JoinRoomModal.jsx';
 import './hub.css';
 
@@ -21,9 +26,25 @@ export default function Hub() {
   const [deck, setDeck] = useState(DEFAULT_DECK);
   const [mathDiff, setMathDiff] = useState('medium');
   const [memoryDiff, setMemoryDiff] = useState('medium');
+  const [c4Diff, setC4Diff] = useState('medium');
+  const [blasterDiff, setBlasterDiff] = useState('medium');
+  const [showSkinLocker, setShowSkinLocker] = useState(false);
+  const [showParentModal, setShowParentModal] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [replayMatchId, setReplayMatchId] = useState(null);
+  const [celebrationToast, setCelebrationToast] = useState(null);
+  const [showEnergyModal, setShowEnergyModal] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [joinGame, setJoinGame] = useState(null); // 'arena' | 'memory' | null
   const [liveRooms, setLiveRooms] = useState([]);
+
+  function tryPlay(path) {
+    if ((profile?.energy ?? 5) <= 0) {
+      setShowEnergyModal(true);
+      return;
+    }
+    navigate(path);
+  }
 
   const refresh = useCallback(async () => {
     try {
@@ -50,7 +71,14 @@ export default function Hub() {
   // Live leaderboard: refresh as soon as any match on this socket finishes.
   useEffect(() => {
     socket.on('match:end', refresh);
-    return () => socket.off('match:end', refresh);
+    const onSkinUnlocked = ({ skin, message }) => {
+      setCelebrationToast(message || `🎉 You unlocked the '${skin.name}' skin!`);
+    };
+    socket.on('skin:unlocked', onSkinUnlocked);
+    return () => {
+      socket.off('match:end', refresh);
+      socket.off('skin:unlocked', onSkinUnlocked);
+    };
   }, [refresh]);
 
   // The server tells us which account this socket is logged in to.
@@ -69,6 +97,10 @@ export default function Hub() {
     return () => socket.off('player:registered:user', onUser);
   }, [setWallet]);
 
+  function handleLogout() {
+    clearWalletSession();
+    logout();
+  }
   // Matches in progress. The server pushes this whenever a room starts, ends or gains a viewer.
   useEffect(() => {
     const onList = list => setLiveRooms(Array.isArray(list) ? list : []);
@@ -98,6 +130,9 @@ export default function Hub() {
           <span className="brand-name">Battle Arena</span>
         </a>
         <div className="hub-wallet">
+          <a className="stat-pill energy-pill" href="#battlepass" title="⚡ Arena Energy — Earn by doing chores or quiz">
+            ⚡ {profile?.energy ?? 5} Energy
+          </a>
           {profile && (
             <span className="stat-pill">
               <span className="lvl">Lv {profile.level || 1}</span>
@@ -105,16 +140,68 @@ export default function Hub() {
               {profile.tokens || 0} ARENA
             </span>
           )}
+          <a className="mm-btn bp-nav-btn" href="#battlepass" title="Proof-of-Chore Battle Pass & Allowance">
+            🏆 Battle Pass
+          </a>
+          <button
+            type="button"
+            className="mm-btn skin-nav-btn"
+            onClick={() => setShowSkinLocker(true)}
+            title="Open Armory to equip skins or submit chore proofs"
+          >
+            🎨 Skins
+          </button>
+          <button
+            type="button"
+            className="mm-btn parent-nav-btn"
+            onClick={() => setShowParentModal(true)}
+            title="Open Parent Portal (PIN) to approve chores"
+          >
+            🛡️ Parents
+          </button>
           <a className="mm-btn ghost" href="#classic" title="Classic lobby with live chat and spectator mode">
             💬 Chat & Spectate
           </a>
           {profile?.username && <span className="user-pill">@{profile.username}</span>}
+          <button type="button" className="mm-btn key-vault-btn" onClick={() => setShowAccountModal(true)} title="Backup, view keys, or restore account">
+            🔑 Keys & Vault
+          </button>
           <span className="addr-pill" title={`Profile ID ${wallet.address}`}>{short(wallet.address)}</span>
-          <button type="button" className="mm-btn" onClick={logout}>Log out</button>
+          <button type="button" className="mm-btn" onClick={handleLogout}>Log out</button>
         </div>
       </header>
 
+      {celebrationToast && (
+        <div className="hub-celebration-toast">
+          <span>{celebrationToast}</span>
+          <button type="button" onClick={() => setCelebrationToast(null)}>✕</button>
+        </div>
+      )}
+
       {loadError && <div className="hub-alert">{loadError}</div>}
+
+      {/* ---------------- Proof-of-Chore Battle Pass Banner ---------------- */}
+      <section className="hub-bp-hero">
+        <div className="bp-hero-badge">⚡ Proof-of-Chore Battle Pass</div>
+        <div className="bp-hero-body">
+          <div className="bp-hero-text">
+            <h2>"The only video game that gets your kids to clean their room first."</h2>
+            <p>
+              Arena Energy cannot be bought with money — it must be earned! Clean your room, finish homework, or pass the Brain Quiz to earn Energy, unlock Battle Pass tiers, and win real allowance rewards.
+            </p>
+          </div>
+          <div className="bp-hero-action">
+            <div className="bp-hero-pills">
+              <span className="bp-hero-tier">Tier {profile?.battlePassTier ?? 1}</span>
+              <span className="bp-hero-allowance">${(profile?.allowanceBalance ?? 0).toFixed(2)} Allowance</span>
+              <span className="bp-hero-energy">⚡ {profile?.energy ?? 5} Energy</span>
+            </div>
+            <a className="btn-hero-bp" href="#battlepass">
+              Open Battle Pass & Chores →
+            </a>
+          </div>
+        </div>
+      </section>
 
       <main className="hub-grid">
         {/* ---------------- Neon Math Arena ---------------- */}
@@ -153,10 +240,10 @@ export default function Hub() {
           </div>
 
           <div className="card-actions">
-            <button type="button" className="btn-quick" onClick={() => navigate('arena?mode=match')}>
+            <button type="button" className="btn-quick" onClick={() => tryPlay('arena?mode=match')}>
               <BoltIcon /> Quick Match
             </button>
-            <button type="button" className="btn-bot" onClick={() => navigate(`arena?mode=bot&difficulty=${mathDiff}`)}>
+            <button type="button" className="btn-bot" onClick={() => tryPlay(`arena?mode=bot&difficulty=${mathDiff}`)}>
               <GamepadIcon /> Play vs Bot
             </button>
             <button type="button" className="btn-bot" onClick={() => navigate('arena?mode=create')}>
@@ -210,10 +297,104 @@ export default function Hub() {
           </div>
 
           <div className="card-actions">
-            <button type="button" className="btn-quick" onClick={() => navigate(`memory?mode=match&deck=${deck}`)}>
+            <button type="button" className="btn-quick" onClick={() => tryPlay(`memory?mode=match&deck=${deck}`)}>
               <BoltIcon /> Quick Match
             </button>
-            <button type="button" className="btn-bot" onClick={() => navigate(`memory?mode=bot&deck=${deck}&difficulty=${memoryDiff}`)}>
+            <button type="button" className="btn-bot" onClick={() => tryPlay(`memory?mode=bot&deck=${deck}&difficulty=${memoryDiff}`)}>
+              <GamepadIcon /> Play vs Bot
+            </button>
+          </div>
+        </section>
+
+        {/* ---------------- Connect Four Arena ---------------- */}
+        <section className="game-card c4-card">
+          <h2 className="card-title c4-card-title">Connect Four Arena</h2>
+
+          <div className="card-art c4-art">
+            <ConnectFourArt />
+            <div className="art-fade" aria-hidden="true" />
+          </div>
+
+          <div className="card-meta">
+            <span className="meta-check" aria-hidden="true">✓</span>
+            Classic 7×6 Drop Grid
+            <span className="meta-bonus">+25 Battle Pass XP</span>
+          </div>
+
+          <div className="card-meta bot-diff-meta">
+            <span className="diff-label">🤖 Bot Level:</span>
+            <div className="diff-selector" role="radiogroup" aria-label="Connect Four Bot Difficulty">
+              {DIFFICULTIES.map(d => (
+                <button
+                  key={d.id}
+                  type="button"
+                  className={`diff-chip ${c4Diff === d.id ? 'active' : ''} diff-${d.id}`}
+                  onClick={() => setC4Diff(d.id)}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="card-actions">
+            <button type="button" className="btn-quick" onClick={() => tryPlay('connectfour?mode=match')}>
+              <BoltIcon /> Quick Match
+            </button>
+            <button type="button" className="btn-bot" onClick={() => tryPlay(`connectfour?mode=bot&difficulty=${c4Diff}`)}>
+              <GamepadIcon /> Play vs Bot
+            </button>
+          </div>
+        </section>
+
+        {/* ---------------- Cyber Blaster Arena ---------------- */}
+        <section className="game-card blaster-card">
+          <h2 className="card-title blaster-card-title">Cyber Blaster Arena</h2>
+
+          <div className="card-art blaster-art">
+            <BlasterArt />
+            <div className="art-fade" aria-hidden="true" />
+          </div>
+
+          <div className="card-meta">
+            <span className="meta-check" aria-hidden="true">✓</span>
+            2D Neon Laser Duel
+            <span className="meta-bonus">+50 Battle Pass XP</span>
+          </div>
+
+          <div className="card-meta blaster-skin-meta">
+            <span className="skin-current-label">🚀 Skin:</span>
+            <span className="skin-current-name">{profile?.equippedSkin || 'neon-striker'}</span>
+            <button
+              type="button"
+              className="btn-change-skin-chip"
+              onClick={() => setShowSkinLocker(true)}
+            >
+              Change Skin 🎨
+            </button>
+          </div>
+
+          <div className="card-meta bot-diff-meta">
+            <span className="diff-label">🤖 Bot Level:</span>
+            <div className="diff-selector" role="radiogroup" aria-label="Cyber Blaster Bot Difficulty">
+              {DIFFICULTIES.map(d => (
+                <button
+                  key={d.id}
+                  type="button"
+                  className={`diff-chip ${blasterDiff === d.id ? 'active' : ''} diff-${d.id}`}
+                  onClick={() => setBlasterDiff(d.id)}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="card-actions">
+            <button type="button" className="btn-quick" onClick={() => tryPlay('blaster?mode=match')}>
+              <BoltIcon /> Quick Match
+            </button>
+            <button type="button" className="btn-bot" onClick={() => tryPlay(`blaster?mode=bot&difficulty=${blasterDiff}`)}>
               <GamepadIcon /> Play vs Bot
             </button>
             <button type="button" className="btn-bot" onClick={() => navigate(`memory?mode=create&deck=${deck}`)}>
@@ -259,18 +440,27 @@ export default function Hub() {
             <div className="onchain-body">
               {matches.length === 0 && <p className="side-empty">No results recorded yet.</p>}
               {latest.map(m => (
-                <a
-                  key={m.matchId}
-                  className="chain-row"
-                  href={`${API}/api/verify/${m.matchId}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  title={`Verify ${m.matchId}`}
-                >
-                  <span className={`chain-dot ${m.gameType || ''}`} />
-                  <span className="chain-game">{gameLabel(m.gameType)}</span>
-                  <span className="chain-hash">{short(m.txHash || m.matchId)}</span>
-                </a>
+                <div key={m.matchId} className="chain-row-container">
+                  <a
+                    className="chain-row"
+                    href={`${API}/api/verify/${m.matchId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={`Verify ${m.matchId}`}
+                  >
+                    <span className={`chain-dot ${m.gameType || ''}`} />
+                    <span className="chain-game">{gameLabel(m.gameType)}</span>
+                    <span className="chain-hash">{short(m.txHash || m.matchId)}</span>
+                  </a>
+                  <button
+                    type="button"
+                    className="btn-replay-pill"
+                    onClick={() => setReplayMatchId(m.matchId)}
+                    title="Watch match replay"
+                  >
+                    ▶ Replay
+                  </button>
+                </div>
               ))}
               {matches.length > 0 && (
                 <div className="chain-count">{matches.length} verified match{matches.length === 1 ? '' : 'es'}</div>
@@ -291,6 +481,59 @@ export default function Hub() {
         </aside>
       </main>
 
+      {showEnergyModal && (
+        <div className="hub-energy-overlay" onClick={() => setShowEnergyModal(false)}>
+          <div className="hub-energy-modal" onClick={e => e.stopPropagation()}>
+            <div className="energy-modal-icon">⚡</div>
+            <h2>Out of Arena Energy!</h2>
+            <p>
+              Arena Energy cannot be bought with money — it must be earned! Clean your room, finish homework, or pass the Brain Quiz to earn Energy and enter matches.
+            </p>
+            <div className="energy-modal-actions">
+              <button type="button" className="btn-modal-bp" onClick={() => navigate('battlepass')}>
+                Go to Battle Pass & Chores →
+              </button>
+              <button type="button" className="btn-modal-close" onClick={() => setShowEnergyModal(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSkinLocker && (
+        <SkinLockerModal
+          kidAddress={wallet?.address}
+          parentAddress={profile?.parentAddress}
+          onClose={() => setShowSkinLocker(false)}
+          onSkinEquipped={() => refresh()}
+        />
+      )}
+
+      {showParentModal && (
+        <ParentApprovalModal
+          parentAddress={profile?.parentAddress}
+          onClose={() => setShowParentModal(false)}
+          onChoreApproved={() => refresh()}
+        />
+      )}
+
+      {showAccountModal && (
+        <AccountModal
+          wallet={wallet}
+          setWallet={setWallet}
+          profile={profile}
+          onClose={() => setShowAccountModal(false)}
+        />
+      )}
+
+      {replayMatchId && (
+        <ReplayModal
+          matchId={replayMatchId}
+          onClose={() => setReplayMatchId(null)}
+        />
+      )}
+
       {joinGame && (
         <JoinRoomModal
           gameLabel={joinGame === 'arena' ? 'Neon Math Arena' : 'Memory Match'}
@@ -310,6 +553,9 @@ const BOT_ADDRESS = '0xB07000000000000000000000000000000000000B'; // same consta
 const GAME_LABELS = {
   memory: 'Memory Match',
   'math-arena': 'Neon Math Arena',
+  'connect-four': 'Connect Four',
+  'cyber-blaster': 'Cyber Blaster Arena',
+  'tic-tac-toe': 'Tic Tac Toe',
 };
 
 function LiveMatches({ rooms }) {
@@ -347,8 +593,24 @@ function LiveMatches({ rooms }) {
                 >
                   Watch
                 </button>
+              ) : r.gameType === 'connect-four' ? (
+                <button
+                  type="button"
+                  className="live-watch"
+                  onClick={() => navigate(`connectfour?mode=watch&room=${r.roomId}`)}
+                >
+                  Watch
+                </button>
+              ) : r.gameType === 'math-arena' ? (
+                <button
+                  type="button"
+                  className="live-watch"
+                  onClick={() => navigate(`arena?mode=watch&room=${r.roomId}`)}
+                >
+                  Watch
+                </button>
               ) : (
-                <span className="live-soon">Watching soon</span>
+                <span className="live-soon">Duel in progress</span>
               )}
             </li>
           ))}
@@ -526,6 +788,65 @@ function BrainArt() {
           <path d="M172 150c-8 6-8 14-2 18" />
         </g>
         <path d="M152 156c-4 12 2 22 12 24" fill="none" stroke="url(#brainStroke)" strokeWidth="3" strokeLinecap="round" strokeOpacity=".75" />
+      </g>
+    </svg>
+  );
+}
+
+function ConnectFourArt() {
+  const preview = [
+    [0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 2, 0, 0, 0],
+    [0, 0, 1, 1, 0, 0, 0],
+    [0, 2, 1, 2, 1, 0, 0],
+    [0, 1, 2, 1, 2, 0, 0],
+    [1, 2, 1, 2, 1, 2, 1],
+  ];
+  return (
+    <div className="c4-art-frame" aria-hidden="true">
+      {preview.map((row, r) => (
+        <div key={r} className="c4-art-row">
+          {row.map((val, c) => (
+            <span
+              key={c}
+              className={`c4-art-cell ${val === 1 ? 'cell-x' : val === 2 ? 'cell-o' : 'cell-empty'}`}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BlasterArt() {
+  return (
+    <svg className="blaster-art-svg" viewBox="0 0 320 180" width="100%" height="100%" aria-hidden="true">
+      <defs>
+        <linearGradient id="blasterGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#00f0ff" stopOpacity="0.8" />
+          <stop offset="100%" stopColor="#0077ff" stopOpacity="0.2" />
+        </linearGradient>
+        <filter id="laserBlur" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="4" result="blur" />
+          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+      </defs>
+      {/* Grid background */}
+      <path d="M0 45h320M0 90h320M0 135h320M80 0v180M160 0v180M240 0v180" stroke="#00f0ff" strokeOpacity="0.08" strokeWidth="1" />
+      {/* Obstacle pillar preview */}
+      <rect x="145" y="60" width="30" height="60" rx="4" fill="#0f172a" stroke="#00f0ff" strokeWidth="1.5" strokeOpacity="0.6" />
+      {/* Laser beams */}
+      <line x1="85" y1="90" x2="145" y2="90" stroke="#00ffff" strokeWidth="3" filter="url(#laserBlur)" strokeLinecap="round" />
+      <line x1="235" y1="85" x2="175" y2="85" stroke="#ff2d55" strokeWidth="3" filter="url(#laserBlur)" strokeLinecap="round" />
+      {/* Ship P1 */}
+      <g transform="translate(65, 90)">
+        <polygon points="18,0 -12,-12 -6,0 -12,12" fill="#00f0ff" stroke="#0077ff" strokeWidth="2" />
+        <polygon points="6,0 -4,-4 -4,4" fill="#ffffff" />
+      </g>
+      {/* Ship P2 */}
+      <g transform="translate(255, 90) rotate(180)">
+        <polygon points="18,0 -12,-12 -6,0 -12,12" fill="#ff2d55" stroke="#ff9500" strokeWidth="2" />
+        <polygon points="6,0 -4,-4 -4,4" fill="#ffffff" />
       </g>
     </svg>
   );

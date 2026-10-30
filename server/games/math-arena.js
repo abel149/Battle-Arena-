@@ -125,16 +125,26 @@ export function applyMove(game, address, move) {
   return { ok: true };
 }
 
-// Called by the server when the round deadline expires: lock an empty
-// pick for every seat that has not answered yet (costs a life, as usual).
-export function timeoutMove(game) {
-  if (game.winner) return;
-  const round = game.round;
+export function timeoutRound(game) {
+  if (game.winner) return { ok: false };
+  let timedOut = false;
   for (const seat of ['X', 'O']) {
-    if (game.round !== round || game.winner) break;
-    if (!game.answered[seat]) applyMove(game, game.players[seat], { index: null });
+    if (!game.answered[seat]) {
+      game.answered[seat] = true;
+      game.picks[seat] = null;
+      game.moves.push({ round: game.round, index: null, address: game.players[seat], t: Date.now(), timeout: true });
+      timedOut = true;
+    }
   }
+  if (timedOut) {
+    resolveRound(game);
+    return { ok: true, timedOut: true };
+  }
+  return { ok: false };
 }
+
+// Alias for backwards/cross-branch compatibility
+export const timeoutMove = timeoutRound;
 
 export function botMove(game, difficulty = game.difficulty || 'medium') {
   const q = game.questions[game.round];

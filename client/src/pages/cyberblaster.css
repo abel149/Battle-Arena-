@@ -1,0 +1,408 @@
+/* ==========================================================================
+   Cyber Blaster Arena Styles
+   ========================================================================== */
+
+.blaster-page {
+  min-height: 100vh;
+  background: radial-gradient(circle at 50% 20%, #0d1527 0%, #030712 100%);
+  color: #f8fafc;
+  display: flex;
+  flex-direction: column;
+}
+
+.blaster-header {
+  padding: 16px 28px;
+  background: rgba(3, 7, 18, 0.85);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(0, 240, 255, 0.15);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 10;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.btn-back {
+  color: #94a3b8;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  transition: all 0.2s ease;
+}
+
+.btn-back:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.blaster-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: #00f0ff;
+  text-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+}
+
+.blaster-mode-badge {
+  font-size: 0.72rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 3px 8px;
+  border-radius: 6px;
+  color: #94a3b8;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-header-armory {
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(0, 119, 255, 0.2));
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  color: #00f0ff;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 8px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-header-armory:hover {
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.35), rgba(0, 119, 255, 0.35));
+  transform: translateY(-1px);
+}
+
+.btn-header-parent {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 8px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-header-parent:hover {
+  background: rgba(16, 185, 129, 0.3);
+  transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   Arena & Canvas
+   ========================================================================== */
+
+.blaster-arena-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.blaster-hud {
+  width: 100%;
+  max-width: 800px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 16px;
+}
+
+.hud-player {
+  flex: 1;
+}
+
+.hud-player.right {
+  text-align: right;
+}
+
+.hud-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 0.95rem;
+}
+
+.hud-player.right .hud-name {
+  justify-content: flex-end;
+}
+
+.seat-badge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.seat-x { background: rgba(0, 240, 255, 0.25); color: #00f0ff; }
+.seat-o { background: rgba(255, 45, 85, 0.25); color: #ff2d55; }
+
+.hud-hp-bar {
+  width: 100%;
+  height: 14px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 7px;
+  overflow: hidden;
+  position: relative;
+}
+
+.hud-hp-fill {
+  height: 100%;
+  transition: width 0.15s ease-out;
+}
+
+.fill-x {
+  background: linear-gradient(90deg, #0077ff, #00f0ff);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+}
+
+.fill-o {
+  background: linear-gradient(90deg, #ff9500, #ff2d55);
+  box-shadow: 0 0 10px rgba(255, 45, 85, 0.5);
+  float: right;
+}
+
+.hud-hp-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+
+.hud-center {
+  text-align: center;
+  padding: 0 16px;
+}
+
+.hud-score {
+  font-size: 1.8rem;
+  font-weight: 900;
+  line-height: 1;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.score-divider {
+  color: #64748b;
+}
+
+.hud-round {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+.canvas-wrapper {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 0 40px rgba(0, 240, 255, 0.2), 0 20px 40px rgba(0, 0, 0, 0.8);
+}
+
+.blaster-canvas {
+  display: block;
+  width: 800px;
+  height: 600px;
+  max-width: 90vw;
+  max-height: 68vh;
+  cursor: crosshair;
+  background: #060a14;
+}
+
+.blaster-controls-bar {
+  display: flex;
+  gap: 20px;
+  margin-top: 14px;
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+.control-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.control-item kbd {
+  background: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #f1f5f9;
+}
+
+/* ==========================================================================
+   Matchmaking Queue Card
+   ========================================================================== */
+
+.blaster-queue-card {
+  text-align: center;
+  padding: 60px 40px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  border-radius: 20px;
+  box-shadow: 0 0 40px rgba(0, 240, 255, 0.2);
+}
+
+.queue-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(0, 240, 255, 0.2);
+  border-top-color: #00f0ff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.btn-cancel-queue {
+  margin-top: 20px;
+  padding: 10px 20px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #cbd5e1;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   Match End Overlay
+   ========================================================================== */
+
+.match-end-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 7, 18, 0.88);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.match-end-dialog {
+  background: #0d121f;
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  border-radius: 20px;
+  box-shadow: 0 0 60px rgba(0, 240, 255, 0.2);
+  width: 100%;
+  max-width: 460px;
+  padding: 36px 30px;
+  text-align: center;
+  animation: modalPop 0.2s ease-out;
+}
+
+.end-trophy {
+  font-size: 3.5rem;
+  margin-bottom: 12px;
+}
+
+.match-end-dialog h2 {
+  font-size: 1.8rem;
+  font-weight: 900;
+  margin: 0 0 8px;
+  color: #f8fafc;
+}
+
+.match-end-dialog p {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  margin: 0 0 24px;
+}
+
+.match-end-rewards {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.reward-pill {
+  background: rgba(0, 240, 255, 0.12);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  color: #00f0ff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 8px;
+}
+
+.end-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.btn-end-play {
+  padding: 12px;
+  background: linear-gradient(135deg, #00f0ff, #0077ff);
+  color: #030712;
+  font-weight: 800;
+  font-size: 0.95rem;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-end-play:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 240, 255, 0.4);
+}
+
+.btn-end-armory {
+  padding: 11px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #f1f5f9;
+  font-weight: 700;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.btn-end-hub {
+  padding: 10px;
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-end-hub:hover {
+  color: #94a3b8;
+}

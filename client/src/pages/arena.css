@@ -1131,7 +1131,47 @@
   color: var(--muted);
 }
 
-.waiting-card .lock-btn { margin-top: 20px; }
+.waiting-card .lock-btn { margin-top: 0; }
+
+.waiting-invite-box {
+  margin: 14px 0 6px;
+}
+.btn-copy-invite {
+  background: rgba(0, 240, 255, 0.15);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  color: #00f0ff;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+}
+.btn-copy-invite:hover {
+  background: rgba(0, 240, 255, 0.3);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+}
+.waiting-actions-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 14px;
+}
+.btn-bot-fallback {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #e2f1ff;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-bot-fallback:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
 
 .arena-toast {
   position: absolute;

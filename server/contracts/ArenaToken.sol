@@ -59,6 +59,21 @@ contract ArenaToken {
         emit Transfer(address(0), to, value);
     }
 
+    /// @notice Batch mint ARENA tokens to multiple recipients in a single atomic transaction.
+    ///         Massively reduces gas overhead and eliminates nonce congestion for the relayer.
+    function mintBatch(address[] calldata recipients, uint256[] calldata values) external onlyMinter {
+        require(recipients.length == values.length, "ArenaToken: length mismatch");
+        uint256 total = 0;
+        for (uint256 i = 0; i < recipients.length; i++) {
+            address to = recipients[i];
+            uint256 val = values[i];
+            balanceOf[to] += val;
+            total += val;
+            emit Transfer(address(0), to, val);
+        }
+        totalSupply += total;
+    }
+
     function burn(uint256 value) external {
         if (balanceOf[msg.sender] < value) revert InsufficientBalance();
         balanceOf[msg.sender] -= value;
