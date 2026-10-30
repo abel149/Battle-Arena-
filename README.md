@@ -10,7 +10,6 @@ achievement badges.
 
 - **⚡ Neon Math Arena** — 3D arena duel. Both players face identical timed questions, move across 4 answer tiles, and lock in before the 10-second timer expires. Correct answers score points; wrong answers cost lives. Playable in 3 bot difficulty tiers (**Easy**, **Medium**, **Hard**) or live multiplayer.
 - **🧠 Memory Match** — Educational card duel (Flags & Countries, Math Pairs, Animals, English ↔ Kiswahili). Cards pair distinct representations (e.g., 🇫🇷 ↔ France), testing recall and skill.
-- **⭕ Tic Tac Toe** — Classic fast-paced turn-based duel with instant win detection.
 
 ---
 
@@ -243,9 +242,8 @@ Battle-Arena-/
 │   │   ├── index.js           # Pluggable game registry
 │   │   ├── math-arena.js      # 3D Math Arena duel engine
 │   │   ├── memory.js          # Memory Match engine with bot AI
-│   │   ├── tictactoe.js       # Tic Tac Toe engine
 │   │   └── decks.js           # Educational decks (Flags, Animals, Kiswahili, Math)
-│   └── test/                  # Node.js native test suite (28 passing tests)
+│   └── test/                  # Node.js native test suite
 └── client/
     ├── vite.config.js         # Vite configuration with 0.0.0.0 host binding
     ├── src/

@@ -42,7 +42,9 @@ export function useAuth() {
 
   useEffect(() => {
     const identify = () => signAndIdentify(getOrCreateWallet());
-    const onRegistered = yes => { if (!yes) setStatus('out'); };
+    const onRegistered = yes => {
+      if (!yes && !getSessionToken()) setStatus('out');
+    };
     const onUser = () => setStatus('in');
     socket.on('connect', identify);
     socket.on('player:registered', onRegistered);

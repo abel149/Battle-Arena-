@@ -13,11 +13,12 @@ const MATCH_MESSAGE = `Battle Arena login for ${walletAddress}`;
 
 function actOn(game) {
   if (game?.winner) return;
-  const empty = game.board
-    .map((v, i) => (v ? null : i))
-    .filter((v) => v !== null);
-  const idx = empty[Math.floor(Math.random() * empty.length)];
-  socket.emit('game:move', { matchId, index: idx });
+  const available = game.cards
+    .map((card, i) => (!card.matched && !card.flipped ? i : null))
+    .filter((i) => i !== null);
+  if (!available.length) return;
+  const idx = available[Math.floor(Math.random() * available.length)];
+  socket.emit('game:move', { roomId: matchId, index: idx });
 }
 
 async function startServer() {
@@ -56,7 +57,7 @@ async function main() {
   socket.on('registered', async () => {
     console.log('[ci:e2e] registered');
     // create a bot match
-    socket.emit('match:bot', { gameType: 'tic-tac-toe' });
+    socket.emit('match:bot', { gameType: 'memory' });
   });
 
   socket.on('match:created', (room) => {

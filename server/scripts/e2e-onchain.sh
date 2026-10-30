@@ -158,7 +158,7 @@ socket.on('connect', async () => {
     console.log('identify sig=' + sig.slice(0, 20) + '... msg=' + msg);
     socket.emit('identify', { address: WALLET, name: 'OnchainTest', signature: sig });
     socket.on('player:update', () => {
-      if (!roomId) socket.emit('match:bot', { gameType: 'tic-tac-toe' });
+      if (!roomId) socket.emit('match:bot', { gameType: 'memory' });
     });
   } catch (e) {
     console.log('identify ERROR: ' + e.message + '\n' + (e.stack || ''));
@@ -177,8 +177,8 @@ function actOn(game) {
   if (!game || game.winner) return;
   const myTurn = game.players[game.turn] === WALLET;
   if (!myTurn || game.locked) return;
-  // Tic-tac-toe replay loop: take the first open cell (random play finishes fast).
-  const idx = (game.board ?? []).findIndex(c => !c);
+  // Keep flipping the first available card until the match finishes.
+  const idx = (game.cards ?? []).findIndex(card => !card.matched && !card.flipped);
   if (idx === -1) return;
   moves++;
   setTimeout(() => socket.emit('game:move', { roomId, index: idx }), 80);

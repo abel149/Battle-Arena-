@@ -526,7 +526,7 @@ io.on('connection', (socket) => {
 
   socket.on('queue:join', ({ gameType, deck } = {}) => {
     const address = accountOf(socket);
-    const type = ENGINES[gameType] ? gameType : 'tic-tac-toe';
+    const type = ENGINES[gameType] ? gameType : 'memory';
     if (!address || queue.some(q => q.socketId === socket.id)) return;
     dropPendingFor(socket.id);
     queue.push({ socketId: socket.id, gameType: type, deck });
@@ -563,7 +563,7 @@ io.on('connection', (socket) => {
   socket.on('room:create', ({ gameType, deck, pairs } = {}) => {
     const address = accountOf(socket);
     if (!address) return;
-    const type = ENGINES[gameType] ? gameType : 'tic-tac-toe';
+    const type = ENGINES[gameType] ? gameType : 'memory';
     const qi = queue.findIndex(q => q.socketId === socket.id);
     if (qi !== -1) queue.splice(qi, 1);
     dropPendingFor(socket.id); // one waiting room per player
@@ -603,7 +603,7 @@ io.on('connection', (socket) => {
 
   socket.on('match:bot', ({ gameType, deck, pairs, difficulty } = {}) => {
     const address = accountOf(socket);
-    const type = ENGINES[gameType] ? gameType : 'tic-tac-toe';
+    const type = ENGINES[gameType] ? gameType : 'memory';
     if (!address) return;
     const diff = ['easy', 'medium', 'hard'].includes(difficulty) ? difficulty : 'medium';
     const room = createRoom(type, address, BOT,
