@@ -421,14 +421,21 @@ app.post('/api/chores/verify', async (req, res) => {
 app.post('/api/chores/create', (req, res) => {
   const { kidAddress, parentAddress, title, category, energyReward, xpReward, allowanceReward } = req.body || {};
   if (!kidAddress || !title) return res.status(400).json({ error: 'kidAddress and title required' });
+  const cleanTitle = String(title).trim().slice(0, 100);
+  if (!cleanTitle) return res.status(400).json({ error: 'Valid title required' });
+  const cleanCategory = String(category || 'custom').trim().slice(0, 30);
+  const safeEnergy = Math.max(1, Math.min(5, Math.floor(Number(energyReward) || 2)));
+  const safeXp = Math.max(10, Math.min(100, Math.floor(Number(xpReward) || 40)));
+  const safeAllowance = Math.max(0, Math.min(20, Math.round((Number(allowanceReward) || 5) * 100) / 100));
+
   const chore = store.createCustomChore({
     kidAddress,
     parentAddress,
-    title,
-    category,
-    energyReward,
-    xpReward,
-    allowanceReward,
+    title: cleanTitle,
+    category: cleanCategory,
+    energyReward: safeEnergy,
+    xpReward: safeXp,
+    allowanceReward: safeAllowance,
   });
   notifyPlayer(kidAddress, 'chore:created', chore);
   res.json(chore);
@@ -494,7 +501,23 @@ app.post('/api/parent/verify-pin', (req, res) => {
 });
 
 app.post('/api/parent/set-pin', (req, res) => {
-  const { address, pin } = req.body || {};
+  const { address, pin, signature, token, currentPin } = req.body || {};
+  if (!address || !pin) return res.status(400).json({ error: 'address and pin required' });
+
+  // Verify authorization: valid session token, valid wallet signature, or verified current PIN
+  let authorized = false;
+  if (token && store.addressForSession(token)?.toLowerCase() === address.toLowerCase()) {
+    authorized = true;
+  } else if (signature && verifyAuthSignature(signature, address)) {
+    authorized = true;
+  } else if (currentPin && store.verifyParentPin(address, currentPin).ok) {
+    authorized = true;
+  }
+
+  if (!authorized) {
+    return res.status(401).json({ error: 'Authentication required: provide correct current PIN, session token, or wallet signature' });
+  }
+
   const result = store.setParentPin(address, pin);
   if (result.error) return res.status(400).json(result);
   res.json(result);

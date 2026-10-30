@@ -258,6 +258,11 @@ const SCHEMA = [
     address TEXT NOT NULL,
     createdAt INTEGER NOT NULL
   )`,
+  // Brain Quiz cooldown tracking (prevents infinite energy spam)
+  `CREATE TABLE IF NOT EXISTS quiz_cooldowns (
+    address TEXT PRIMARY KEY,
+    lastCompletedAt INTEGER NOT NULL
+  )`,
 ];
 
 let db;
@@ -436,6 +441,8 @@ function prepare() {
     sessionInsert: db.prepare('INSERT INTO sessions (tokenHash, address, createdAt) VALUES (?, ?, ?)'),
     sessionGet: db.prepare('SELECT address, createdAt FROM sessions WHERE tokenHash = ?'),
     sessionDelete: db.prepare('DELETE FROM sessions WHERE tokenHash = ?'),
+    getQuizCooldown: db.prepare('SELECT lastCompletedAt FROM quiz_cooldowns WHERE address = ?'),
+    setQuizCooldown: db.prepare('INSERT OR REPLACE INTO quiz_cooldowns (address, lastCompletedAt) VALUES (?, ?)'),
   };
 }
 
@@ -1075,8 +1082,16 @@ export function addEnergy(kidAddress, amount = 2) {
   return { ok: true, energy: p.energy };
 }
 
+export const QUIZ_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes cooldown between brain quizzes
+
 export function completeBrainQuiz(kidAddress) {
   open();
+  const normalized = String(kidAddress || '').toLowerCase();
+  const row = prepared.getQuizCooldown.get(normalized);
+  if (row && Date.now() - row.lastCompletedAt < QUIZ_COOLDOWN_MS) {
+    const waitSec = Math.ceil((QUIZ_COOLDOWN_MS - (Date.now() - row.lastCompletedAt)) / 1000);
+    return { error: `Brain Quiz already completed recently. Please wait ${waitSec}s before taking it again.` };
+  }
   const p = getPlayer(kidAddress);
   if (!p) return { error: 'Player not found' };
   p.energy = (p.energy || 0) + 2;
@@ -1084,8 +1099,15 @@ export function completeBrainQuiz(kidAddress) {
   p.battlePassTier = Math.min(10, Math.floor(p.battlePassXp / 100) + 1);
   p.tokens = (p.tokens || 0) + 2;
   prepared.upsert.run(playerToRow(p));
+  prepared.setQuizCooldown.run(normalized, Date.now());
   syncBattlePassVouchers(p.address, p.battlePassTier, p.parentAddress);
   return { ok: true, energy: p.energy, battlePassXp: p.battlePassXp, battlePassTier: p.battlePassTier };
+}
+
+export function getParentPin(address) {
+  open();
+  const row = prepared.getParentPin.get(address);
+  return row ? row.pinHash : null;
 }
 
 // ---- Skin & Parent Approval System ----

@@ -95,6 +95,55 @@ test('Security SEC-01 & SEC-02: rejecting unauthenticated login and registration
   const guestErr = await guestErrPromise;
   assert.equal(guestErr.code, 'AUTH_REQUIRED', 'Unregistered guest must be blocked from matchmaking queue');
 
+  // 7. Brain Quiz cooldown check (SEC-11)
+  const quiz1 = await fetch(`${serverUrl}/api/chores/quiz-complete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kidAddress: legitWallet.address, score: 5 }),
+  });
+  assert.equal(quiz1.status, 200);
+  const quiz2 = await fetch(`${serverUrl}/api/chores/quiz-complete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kidAddress: legitWallet.address, score: 5 }),
+  });
+  assert.equal(quiz2.status, 400, 'Immediate duplicate quiz must trigger cooldown');
+  const quiz2Json = await quiz2.json();
+  assert.ok(quiz2Json.error.includes('cooldown') || quiz2Json.error.includes('recently'));
+
+  // 8. Parent PIN setup protection check (SEC-13)
+  const pinUnauth = await fetch(`${serverUrl}/api/parent/set-pin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ address: legitWallet.address, pin: '9999' }),
+  });
+  assert.equal(pinUnauth.status, 401, 'Setting PIN without current PIN or signature must be 401');
+
+  const pinAuth = await fetch(`${serverUrl}/api/parent/set-pin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ address: legitWallet.address, pin: '9999', currentPin: '1234' }),
+  });
+  assert.equal(pinAuth.status, 200, 'Setting PIN with verified current PIN succeeds');
+
+  // 9. Chore reward capping check (SEC-16)
+  const choreRes = await fetch(`${serverUrl}/api/chores/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      kidAddress: legitWallet.address,
+      title: 'Exploit test',
+      energyReward: 9999,
+      xpReward: 99999,
+      allowanceReward: 5000,
+    }),
+  });
+  assert.equal(choreRes.status, 200);
+  const choreJson = await choreRes.json();
+  assert.ok(choreJson.energyReward <= 5, 'Energy reward must be capped');
+  assert.ok(choreJson.xpReward <= 100, 'XP reward must be capped');
+  assert.ok(choreJson.allowanceReward <= 20, 'Allowance reward must be capped');
+
   guestSock.disconnect();
   io.close();
   await new Promise(r => server.close(r));

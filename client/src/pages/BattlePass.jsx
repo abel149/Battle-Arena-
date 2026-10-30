@@ -344,6 +344,7 @@ export default function BattlePass() {
         body: JSON.stringify({
           address: parentTarget,
           pin: newPin.trim(),
+          currentPin: parentPinInput.trim(),
         }),
       });
       const resData = await res.json();
