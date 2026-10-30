@@ -65,7 +65,7 @@ async function ensureContract() {
   const code = await provider.getCode(address);
   if (code === '0x') throw new Error(`No contract deployed at ${address} on chain ${network.chainId}`);
 
-  // Shared NonceManager (signer.js) — must be the same instance chain-tokens.js uses.
+  // Shared NonceManager (signer.js) â€” must be the same instance chain-tokens.js uses.
   signer = getSigner() || provider;
   contract = new Contract(address, MATCH_RESULT_ABI, signer);
   return contract;
@@ -126,7 +126,42 @@ function normalizeMatch(match) {
 export function isOnchain() {
   return USE_ONCHAIN;
 }
+// Human-readable chain info for the front end (GET /api/chain/status).
+const CHAIN_NAMES = {
+  31337: 'Local Hardhat',
+  84532: 'Base Sepolia',
+  8453: 'Base',
+  80002: 'Polygon Amoy',
+  11155111: 'Sepolia',
+};
+// Block-explorer tx URL prefixes. The local Hardhat chain has no explorer.
+const EXPLORER_TX = {
+  84532: 'https://sepolia.basescan.org/tx/',
+  8453: 'https://basescan.org/tx/',
+  80002: 'https://amoy.polygonscan.com/tx/',
+  11155111: 'https://sepolia.etherscan.io/tx/',
+};
 
+export async function chainInfo() {
+  if (!USE_ONCHAIN) {
+    return { onchain: false, network: 'Simulated ledger', chainId: null, blockNumber: null, contract: null, explorerTx: null };
+  }
+  try {
+    await ensureContract();
+    const [network, blockNumber] = await Promise.all([provider.getNetwork(), provider.getBlockNumber()]);
+    const chainId = Number(network.chainId);
+    return {
+      onchain: true,
+      network: CHAIN_NAMES[chainId] || `Chain ${chainId}`,
+      chainId,
+      blockNumber,
+      contract: configuredAddress,
+      explorerTx: EXPLORER_TX[chainId] || null,
+    };
+  } catch (err) {
+    return { onchain: true, error: err.message, network: 'Chain unreachable', chainId: null, blockNumber: null, contract: configuredAddress, explorerTx: null };
+  }
+}
 /// Record a completed match on-chain. Returns the receipt entry.
 export async function recordMatch({ matchId, gameType, players, winner, moves }) {
   if (!USE_ONCHAIN) throw new Error('Real blockchain required: MATCH_RESULT_ADDRESS is not configured');
