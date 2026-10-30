@@ -10,7 +10,10 @@ test('ResultRecorder falls back to simulated ledger when unconfigured', async ()
   const receipt = await defaultRecorder.recordMatch({
     matchId: 'recorder_test_' + Date.now(),
     gameType: 'memory',
-    players: { X: '0x1111111111111111111111111111111111111111', O: '0x2222222222222222222222222222222222222222' },
+    players: {
+      X: '0x1111111111111111111111111111111111111111',
+      O: '0x2222222222222222222222222222222222222222',
+    },
     winner: '0x1111111111111111111111111111111111111111',
     moves: 4,
   });
@@ -31,7 +34,10 @@ test('ResultRecorder forced to simulated mode produces simulated receipt', async
   const receipt = await simulatedRecorder.recordMatch({
     matchId: 'sim_test_' + Date.now(),
     gameType: 'connect-four',
-    players: { X: '0x3333333333333333333333333333333333333333', O: '0x4444444444444444444444444444444444444444' },
+    players: {
+      X: '0x3333333333333333333333333333333333333333',
+      O: '0x4444444444444444444444444444444444444444',
+    },
     winner: 'draw',
     moves: 42,
   });

@@ -74,13 +74,7 @@ export function bindIdentity(socket, address, socketPlayer) {
  * @param {Object} ctx - Server socket context.
  */
 export function registerAuthHandlers(socket, ctx) {
-  const {
-    rooms,
-    socketPlayer,
-    queue,
-    dropPendingFor,
-    serializeRoom,
-  } = ctx;
+  const { rooms, socketPlayer, queue, dropPendingFor, serializeRoom } = ctx;
 
   const authSuccess = (result) => {
     const token = store.createSession(result.address);

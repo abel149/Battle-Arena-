@@ -743,7 +743,11 @@ async function finishRoom(room) {
     roomId: room.id,
     winner: winnerAddr,
     result: game.winner,
-    receipt: { ...receipt, onchain: defaultRecorder.isOnchain() && !receipt?.error, rewards: rewardReceipts },
+    receipt: {
+      ...receipt,
+      onchain: defaultRecorder.isOnchain() && !receipt?.error,
+      rewards: rewardReceipts,
+    },
   });
   // Clean up persisted active room and memory
   store.removeActiveRoom(room.id);
