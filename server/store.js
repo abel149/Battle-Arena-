@@ -6,11 +6,13 @@
 import Database from 'better-sqlite3';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_FILE = process.env.ARENA_DB_PATH || path.join(__dirname, 'data.sqlite');
+const LEGACY_DATA_FILE = process.env.ARENA_LEGACY_DATA_PATH || path.join(__dirname, 'data.json');
 
 // ---- Schema ----
 const SCHEMA = [
@@ -80,7 +82,40 @@ function open() {
   db.pragma('foreign_keys = ON');
   for (const stmt of SCHEMA) db.exec(stmt);
   prepare();
+  migrateLegacyPlayers();
   return db;
+}
+
+function migrateLegacyPlayers() {
+  if (prepared.count.get().c > 0 || !fs.existsSync(LEGACY_DATA_FILE)) return;
+
+  const legacyData = JSON.parse(fs.readFileSync(LEGACY_DATA_FILE, 'utf8'));
+  if (!legacyData.players || typeof legacyData.players !== 'object' || Array.isArray(legacyData.players)) {
+    throw new Error(`Cannot migrate legacy player data from ${LEGACY_DATA_FILE}`);
+  }
+
+  const migrate = db.transaction(() => {
+    for (const [key, legacyPlayer] of Object.entries(legacyData.players)) {
+      if (!legacyPlayer || typeof legacyPlayer !== 'object' || Array.isArray(legacyPlayer)) {
+        throw new Error(`Invalid legacy player record for ${key}`);
+      }
+      const address = legacyPlayer.address || key;
+      if (typeof address !== 'string' || !address) {
+        throw new Error(`Invalid legacy player address for ${key}`);
+      }
+      const player = {
+        ...createPlayer(address, legacyPlayer.name),
+        ...legacyPlayer,
+        address,
+        registered: Boolean(legacyPlayer.registered),
+        username: legacyPlayer.username || null,
+        email: legacyPlayer.email || null,
+        password: legacyPlayer.password || null,
+      };
+      prepared.upsert.run(playerToRow(player));
+    }
+  });
+  migrate();
 }
 
 function prepare() {

@@ -310,7 +310,6 @@ const BOT_ADDRESS = '0xB07000000000000000000000000000000000000B'; // same consta
 const GAME_LABELS = {
   memory: 'Memory Match',
   'math-arena': 'Neon Math Arena',
-  'tic-tac-toe': 'Tic Tac Toe',
 };
 
 function LiveMatches({ rooms }) {
@@ -426,7 +425,6 @@ function LeaderRow({ player, me }) {
 const gameLabel = type => ({
   'math-arena': 'Math Arena',
   memory: 'Memory Match',
-  'tic-tac-toe': 'Tic Tac Toe',
 }[type] || type || 'Arena');
 
 /* --------------------------------- icons --------------------------------- */

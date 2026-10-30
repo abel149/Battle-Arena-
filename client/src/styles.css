@@ -89,18 +89,6 @@ tr.me td { color: var(--accent2); }
 .turn-bar { display: flex; justify-content: space-between; align-items: center;
   margin-bottom: 1rem; font-size: 1.05rem; font-weight: 600; }
 
-.board { display: grid; grid-template-columns: repeat(3, 120px); gap: 10px; justify-content: center; }
-.cell {
-  width: 120px; height: 120px; font-size: 3.2rem; font-weight: 700;
-  background: var(--panel2); border: 1px solid var(--border); border-radius: 12px;
-  color: var(--text); cursor: pointer; transition: transform .08s;
-}
-.cell:hover:not(:disabled) { transform: scale(1.04); box-shadow: 0 0 0 2px var(--accent); }
-.cell:disabled { cursor: default; }
-.cell.x { color: var(--accent); }
-.cell.o { color: var(--accent2); }
-.cell.win { background: #20304f; border-color: var(--accent2); box-shadow: 0 0 12px rgba(0,212,166,.4); }
-
 .receipt {
   margin-top: 1.25rem; padding: 1rem; border-radius: 10px;
   background: #0f2b22; border: 1px solid #1f6b52; font-size: 0.85rem;

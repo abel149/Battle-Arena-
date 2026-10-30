@@ -183,11 +183,14 @@ export default function Arena() {
   }, [game?.question]);
 
   /* -------------------------------- rounds -------------------------------- */
+  // Boolean on purpose: `game.question` is a brand-new object on every broadcast,
+  // so depending on it would restart the clock each time the rival locks in.
+  const hasQuestion = !!game?.question;
   // Reset position + clock for every new question.
   useEffect(() => {
-    if (!game?.question) return;
+    if (!hasQuestion) return;
     setTimeLeft(ROUND_SECONDS);
-  }, [game?.round, game?.question]);
+  }, [game?.round, hasQuestion]);
 
   // When the round result closes, both players return to their start tiles.
   useEffect(() => {
@@ -200,14 +203,24 @@ export default function Arena() {
   }, [reveal]);
 
   // Show the previous round result for a moment before playing on.
+  // The hide-timer lives in a ref and is NOT cleared by this effect's cleanup:
+  // every game:state broadcast (bot lock-in, chat/spectator refresh...) hands us a
+  // new `lastResult` object, and a cleanup would cancel the timer while the early
+  // return below never re-arms it — leaving the popup stuck forever.
+  const revealTimer = useRef(null);
   useEffect(() => {
     const last = game?.lastResult;
     if (!last || last.round === revealRound.current) return;
     revealRound.current = last.round;
     setReveal(last);
-    const id = setTimeout(() => setReveal(null), 1900);
-    return () => clearTimeout(id);
-  }, [game?.lastResult]);
+    clearTimeout(revealTimer.current);
+    revealTimer.current = setTimeout(() => {
+      revealTimer.current = null;
+      setReveal(null);
+    }, 1900);
+  }, [game?.lastResult?.round]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => () => clearTimeout(revealTimer.current), []);
 
   // The server clears picks as soon as a round resolves, so the rival's tile is
   // read from the round result — otherwise P2 would never leave its start tile.
@@ -237,7 +250,7 @@ export default function Arena() {
   useEffect(() => { answerRef.current = answer; }, [answer]);
 
   useEffect(() => {
-    if (!game?.question || game.winner || reveal) return;
+    if (!hasQuestion || game.winner || reveal) return;
     setTimeLeft(ROUND_SECONDS);
     let left = ROUND_SECONDS;
     const id = setInterval(() => {
@@ -249,7 +262,7 @@ export default function Arena() {
       }
     }, 1000);
     return () => clearInterval(id);
-  }, [game?.round, game?.question, game?.winner, reveal]);
+  }, [game?.round, hasQuestion, game?.winner, reveal]);
 
   function movePlayer(dir) {
     if (locked || !game?.question || game.winner || reveal) return;
