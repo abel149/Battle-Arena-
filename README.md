@@ -1,352 +1,277 @@
 # ⚔️ Web3 Battle Arena
 
-**Web3 Battle Arena** is a real-time multiplayer gaming platform engineered specifically for kids and families. It bridges fast, competitive tabletop board and action games with a family-friendly Web3 economy: **Proof-of-Chore Battle Pass**, parent-backed allowance, server-authoritative netcode, on-chain match receipts, ERC-4337 gasless account abstraction, and a tactile physical board game visual design.
+**Web3 Battle Arena** is a real-time multiplayer board and action gaming platform built specifically for kids and families, combining fast-paced tabletop duels with a healthy, family-first Web3 economy. Players compete via server-authoritative game engines, earn non-purchasable Energy by doing real-world chores verified by parents, unlock real-life family Battle Pass vouchers, and anchor tamper-evident match receipts and rewards on-chain (or into a verifiable local ledger).
 
 ---
 
-## 🎮 Four Real-Time Games Included
+## 💡 The Problem & The Innovation
 
-All games run on **server-authoritative engines** with built-in heuristic AI bots across 3 difficulty tiers (**Easy**, **Medium**, **Hard**):
+### The Problem
 
-1. **⚡ Neon Math Arena** — Fast-paced 3D math duel. Both players face identical mental math questions, maneuver across 4 interactive answer tiles, and lock in their answers before the authoritative 12-second round timer expires. Correct answers score points; incorrect answers or timeouts cost hearts.
-2. **🧠 Memory Match** — Educational card duel featuring multiple decks (Flags & Countries, Math Pairs, Animals, English ↔ Kiswahili). Cards pair distinct representations (e.g., 🇫🇷 ↔ France). Cards are masked server-side to prevent client snooping; bot AI models realistic human memory retention curves (20%, 65%, 95% recall).
-3. **🔴 Connect Four** — Classic 7x6 gravity grid duel. Drop discs into columns with diagonal, horizontal, and vertical raycasting win detection. Includes intelligent bot AI capable of blocking opponent match points.
-4. **🚀 Cyber Blaster** — Real-time 2D top-down cyberpunk duel shooter running on a fixed 40ms physics loop (25 TPS). Features obstacle cover (Circle-AABB collision math), randomized powerups (Shield, Overcharge, Speed Boost, Repair), laser projectile physics, dash maneuvers, and dynamic delta state compression.
+Traditional kids' mobile and web games are riddled with dark patterns:
 
----
+- **Predatory Microtransactions:** Games monetize kids by selling virtual currency, gems, and loot boxes with real money.
+- **Screen-Time Friction:** Parents struggle to balance screen time with real-world chores and schoolwork, leading to daily conflicts.
+- **Black-Box Matchmaking & Opaque Outcomes:** Matches and ranking calculations happen in closed databases with no transparency or provable history.
+- **Unsafe Social Spaces:** Unmoderated chat systems expose young children to bullying and inappropriate language.
 
-## 🛡️ Parent-Backed Battle Pass & "Proof-of-Chore"
+### The Innovation
 
-To eliminate predatory real-money micro-transactions and solve the kid screen-time paradox, Battle Arena introduces a parent-oracle incentive economy:
-
-- **⚡ Arena Energy System:** Matches require 1 Arena Energy to enter. **Energy cannot be bought with money**; it is earned by completing real-world tasks or passing the daily 5-question Brain Quiz (with cooldowns).
-- **📜 Proof of Chore (`ProofOfChore.sol`):** Kids submit completed real-world tasks (cleaning bedroom, completing homework, reading 30 minutes, doing dishes). Parents act as real-world Oracles, approving tasks on-chain or through a secure local PIN portal.
-- **🏆 10-Tier Battle Pass:** Completing chores earns XP and unlocks real-life family reward vouchers (1-Hour Bonus Screen Time, Family Pizza Night Choice, Ice Cream Spree, $25 Toy Store Voucher) and tokenized ARENA allowance.
-- **🎨 Armory Skins:** Completing specific chores unlocks cosmetic blaster skins (Crimson Phoenix, Shadow Phantom, Emerald Titan, Solar Sovereign).
-- **🔒 Parent PIN Security:** Parent portals are protected by bcrypt-hashed PINs with SQLite-persisted brute-force lockouts (5 failed attempts trigger a 15-minute lock).
+1. **The Earned-Energy "Proof-of-Chore" Loop:** Arena Energy **cannot be bought with real money**. Kids earn energy to play matches by completing real-world chores (e.g., homework, cleaning room, reading) approved by parents acting as real-world Oracles, or by completing educational Brain Quizzes with cooldowns.
+2. **Verifiable Match Results:** Every match computes a deterministic cryptographic SHA-256 `resultHash` covering the room, game type, players, winner, move count, and timestamp. Results are committed to the blockchain (`MatchResult.sol`) or recorded in a verifiable ledger, creating an immutable, replayable history.
+3. **Educational & Pure Game Engines:** Games are educational and tactical (Mental Math, Memory Match, Connect Four, Cyber Blaster) running on pure, authoritative logic completely isolated from rendering and transport.
+4. **Kid-Safe Architecture:** Positive preset chat shortcuts, server-side profanity filtering, masked memory card states (no client-side snooping), and bcrypt-hashed Parent PIN portals with brute-force lockout defense.
 
 ---
 
-## 🔐 Web3 Identity & Gasless Account Abstraction
+## 🚦 Feature Checklist & Status
 
-- **🔑 Production-Grade Dual-Vault:** Players are instantly provisioned a local burner wallet with a standard BIP-39 12-word mnemonic. Keys are redundantly mirrored across `localStorage` and `IndexedDB` with auto-healing to prevent loss on browser cache wipes.
-- **💼 MetaMask Integration:** Optional standard EIP-1193 connection for web3 wallets.
-- **⛽ ERC-4337 Gas Sponsorship (`ArenaPaymaster.sol`):** Players never need ETH or native gas tokens on L2s (Base, Arbitrum, Polygon). The Paymaster sponsors transaction gas with daily safety quotas (max 0.05 ETH/day per child).
-- **🛡️ EIP-191 Authentication & Anti-Replay:** Login and registration require cryptographic wallet signatures. The server enforces replay protection supporting both timestamped signatures (`AUTH_WINDOW_MS`) and single-use server nonces (`/api/auth/nonce`).
+| Feature                             | Status                   | Description                                                                                      |
+| :---------------------------------- | :----------------------- | :----------------------------------------------------------------------------------------------- |
+| **Connect Four**                    | 🟢 **Working**           | Pure server engine, 7x6 gravity grid, 4-in-a-row raycasting, bot AI blocking.                    |
+| **Memory Match**                    | 🟢 **Working**           | Server-side card content masking, 4 educational decks, realistic human memory bot.               |
+| **Neon Math Arena**                 | 🟢 **Working**           | Simultaneous mental math rounds, 12s authoritative timer, 3-life elimination, AI bot.            |
+| **Cyber Blaster**                   | 🟢 **Working**           | 2D top-down action shooter, 40ms physics loop (25 TPS), Circle-AABB collisions, powerups.        |
+| **Matchmaking & Private Rooms**     | 🟢 **Working**           | Random pairing queue, 5-char invite codes (`room:join`), live spectator mode.                    |
+| **Kid-Safe Chat**                   | 🟢 **Working**           | Preset quick-chats, regex profanity filter (`[friendly]`), 800ms rate limiting.                  |
+| **Energy & Proof-of-Chore**         | 🟢 **Working**           | 1 energy/match, chores seeded and custom created, parent verification rewards Energy/Allowance.  |
+| **Parent PIN Protection**           | 🟢 **Working**           | Hashed PINs, SQLite lockout tracking (5 consecutive fails trigger 15-min lockout).               |
+| **Battle Pass & Vouchers**          | 🟢 **Working**           | 10 reward tiers with real-world family reward vouchers (Pizza Night, Extra Screen Time).         |
+| **Result Hashing & Replays**        | 🟢 **Working**           | Deterministic SHA-256 match hash, SQLite move-by-move replay archive (`/api/replay/:id`).        |
+| **On-Chain Match Receipts**         | 🟢 **Working / Dual**    | Writes to `MatchResult.sol` when EVM configured; falls back transparently to simulated ledger.   |
+| **ERC-20 Tokens & ERC-1155 Badges** | 🟢 **Working / Dual**    | Mints `ARENA` tokens & badges via `chain-tokens.js` on-chain, or records locally when simulated. |
+| **ERC-4337 Gas Sponsorship**        | 🟡 **Simulated / Ready** | `ArenaPaymaster.sol` contract implemented and tested; local demo uses relayer minter key.        |
+| **Dual-Vault Identity**             | 🟢 **Working**           | Auto-healing dual storage (`IndexedDB` + `localStorage`), BIP-39 mnemonic, optional MetaMask.    |
 
 ---
 
-## 🚀 Quick Start (All Operating Systems)
+## 🏛️ System Architecture
 
-Battle Arena runs seamlessly across **Linux**, **macOS**, and **Windows**.
+```
+                        +---------------------------------------+
+                        |      Client (Browser / React 18)      |
+                        |   Three.js 3D Viewport / Vite Bundle   |
+                        |     Dual-Vault Burner / MetaMask      |
+                        +-------------------+-------------------+
+                                            |
+                         WebSocket (Socket.IO) / HTTP REST
+                                            |
+                                            v
++-----------------------------------------------------------------------------------+
+|                        Server Boundary (Node.js & Express)                        |
+|   Rate Limiting, CORS Guards, Security Headers, EIP-191 Signature Verification    |
++-------------------------------------------+---------------------------------------+
+                                            |
+         +----------------------------------+----------------------------------+
+         |                                  |                                  |
+         v                                  v                                  v
++--------------------+            +--------------------+            +--------------------+
+|  Socket Handlers   |            | Pure Game Engines  |            | Persistence Layer  |
+|  - auth.js         |            |  - connectfour.js  |            |  - better-sqlite3  |
+|  - matchmaking.js  | <--------> |  - memory.js       | <--------> |  - data.sqlite     |
+|  - gameplay.js     |            |  - math-arena.js   |            |    (WAL Mode,      |
+|  - chat.js         |            |  - cyber-blaster.js|            |     Replays, Stats)|
+|  - progression.js  |            +--------------------+            +--------------------+
++--------------------+                      |
+         |                                  v
+         |                        +--------------------+
+         +----------------------> |   ResultRecorder   |
+                                  |  (Interface Layer) |
+                                  +---------+----------+
+                                            |
+                   +------------------------+------------------------+
+                   | (configured)                                    | (unconfigured)
+                   v                                                 v
+      +-------------------------+                       +-------------------------+
+      |  On-Chain EVM Adapter   |                       |    Simulated Adapter    |
+      |   (chain-onchain.js)    |                       |       (chain.js)        |
+      |   - MatchResult.sol     |                       |   - Local ledger.json   |
+      |   - ArenaToken.sol      |                       |   - Simulated txHash    |
+      |   - ArenaBadges.sol     |                       |   - Instant settlement  |
+      +-------------------------+                       +-------------------------+
+```
+
+### Folder Map
+
+- `contracts/`: Solidity smart contracts (`MatchResult.sol`, `ArenaToken.sol`, `ArenaBadges.sol`, `ProofOfChore.sol`, `ArenaPaymaster.sol`).
+- `server/`: Authoritative game server, APIs, security middleware, and database adapters.
+  - `server/games/`: Pure game engines with zero network or database dependencies.
+  - `server/sockets/`: Modular socket event handlers (`auth`, `matchmaking`, `gameplay`, `chat`, `progression`).
+  - `server/result-recorder.js`: Unified abstraction bridging real on-chain contracts and simulated local recording.
+  - `server/store.js`: SQLite schema, prepared statements, and transactional player operations.
+  - `server/test/`: 14 automated test suites covering engines, security, persistence, and end-to-end flows.
+- `client/`: React 18 single-page application built with Vite.
+  - `client/src/pages/`: Game and hub pages (`Hub`, `BattlePass`, `Arena`, `MemoryMatch`, `ConnectFour`, `CyberBlaster`).
+  - `client/src/components/`: Modular presentation components and modals.
+  - `client/src/lib/`: Dual-vault cryptographic session manager and router.
+- `shared/`: Shared protocol constants, socket event schemas, and game configurations.
+
+---
+
+## 🧰 Tech Stack & Design Choices
+
+| Technology            | Purpose                       | Why This Choice Was Made                                                                                  |
+| :-------------------- | :---------------------------- | :-------------------------------------------------------------------------------------------------------- |
+| **Node.js + Express** | Backend Server & API Boundary | Lightweight, event-driven HTTP boundary with minimal overhead and vast ecosystem.                         |
+| **Socket.IO**         | Real-Time Transport           | Native WebSocket transport with reliable fallback, channel rooms, and clean disconnect detection.         |
+| **better-sqlite3**    | Embedded Persistence          | Synchronous, zero-latency SQLite with WAL mode. Zero external daemon setup required for hackathon judges. |
+| **React 18 + Vite**   | Frontend Interface            | Instant hot module replacement (HMR), sub-4s production build, clean modular component model.             |
+| **Three.js**          | 3D Arena Visualizations       | Lightweight WebGL graphics for Neon Math Arena floor and effects without heavy game engine bloat.         |
+| **Ethers.js v6**      | Cryptography & Contracts      | Industry-standard wallet key derivation, EIP-191 personal message signing, and contract ABI encoding.     |
+| **Hardhat**           | Local EVM Blockchain          | Deterministic local blockchain node with instant mining for automated smart contract testing.             |
+
+---
+
+## 🔗 "What is Real and What is Simulated?"
+
+Transparency is paramount for hackathon judges:
+
+1. **What is 100% Real:**
+   - **All 4 Game Engines:** Real, deterministic, authoritative server physics, card masking, board state tracking, and AI bots.
+   - **Authentication & Security:** Real EIP-191 cryptographic wallet signature verification with freshness checks, single-use anti-replay caching, and bcrypt PIN hashing.
+   - **SQLite Persistence:** Real embedded database in WAL mode storing players, profiles, weekly leaderboards, active match snapshots, and full move-by-move replays.
+   - **Smart Contracts (`contracts/`):** Real, compiled Solidity contracts deployed and executable against any EVM network (Hardhat, Base Sepolia, Ethereum).
+   - **The Match Result Hash:** Real SHA-256 cryptographic digest of canonical match outcomes.
+   - **End-to-End On-Chain Flow:** When Hardhat runs, transactions actually execute against `MatchResult.sol`, `ArenaToken.sol`, and `ArenaBadges.sol`.
+
+2. **What is Simulated (When Blockchain is Not Configured):**
+   - **Simulated Ledger Fallback (`chain.js`):** If no contract address or RPC is provided in `.env`, the server falls back to an internal simulated ledger (`ledger.json`) so the entire game remains 100% playable without requiring a local blockchain node.
+   - **Simulated Transaction Hashes:** In simulated mode, `txHash` is generated as random 32-byte hex strings.
+   - **Gas Paymaster (`ArenaPaymaster.sol`):** The ERC-4337 paymaster smart contract is fully written and tested. However, during local gameplay, the server acts as a trusted relayer minter using its own private key rather than requiring an external ERC-4337 UserOperation bundler (such as Biconomy or Stackup).
+
+---
+
+## 🔏 Result Hashing & Verification
+
+Every completed match produces an authoritative receipt containing a deterministic `resultHash`.
+
+### 1. Hash Construction
+
+The result hash is computed by taking the SHA-256 digest of the canonical JSON payload:
+
+$$\text{resultHash} = \text{0x} + \text{SHA256}(\text{JSON.stringify}(\{ \text{matchId}, \text{gameType}, \text{players}, \text{winner}, \text{moves}, \text{timestamp} \}))$$
+
+```javascript
+const payload = { matchId, gameType, players, winner, moves, timestamp };
+const resultHash = '0x' + crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+```
+
+### 2. On-Chain Anchoring
+
+In `MatchResult.sol`, the match is committed with its `bytes32` identifier:
+
+```solidity
+function recordMatch(
+    bytes32 matchId,
+    string calldata gameType,
+    address playerA,
+    address playerB,
+    address winner,
+    uint32 moves
+) external onlyOwner
+```
+
+### 3. Verification & Anti-Tamper Check
+
+Anyone can verify match integrity via the REST endpoint `/api/verify/:matchId`:
+
+- Checks if the match exists in the on-chain or ledger record.
+- Any modification to winner, moves count, player addresses, or timestamp results in a completely mismatched hash, alerting clients of tampering immediately.
+
+---
+
+## 🚀 Step-by-Step Setup & Run Instructions
+
+Runs on **Linux**, **macOS**, and **Windows**.
 
 ### Prerequisites
 
-- **Node.js 18+ or 20+** installed: [https://nodejs.org](https://nodejs.org) (check with `node -v`)
-- **Git**: [https://git-scm.com](https://git-scm.com)
+- **Node.js 18+ or 20+** installed (`node -v`)
+- **Git**
 
-### 1. Clone & Install Dependencies
-
-From the repository root directory:
+### 1. Clone & Install
 
 ```bash
 git clone https://github.com/abel149/Battle-Arena-.git
 cd Battle-Arena-
-
-# Automatically installs dependencies for both server and client:
 npm install
 ```
 
-_(Alternatively, you can manually run `npm --prefix server install` and `npm --prefix client install`)._
-
-### 2. Start the Blockchain Node & Game Server
-
-In your first terminal window:
+### 2. Start Blockchain & Game Server (Terminal 1)
 
 ```bash
 npm start
 ```
 
-> **What `npm start` does automatically:**
->
-> 1. Detects if a local blockchain node is running on `http://127.0.0.1:8545`. If not, it automatically boots a local **Hardhat node**.
-> 2. Automatically compiles and deploys the smart contracts:
->    - `MatchResult.sol` (on-chain immutable match receipts, protected by `onlyOwner`)
->    - `ArenaToken.sol` (ERC-20 ARENA reward token with batch minting)
->    - `ArenaBadges.sol` (ERC-1155 collectible achievement badges)
->    - `ProofOfChore.sol` (parent oracle attestation contract)
-> 3. Restores active matches from SQLite (`active_rooms` table) if recovering from a restart.
-> 4. Starts the Battle Arena backend server on port `3001` with centralized NonceManager tracking.
+_Automatically boots a local Hardhat node (port 8545), compiles and deploys smart contracts, and launches the game server on port 3001._
 
-### 3. Start the Web Client
-
-In a second terminal window:
+### 3. Start Web Client (Terminal 2)
 
 ```bash
 npm run client
 ```
 
-Now open **http://localhost:5173** in your web browser!
+_Launches the Vite dev server at **http://localhost:5173**._
 
 ---
 
-## 💻 Operating System Guides
+## ⚙️ Environment Variables Explained
 
-### 🐧 Linux (Ubuntu, Debian, Fedora, Arch)
+Copy `.env.example` to `.env` or `server/.env` to configure custom networks:
 
-1. **Install Node.js & C++ Build Tools** (needed for SQLite native addon):
-   ```bash
-   # Ubuntu / Debian:
-   sudo apt update
-   sudo apt install -y build-essential python3 nodejs npm
-
-   # Recommended: Node 20 via nvm (Node Version Manager)
-   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-   nvm install 20 && nvm use 20
-   ```
-2. **If port 3001 or 8545 is busy (`EADDRINUSE`):**
-   ```bash
-   fuser -k 3001/tcp 8545/tcp 5173/tcp
-   ```
-3. **Allow LAN teammates to connect (UFW Firewall):**
-   ```bash
-   sudo ufw allow 5173/tcp
-   sudo ufw allow 3001/tcp
-   ```
+| Variable                | Default Value           | Description                                                                        |
+| :---------------------- | :---------------------- | :--------------------------------------------------------------------------------- |
+| `PORT`                  | `3001`                  | Express & Socket.IO backend port.                                                  |
+| `ARENA_DB_PATH`         | `./data.sqlite`         | Path to SQLite database file.                                                      |
+| `NODE_HTTP_URL`         | `http://127.0.0.1:8545` | EVM RPC node URL (Hardhat local, Base Sepolia, etc.).                              |
+| `PRIVATE_KEY`           | `0xac0974b...`          | Deployer & minter private key (Hardhat test key #0).                               |
+| `MATCH_RESULT_ADDRESS`  | _(empty)_               | Deployed `MatchResult.sol` contract address. Unset falls back to simulated ledger. |
+| `MATCH_RESULT_CHAIN_ID` | `31337`                 | EVM chain ID for match receipts.                                                   |
+| `ARENA_TOKEN_ADDRESS`   | _(empty)_               | Deployed ERC-20 `ArenaToken.sol` contract address.                                 |
+| `ARENA_BADGES_ADDRESS`  | _(empty)_               | Deployed ERC-1155 `ArenaBadges.sol` contract address.                              |
+| `ARENA_CHAIN_ID`        | `31337`                 | EVM chain ID for tokens and badges.                                                |
+| `CHORE_ORACLE_ADDRESS`  | _(empty)_               | Deployed `ProofOfChore.sol` contract address.                                      |
 
 ---
 
-### 🍎 macOS (Apple Silicon M1/M2/M3/M4 & Intel)
-
-1. **Install Xcode Command Line Tools & Node.js**:
-   ```bash
-   xcode-select --install
-   # Using Homebrew:
-   brew install node@20
-   ```
-2. **If port 3001, 8545, or 5173 is already in use:**
-   ```bash
-   lsof -ti :3001,8545,5173 | xargs kill -9
-   ```
-3. **Local Network Permission**:
-   When macOS prompts _"Node wants to find and connect to devices on your local network"_, click **Allow** so multiplayer works across LAN devices.
-
----
-
-### 🪟 Windows (Windows 10 / 11, PowerShell, CMD, Git Bash)
-
-1. **Install Node.js 20+**:
-   - Download the LTS installer from [nodejs.org](https://nodejs.org).
-   - During installation, check the box: **"Automatically install the necessary tools (Chocolatey, Python, Visual Studio Build Tools)"** if prompted. This ensures `better-sqlite3` builds without issues.
-   - If `better-sqlite3` shows compilation errors later, open PowerShell as Administrator and run:
-     ```powershell
-     npm install --global windows-build-tools
-     ```
-
-2. **PowerShell Script Execution Policy**:
-   If PowerShell throws `File ... cannot be loaded because running scripts is disabled on this system`:
-
-   ```powershell
-   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-   ```
-
-3. **Running the App**:
-
-   ```powershell
-   # Terminal 1: Starts blockchain + game server
-   npm start
-
-   # Terminal 2: Starts web client
-   npm run client
-   ```
-
-4. **Kill Stuck Ports on Windows (`EADDRINUSE`)**:
-   ```powershell
-   npx kill-port 3001 8545 5173
-   ```
-
----
-
-## 🌐 Playing with Teammates Across Devices / LAN
-
-Battle Arena supports playing between two separate laptops, tablets, or phones connected to the same Wi-Fi network:
-
-1. **Find the host machine's Local IP address:**
-   - **Linux**: Run `hostname -I` (e.g. `192.168.1.8`)
-   - **macOS**: Run `ipconfig getifaddr en0`
-   - **Windows**: Run `ipconfig` (look for _IPv4 Address_ under your active Wi-Fi adapter)
-2. **Start the server and client on the host machine:**
-   ```bash
-   npm start        # Terminal 1
-   npm run client   # Terminal 2
-   ```
-3. **On your teammate's device/laptop/phone:**
-   Open their browser and navigate to:
-   ```
-   http://<HOST_IP>:5173     (e.g., http://192.168.1.8:5173)
-   ```
-   _The client automatically resolves Socket.IO connections to `http://<HOST_IP>:3001`._
-
----
-
-## 🕹️ How to Play & Test Multiplayer
-
-1. **Authentication**:
-   - Register a handle and password, or authenticate with your burner wallet / MetaMask via EIP-191 signature.
-   - Sessions are protected with SHA-256 hashed tokens and survive browser reloads.
-2. **Solo vs Bot**:
-   - Click **Play vs Bot** on any of the 4 games.
-   - Select difficulty: **Easy**, **Medium**, or **Hard**. AI accuracy, reaction times, and projectile targeting dynamically scale.
-3. **Multiplayer Matchmaking (Quick Match)**:
-   - Open `http://localhost:5173` in two browser windows (or normal + incognito).
-   - Sign in with two different accounts.
-   - Both players click **Quick Match** on the same game to be paired instantly.
-4. **Private Game Rooms**:
-   - Player 1 clicks **Create Room** and shares the 5-character room code (e.g. `K9X2B`).
-   - Player 2 clicks **Join Room** and enters the code.
-5. **Live Spectator Mode & Lobby Chat**:
-   - Live games appear under **Chat & Watch** on the main Hub. Click **Spectate** to watch real-time gameplay.
-   - Chat is moderated with positive preset shortcuts and kid-safe regex profanity filters.
-6. **On-Chain Results & Replays**:
-   - When a match concludes, the server signs and commits the result hash on-chain (`MatchResult.sol`).
-   - Click **Watch Replay** under **Verified Match Records** to inspect the move-by-move replay archive stored in SQLite.
-
----
-
-## 🧪 Automated Testing Suite
-
-The project includes **49 automated unit and integration tests** verifying smart contracts, authoritative game engines, security rules, and state rehydration:
+## 🧪 Testing, Linting & Build
 
 ```bash
-# Run the complete test suite (49 passing tests):
+# 1. Run all 63 automated tests (unit, security, persistence, flow):
 npm test
 
-# Run end-to-end matchmaking flow test:
-cd server && node --test test/matchmake-flow.test.mjs
+# 2. Run ESLint code quality audit:
+npm run lint
 
-# Run full AppSec verification test:
-cd server && node --test test/auth-security.test.mjs
+# 3. Check Prettier formatting consistency:
+npm run format:check
 
-# Force compile smart contracts:
-cd server && npx hardhat compile --force
+# 4. Run full On-Chain End-to-End Test (Hardhat node + deploy + bot duel + receipts):
+bash server/scripts/e2e-onchain.sh
 
-# Production frontend build:
-cd client && npm run build
+# 5. Production frontend bundle build:
+npm run build
 ```
 
 ---
 
-## 🛠️ Project Structure
+## ⚠️ Known Limitations & Next Steps
 
-```
-Battle-Arena-/
-├── package.json               # Root scripts (start, client, dev, test, build, install:all)
-├── README.md                  # Comprehensive project & setup documentation
-├── server/
-│   ├── index.js               # Authoritative Socket.IO & Express server (matchmaking, rooms, chat, tickers)
-│   ├── security.js            # Anti-replay auth, CORS origin guards, security headers, rate limiting
-│   ├── store.js               # SQLite database & player profile storage with WAL mode (server/data.sqlite)
-│   ├── signer.js              # Centralized NonceManager provider/signer preventing transaction nonce clashes
-│   ├── chain-onchain.js       # MatchResult.sol on-chain adapter with batching & simulated fallback
-│   ├── chain-tokens.js        # ArenaToken & ArenaBadges minting relayer
-│   ├── chain-chore.js         # ProofOfChore oracle attestation recording
-│   ├── contracts/
-│   │   ├── MatchResult.sol    # On-chain match receipts contract (onlyOwner)
-│   │   ├── ArenaToken.sol     # ERC-20 ARENA reward token contract (onlyMinter)
-│   │   ├── ArenaBadges.sol    # ERC-1155 collectible achievement badges contract
-│   │   ├── ProofOfChore.sol   # Parent Oracle chore attestation contract
-│   │   └── ArenaPaymaster.sol # ERC-4337 Account Abstraction gas paymaster
-│   ├── games/
-│   │   ├── index.js           # Pluggable game engine registry
-│   │   ├── math-arena.js      # 3D Math duel engine (authoritative 12s timer)
-│   │   ├── memory.js          # Memory Match engine with card masking & human memory simulation
-│   │   ├── connectfour.js     # 7x6 gravity grid with win raycasting & minimax bot
-│   │   ├── cyber-blaster.js   # 2D duel shooter with 40ms tick physics & powerups
-│   │   └── decks.js           # Educational decks (Flags, Animals, Kiswahili, Math)
-│   └── test/                  # Node.js native test suite (49 unit & integration tests)
-│       ├── auth-security.test.mjs
-│       ├── matchmake-flow.test.mjs
-│       ├── memory.test.mjs
-│       ├── math-arena.test.mjs
-│       ├── connectfour.test.mjs
-│       ├── cyber-blaster.test.mjs
-│       ├── persistence.test.mjs
-│       ├── store.test.mjs
-│       ├── skins.test.mjs
-│       ├── chore.test.mjs
-│       └── tokens.test.mjs
-└── client/
-    ├── vite.config.js         # Vite configuration with 0.0.0.0 host binding & code splitting
-    ├── src/
-    │   ├── socket.js          # Socket.IO client with session headers & dynamic LAN host resolution
-    │   ├── main.jsx           # React root with lazy route code-splitting
-    │   ├── lib/
-    │   │   ├── session.js     # Production-grade dual-vault (IndexedDB + localStorage auto-healing)
-    │   │   ├── chain.js       # Contract readers & balance formatters
-    │   │   └── router.js      # Lightweight hash-based router
-    │   ├── pages/
-    │   │   ├── Hub.jsx        # Tabletop arcade hub with integrated Chat & Watch (#hub)
-    │   │   ├── BattlePass.jsx # Proof-of-Chore Battle Pass & Allowance portal (#battlepass)
-    │   │   ├── Arena.jsx      # 3D Neon Math Arena match interface (#arena)
-    │   │   ├── MemoryMatch.jsx# Memory Match duel interface (#memory)
-    │   │   ├── ConnectFour.jsx# Connect Four disc duel interface (#connectfour)
-    │   │   └── CyberBlaster.jsx# Cyber Blaster real-time action interface (#blaster)
-    │   └── components/
-    │       ├── ArenaPreview3D.jsx     # WebGL Three.js arena floor with proper GPU cleanup
-    │       ├── ParentApprovalModal.jsx# PIN-protected parent chore oracle approval modal
-    │       ├── SkinLockerModal.jsx    # Armory skins locker & chore submit view
-    │       ├── ReplayModal.jsx        # Move-by-move match replay viewer
-    │       ├── AccountModal.jsx       # BIP-39 mnemonic seed phrase & keystore backup modal
-    │       ├── JoinRoomModal.jsx      # 5-character private room code modal
-    │       ├── VerifyPanel.jsx        # On-chain transaction ledger verification modal
-    │       └── ChainBadge.jsx         # Live blockchain status pill
-    └── smoke-test.mjs         # Headless socket match validation script
-```
+### Known Limitations
 
----
+- **Turn Timers in Tabletop Games:** Connect Four and Memory Match rely on player turn completion without turn countdown timers (unlike Math Arena which has a strict 12s round timer). If a player abandons mid-game, their opponent currently wins by leaving the room.
+- **Local Hardhat Nonce Reset:** Restarting a local Hardhat node resets EVM state and nonces to 0. If testing with MetaMask, users must clear activity/nonces in MetaMask settings.
+- **Single-Server In-Memory Rooms:** Active room objects live in memory backed by SQLite persistence. In a distributed multi-instance deployment, a Redis adapter for Socket.IO would be needed.
 
-## ❓ Troubleshooting & FAQs
+### Next Steps
 
-### 1. `Error: listen EADDRINUSE: address already in use :::3001` or `8545`
-
-Another instance of the backend or Hardhat is running in the background.
-
-- **Linux/macOS**: `fuser -k 3001/tcp 8545/tcp 5173/tcp`
-- **Windows**: `npx kill-port 3001 8545 5173`
-
-### 2. "Arena server offline — start it with 'cd server && npm start'"
-
-Your frontend cannot connect to port 3001. Ensure `npm start` is running in your first terminal.
-
-### 3. Native module compilation errors (`better-sqlite3`)
-
-- **Linux**: Run `sudo apt install build-essential python3`
-- **macOS**: Run `xcode-select --install`
-- **Windows**: Run `npm install --global windows-build-tools` (or install Visual Studio Community Desktop C++).
-
-### 4. How do I reset player data, tokens, and match history?
-
-Delete the SQLite database file in `server/`:
-
-```bash
-# Linux / macOS:
-rm server/data.sqlite
-
-# Windows (PowerShell):
-Remove-Item server/data.sqlite
-```
-
-The server will automatically generate a fresh schema on next boot.
-
-### 5. MetaMask Nonce Desync on Localhost
-
-If you restart the local Hardhat node, transaction nonces reset to 0. In MetaMask:
-
-- Go to **Settings** → **Advanced** → **Clear activity and nonce data** (or Reset Account).
-- Ensure your network RPC is set to `http://127.0.0.1:8545` with Chain ID `31337`.
+1. **Public Testnet Deployment:** Deploy contracts to Base Sepolia or Arbitrum Sepolia with an active public RPC.
+2. **ERC-4337 Live Bundler Integration:** Integrate Biconomy or Pimlico bundler SDK on the frontend for production gasless account abstraction.
+3. **Turn Timeout Clocks:** Add 30-second chess clocks to Connect Four and Memory Match.
+4. **Mobile Native Shell:** Wrap the responsive React client in Capacitor for iOS and Android app store distribution.
 
 ---
 
 ## 📄 License
 
-MIT License. Designed and engineered for decentralized, family-friendly competitive gaming at the Swafri Hackathon 2026.
+MIT License. Created for the Swafri Hackathon 2026.
