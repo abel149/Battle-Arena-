@@ -135,17 +135,23 @@ export default function BattlePass() {
     const onChoreUpdated = () => refreshAll();
     const onChoreCreated = () => refreshAll();
     const onPlayerUpdate = () => refreshAll();
+    const onParentLinked = ({ parentAddress }) => {
+      showToast(`🎉 Verified Parent linked (${short(parentAddress)})!`, 'success');
+      refreshAll();
+    };
 
     socket.on('chore:verified', onChoreVerified);
     socket.on('chore:updated', onChoreUpdated);
     socket.on('chore:created', onChoreCreated);
     socket.on('player:update', onPlayerUpdate);
+    socket.on('parent:linked', onParentLinked);
 
     return () => {
       socket.off('chore:verified', onChoreVerified);
       socket.off('chore:updated', onChoreUpdated);
       socket.off('chore:created', onChoreCreated);
       socket.off('player:update', onPlayerUpdate);
+      socket.off('parent:linked', onParentLinked);
     };
   }, [refreshAll, showToast]);
 

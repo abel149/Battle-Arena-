@@ -343,6 +343,10 @@ app.post('/api/parent/link', (req, res) => {
   const { kidAddress, parentAddress } = req.body || {};
   if (!kidAddress || !parentAddress) return res.status(400).json({ error: 'kidAddress and parentAddress required' });
   const kid = store.linkParent(kidAddress, parentAddress);
+  if (kid) {
+    notifyPlayer(kid.address, 'player:update', store.withoutPassword(kid));
+    notifyPlayer(kid.address, 'parent:linked', { parentAddress });
+  }
   res.json(store.withoutPassword(kid));
 });
 

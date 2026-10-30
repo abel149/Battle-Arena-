@@ -1003,8 +1003,14 @@ export function createCustomChore({ kidAddress, parentAddress, title, category, 
   return prepared.getChoreById.get(id);
 }
 
-export function linkParent(kidAddress, parentAddress) {
+export function linkParent(kidIdentifier, parentAddress) {
   open();
+  let kidAddress = String(kidIdentifier || '').trim();
+  if (kidAddress.startsWith('@')) kidAddress = kidAddress.slice(1);
+  const byUsername = prepared.getByUsername.get(kidAddress.toLowerCase());
+  if (byUsername) {
+    kidAddress = byUsername.address;
+  }
   upsertPlayer(kidAddress);
   prepared.updateKidParent.run(parentAddress, kidAddress);
   prepared.updateKidParentOnChores.run(parentAddress, kidAddress);
