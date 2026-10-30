@@ -1,0 +1,249 @@
+/* ==========================================================================
+   Battle Arena — Chain Status Badge & Verification Modal
+   Theme: Physical Tabletop Board Game (Tactile, chunky, flat colors, hard shadows)
+   ========================================================================== */
+
+/* ---- Chain badge ---- */
+.chain-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+  border: 2px solid var(--border-ink, #0e1116);
+  background: var(--bg-card-sub, #1e232b);
+  box-shadow: 2px 2px 0px #0e1116;
+  color: var(--text-dim, #9aa5b5);
+  white-space: nowrap;
+}
+
+.chain-badge.live {
+  color: #56ffc0;
+  background: #173326;
+}
+
+.chain-badge.sim {
+  color: #ffd25e;
+  background: #362a14;
+}
+
+.chain-badge.err,
+.chain-badge.off {
+  color: #ff708a;
+  background: #3a171c;
+}
+
+.chain-badge .live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #56ffc0;
+  border: 1px solid #0e1116;
+  animation: chain-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes chain-pulse {
+  50% { opacity: 0.35; }
+}
+
+/* ---- Receipt / verify buttons ---- */
+.receipt-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  max-width: 100%;
+  line-height: 1.4;
+  margin-top: 10px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+  font-size: 12px;
+  font-weight: 700;
+  color: #f5f6f0;
+  background: #1e2531;
+  border: 2px solid var(--border-ink, #0e1116);
+  box-shadow: 2px 2px 0px #0e1116;
+  transition: transform 0.08s ease, background 0.08s ease;
+}
+
+.receipt-btn:hover {
+  background: #273040;
+  transform: translateY(-1px);
+}
+
+.receipt-btn:active {
+  transform: translate(1px, 1px);
+  box-shadow: none;
+}
+
+.receipt-btn.sim {
+  color: #ffd25e;
+  border-color: #0e1116;
+}
+
+.receipt-balance {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #ffd25e;
+  font-weight: 600;
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+}
+
+/* ---- Verify panel modal ---- */
+.vp-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background: rgba(14, 17, 22, 0.85);
+  padding: 16px;
+}
+
+.vp-card {
+  position: relative;
+  width: min(500px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  padding: 24px;
+  border-radius: 14px;
+  background: var(--bg-card, #262c36);
+  border: 2.5px solid var(--border-ink, #0e1116);
+  box-shadow: 4px 4px 0px #0e1116;
+  color: var(--text-main, #f5f6f0);
+}
+
+.vp-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  background: var(--bg-card-sub, #1e232b);
+  border: 1.5px solid #0e1116;
+  border-radius: 6px;
+  color: var(--text-dim, #9aa5b5);
+  font-size: 15px;
+  font-weight: 700;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 1.5px 1.5px 0 #0e1116;
+}
+
+.vp-close:hover {
+  background: #362a14;
+  color: #fff;
+}
+
+.vp-title {
+  margin: 0 0 14px;
+  font-family: var(--font-display, 'Fredoka', sans-serif);
+  font-size: 20px;
+  font-weight: 700;
+  color: #f5b700;
+}
+
+.vp-status {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 14px;
+  border: 2px solid #0e1116;
+  box-shadow: 2px 2px 0 #0e1116;
+}
+
+.vp-status.good {
+  background: #173326;
+  color: #56ffc0;
+}
+
+.vp-status.sim {
+  background: #362a14;
+  color: #ffd25e;
+}
+
+.vp-status.bad {
+  background: #3a171c;
+  color: #ff708a;
+}
+
+.vp-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1.5px solid #0e1116;
+  font-size: 13px;
+}
+
+.vp-label {
+  width: 92px;
+  flex: none;
+  font-weight: 700;
+  color: var(--text-dim, #9aa5b5);
+}
+
+.vp-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.vp-value.mono,
+.vp-card code {
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+  font-size: 12px;
+}
+
+.vp-mini {
+  flex: none;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  color: #f5f6f0;
+  background: #1e2531;
+  border: 1.5px solid #0e1116;
+  box-shadow: 1.5px 1.5px 0 #0e1116;
+  transition: transform 0.08s ease;
+}
+
+.vp-mini:hover {
+  background: #273040;
+  transform: translateY(-1px);
+}
+
+.vp-mini:active {
+  transform: translate(1px, 1px);
+  box-shadow: none;
+}
+
+.vp-note {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: var(--text-dim, #9aa5b5);
+  line-height: 1.45;
+}
+
+/* The Hub ledger rows can also be buttons to open the verify panel */
+button.chain-row {
+  width: auto;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0;
+}

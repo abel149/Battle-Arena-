@@ -4,6 +4,8 @@ import { navigate, useRoute } from '../lib/router.js';
 import { short, useProfile } from '../lib/session.js';
 import RoomCode from '../components/RoomCode.jsx';
 import MatchChat from '../components/MatchChat.jsx';
+import VerifyPanel from '../components/VerifyPanel.jsx';
+import { useChainStatus, useChainBalance, formatArena } from '../lib/chain.js';
 import './arena.css';
 
 const ROUND_SECONDS = 10;
@@ -684,6 +686,9 @@ function RoundResult({ result, question, mySeat, myName, oppName }) {
 }
 
 function MatchResult({ game, mySeat, myName, oppName, receipt, onPlayAgain, canRematch, onLeave, difficulty, onSelectDifficulty }) {
+  const chain = useChainStatus();
+  const [verifying, setVerifying] = useState(false);
+  const chainBal = useChainBalance(game.players?.[mySeat], receipt ? 1 : 0);
   const winner = game.winner;
   const iWon = winner === mySeat;
   const draw = winner === 'draw';
@@ -712,18 +717,30 @@ function MatchResult({ game, mySeat, myName, oppName, receipt, onPlayAgain, canR
           <span className="p2">{oppScore}</span>
         </div>
         {receipt ? (
-          <a
-            className="receipt-link"
-            href={`${API}/api/verify/${receipt.matchId}`}
-            target="_blank"
-            rel="noreferrer"
-            title={`Verify ${receipt.matchId}`}
-          >
-            ⛓ On-chain: {short(receipt.txHash || receipt.matchId)}
-            {receipt.rewards && receipt.rewards[game.players?.[mySeat]]?.tokens ? (
-              <span className="reward-tag"> (+{receipt.rewards[game.players[mySeat]].tokens} ARENA)</span>
-            ) : null}
-          </a>
+          <>
+            <button
+              type="button"
+              className={`receipt-btn ${receipt.onchain ? '' : 'sim'}`}
+              onClick={() => setVerifying(true)}
+              title="Verify this match"
+            >
+              {receipt.error
+                ? '⚠ Saved locally (chain write failed)'
+                : receipt.onchain
+                  ? `⛓ Recorded on ${chain?.network || 'chain'}: ${short(receipt.txHash || receipt.matchId)}`
+                  : `🧪 Simulated record: ${short(receipt.txHash || receipt.matchId)}`}
+              {receipt.rewards && receipt.rewards[game.players?.[mySeat]]?.tokens ? (
+                <span className="reward-tag"> (+{receipt.rewards[game.players[mySeat]].tokens} ARENA)</span>
+              ) : null}
+              <span> · Verify</span>
+            </button>
+            {chainBal?.onchain && (
+              <div className="receipt-balance">Wallet balance: {formatArena(chainBal.balance)} ARENA (on-chain)</div>
+            )}
+            {verifying && (
+              <VerifyPanel matchId={receipt.matchId} status={chain} onClose={() => setVerifying(false)} />
+            )}
+          </>
         ) : (
           <div className="receipt-link recording">
             ⛓ Confirming on blockchain…

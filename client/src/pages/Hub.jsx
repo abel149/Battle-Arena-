@@ -9,6 +9,9 @@ import ParentApprovalModal from '../components/ParentApprovalModal.jsx';
 import ReplayModal from '../components/ReplayModal.jsx';
 import AccountModal from '../components/AccountModal.jsx';
 import JoinRoomModal from '../components/JoinRoomModal.jsx';
+import ChainBadge from '../components/ChainBadge.jsx';
+import VerifyPanel from '../components/VerifyPanel.jsx';
+import { useChainStatus, useChainBalance, formatArena } from '../lib/chain.js';
 import './hub.css';
 
 const DEFAULT_DECK = 'flags';
@@ -38,6 +41,9 @@ export default function Hub() {
   const [loadError, setLoadError] = useState(null);
   const [joinGame, setJoinGame] = useState(null); // 'arena' | 'memory' | null
   const [liveRooms, setLiveRooms] = useState([]);
+  const chain = useChainStatus();
+  const chainBal = useChainBalance(wallet.address);
+  const [verifyId, setVerifyId] = useState(null);
 
   function tryPlay(path) {
     if ((profile?.energy ?? 5) <= 0) {
@@ -164,12 +170,20 @@ export default function Hub() {
             <span className="energy-meter-val">{profile?.energy ?? 5}/5</span>
           </a>
 
+          {/* Chain Connection Badge */}
+          <ChainBadge status={chain} />
+
           {/* Player Badge */}
           {profile && (
-            <div className="player-badge-pill">
+            <div
+              className="player-badge-pill"
+              title={chainBal?.onchain ? 'Balance verified on ARENA token contract' : 'Balance from game database'}
+            >
               <span className="player-badge-lvl">Lv {profile.level || 1}</span>
               <span className="dot-sep" aria-hidden="true">·</span>
-              <span className="player-badge-tokens">{profile.tokens || 0} ARENA</span>
+              <span className="player-badge-tokens">
+                {chainBal?.onchain ? `⛓ ${formatArena(chainBal.balance)}` : profile.tokens || 0} ARENA
+              </span>
             </div>
           )}
 
@@ -505,17 +519,16 @@ export default function Hub() {
               {matches.length === 0 && <p className="side-empty">No results recorded yet. Play a match to log the first record.</p>}
               {latest.map(m => (
                 <div key={m.matchId} className="chain-row-container">
-                  <a
+                  <button
+                    type="button"
                     className="chain-row"
-                    href={`${API}/api/verify/${m.matchId}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    title={`Verify ${m.matchId}`}
+                    onClick={() => setVerifyId(m.matchId)}
+                    title={`Verify ${m.matchId} on-chain`}
                   >
                     <span className={`chain-dot ${m.gameType || ''}`} />
                     <span className="chain-game">{gameLabel(m.gameType)}</span>
                     <span className="chain-hash">{short(m.txHash || m.matchId)}</span>
-                  </a>
+                  </button>
                   <button
                     type="button"
                     className="btn-replay-pill"
@@ -527,7 +540,9 @@ export default function Hub() {
                 </div>
               ))}
               {matches.length > 0 && (
-                <div className="chain-count">{matches.length} verified match{matches.length === 1 ? '' : 'es'}</div>
+                <div className="chain-count">
+                  {matches.length} {chain?.onchain && !chain.error ? 'verified' : 'simulated'} match{matches.length === 1 ? '' : 'es'}
+                </div>
               )}
             </div>
           </section>
@@ -591,6 +606,14 @@ export default function Hub() {
         <ReplayModal
           matchId={replayMatchId}
           onClose={() => setReplayMatchId(null)}
+        />
+      )}
+
+      {verifyId && (
+        <VerifyPanel
+          matchId={verifyId}
+          status={chain}
+          onClose={() => setVerifyId(null)}
         />
       )}
 

@@ -22,7 +22,7 @@ function verifyAuthSignature(signature, address) {
 }
 
 import { ENGINES, DECKS, dailyDeckId } from './games/index.js';
-import { recordMatch, getLedger, isOnchain, normalizeLedgerEntry, ONCHAIN_LABELS } from './chain-onchain.js';
+import { recordMatch, getLedger, isOnchain, chainInfo, normalizeLedgerEntry, ONCHAIN_LABELS } from './chain-onchain.js';
 import { distributeRewards, isTokensOnchain, tokenAddresses, tokenBalance } from './chain-tokens.js';
 import { recordChoreVerification, verifyParentAttestation, getChoreLedger, isChoreOnchain } from './chain-chore.js';
 import * as store from './store.js';
@@ -143,6 +143,11 @@ app.get('/api/wallet/:address/tokens', async (req, res) => {
     res.status(500).json({ error: 'Failed to read token balance', detail: err.message });
   }
 });
+app.get('/api/chain/status', async (_req, res) => {
+  const info = await chainInfo();
+  res.json({ ...info, tokens: { onchain: isTokensOnchain(), addresses: tokenAddresses() } });
+});
+
 app.get('/api/matches', async (_req, res) => {
   try {
     res.json(await getLedger());
@@ -545,7 +550,7 @@ async function finishRoom(room) {
     roomId: room.id,
     winner: winnerAddr,
     result: game.winner,
-    receipt: { ...receipt, rewards: rewardReceipts }, // { matchId, matchIdRaw?, winner, timestamp, resultHash, txHash, rewards? }
+    receipt: { ...receipt, onchain: isOnchain() && !receipt?.error, rewards: rewardReceipts }, // { matchId, matchIdRaw?, winner, timestamp, resultHash, txHash, onchain, rewards? }
   });
   // Clean up persisted active room and memory
   store.removeActiveRoom(room.id);
