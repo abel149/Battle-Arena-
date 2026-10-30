@@ -649,6 +649,8 @@ function broadcastLiveRooms() {
  * @param {Object} room - Finished room object.
  */
 async function finishRoom(room) {
+  if (room.finished) return;
+  room.finished = true;
   if (room.tickInterval) clearInterval(room.tickInterval);
   if (room.mathTimer) clearTimeout(room.mathTimer);
   clearTimeout(room.roundTimer);

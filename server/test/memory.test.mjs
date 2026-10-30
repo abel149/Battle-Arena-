@@ -137,3 +137,41 @@ test('botMove in hard mode recalls seen matching card on second flip', () => {
   }
   assert.ok(recalled >= 32, `Expected high recall in hard mode, got ${recalled}/40`);
 });
+
+test('rejects flipping the same card twice on the same turn', () => {
+  const g = memory.createGame('0xA', '0xB', { deck: 'flags', pairs: 4 });
+  const first = memory.applyMove(g, '0xA', { index: 0 });
+  assert.ok(!first.error);
+  assert.deepEqual(g.flipped, [0]);
+
+  // Flipping index 0 again must be rejected
+  const second = memory.applyMove(g, '0xA', { index: 0 });
+  assert.equal(second.error, 'Invalid card');
+  assert.deepEqual(g.flipped, [0]);
+});
+
+test('detects a draw when both players finish with equal pairs', () => {
+  const g = memory.createGame('0xA', '0xB', { deck: 'flags', pairs: 2 });
+  // Total 2 pairs (4 cards). Give 1 pair to X, 1 pair to O.
+  g.scores['0xA'] = 1;
+  g.scores['0xB'] = 0;
+  g.turn = 'O';
+
+  // Find the remaining pair that is not yet matched
+  const remaining = g.cards.map((c, i) => (c.pairId === 1 ? i : null)).filter((i) => i !== null);
+
+  // Mark pair 0 as already matched
+  g.cards.forEach((c) => {
+    if (c.pairId === 0) c.matched = true;
+  });
+
+  // O flips the second pair
+  memory.applyMove(g, '0xB', { index: remaining[0] });
+  const res = memory.applyMove(g, '0xB', { index: remaining[1] });
+  assert.ok(res.pendingMs > 0);
+  memory.resolve(g);
+
+  assert.equal(g.scores['0xA'], 1);
+  assert.equal(g.scores['0xB'], 1);
+  assert.equal(g.winner, 'draw');
+});

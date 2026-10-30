@@ -34,6 +34,15 @@ test('kid submits chore and parent verifies it on-chain/ledger', () => {
   assert.equal(playerAfter.energy, startingEnergy + chore.energyReward);
   assert.ok(playerAfter.battlePassXp >= chore.xpReward);
   assert.ok(playerAfter.allowanceBalance >= chore.allowanceReward);
+
+  // Attempting to verify the same chore a second time must be rejected
+  const reVerify = store.verifyChore(chore.id, parent);
+  assert.equal(reVerify.error, 'Chore already verified');
+
+  // Verify rewards did not increase again
+  const playerDoubleCheck = store.getPlayer(kid);
+  assert.equal(playerDoubleCheck.energy, playerAfter.energy);
+  assert.equal(playerDoubleCheck.allowanceBalance, playerAfter.allowanceBalance);
 });
 
 test('energy consumption gates match entry', () => {
