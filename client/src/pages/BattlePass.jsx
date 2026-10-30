@@ -81,6 +81,12 @@ export default function BattlePass() {
   });
   const [linkKidInput, setLinkKidInput] = useState('');
   const [activeKidTab, setActiveKidTab] = useState('chores'); // chores | roadmap | vouchers
+  const [parentUnlocked, setParentUnlocked] = useState(false);
+  const [parentPin, setParentPin] = useState('');
+  const [pinError, setPinError] = useState(null);
+  const [showPinChange, setShowPinChange] = useState(false);
+  const [newPin, setNewPin] = useState('');
+  const [pinChangeMsg, setPinChangeMsg] = useState(null);
 
   const showToast = useCallback((msg, type = 'info') => {
     setToast({ msg, type });
@@ -291,6 +297,61 @@ export default function BattlePass() {
       refreshAll();
     } catch (err) {
       showToast(err.message, 'error');
+    }
+  }
+
+  // Verify Parent PIN
+  async function handleVerifyPin(e) {
+    e.preventDefault();
+    setPinError(null);
+    try {
+      const parentTarget = data?.parentAddress || profile?.parentAddress || wallet.address || 'default';
+      const res = await fetch(`${API}/api/parent/verify-pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address: parentTarget,
+          pin: parentPin.trim(),
+        }),
+      });
+      const resData = await res.json();
+      if (resData.ok) {
+        setParentUnlocked(true);
+        setParentPin('');
+        showToast('Parent Oracle unlocked!', 'success');
+        refreshAll();
+      } else {
+        setPinError(resData.error || 'Incorrect Parent PIN. (Default PIN is 1234)');
+      }
+    } catch {
+      setPinError('Failed to verify PIN. Try again.');
+    }
+  }
+
+  // Update Parent PIN
+  async function handleSaveNewPin(e) {
+    e.preventDefault();
+    setPinChangeMsg(null);
+    if (!/^\d{4,6}$/.test(newPin.trim())) {
+      setPinChangeMsg({ error: 'PIN must be 4 to 6 digits' });
+      return;
+    }
+    try {
+      const parentTarget = data?.parentAddress || profile?.parentAddress || wallet.address || 'default';
+      const res = await fetch(`${API}/api/parent/set-pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address: parentTarget,
+          pin: newPin.trim(),
+        }),
+      });
+      const resData = await res.json();
+      if (resData.error) throw new Error(resData.error);
+      setPinChangeMsg({ success: 'Parent PIN updated successfully!' });
+      setNewPin('');
+    } catch (err) {
+      setPinChangeMsg({ error: err.message || 'Failed to update PIN' });
     }
   }
 
@@ -615,7 +676,43 @@ export default function BattlePass() {
       )}
 
       {/* ================= PARENT ORACLE VIEW ================= */}
-      {view === 'parent' && (
+      {view === 'parent' && !parentUnlocked && (
+        <main className="parent-view">
+          <div className="parent-pin-card">
+            <div className="parent-gate-icon">🔒</div>
+            <h2>Enter Parent PIN</h2>
+            <p>
+              The Parent Oracle is protected to prevent kids from self-approving chores and granting themselves infinite energy.
+            </p>
+            <form onSubmit={handleVerifyPin} className="parent-pin-form">
+              <input
+                type="password"
+                maxLength={6}
+                pattern="[0-9]*"
+                inputMode="numeric"
+                className="parent-pin-input"
+                placeholder="1234"
+                value={parentPin}
+                onChange={e => setParentPin(e.target.value)}
+                autoFocus
+                aria-label="Parent PIN"
+              />
+              {pinError && <div className="pin-error-text">{pinError}</div>}
+              <button type="submit" className="btn-pin-submit">
+                Unlock Parent Oracle →
+              </button>
+            </form>
+            <div className="pin-hint">
+              💡 First time? The default family PIN is <strong>1234</strong>.
+            </div>
+            <button type="button" className="btn-return-kid" onClick={() => setView('kid')}>
+              ← Back to Kid Arena
+            </button>
+          </div>
+        </main>
+      )}
+
+      {view === 'parent' && parentUnlocked && (
         <main className="parent-view">
           <div className="parent-banner">
             <div className="oracle-badge">
@@ -625,9 +722,50 @@ export default function BattlePass() {
             <p>
               Verify your child's real-world tasks on-chain, issue custom chore bounties, and manage allowance rewards.
             </p>
-            <div className="parent-wallet-info">
-              Connected Oracle Wallet: <code>{wallet.address}</code>
+            <div className="parent-banner-actions">
+              <div className="parent-wallet-info">
+                Connected Oracle Wallet: <code>{wallet.address}</code>
+              </div>
+              <div className="parent-header-buttons">
+                <button
+                  type="button"
+                  className="btn-toggle-pin-sm"
+                  onClick={() => setShowPinChange(!showPinChange)}
+                >
+                  ⚙️ {showPinChange ? 'Hide Settings' : 'Change PIN'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-lock-parent"
+                  onClick={() => {
+                    setParentUnlocked(false);
+                    setView('kid');
+                    showToast('Parent Oracle locked.', 'info');
+                  }}
+                >
+                  🔒 Lock & Exit
+                </button>
+              </div>
             </div>
+
+            {showPinChange && (
+              <form onSubmit={handleSaveNewPin} className="pin-change-box">
+                <h4>Change Parent PIN</h4>
+                <div className="pin-change-row">
+                  <input
+                    type="password"
+                    maxLength={6}
+                    placeholder="New 4-6 digit PIN"
+                    value={newPin}
+                    onChange={e => setNewPin(e.target.value)}
+                    className="pin-change-input"
+                  />
+                  <button type="submit" className="btn-save-pin">Save PIN</button>
+                </div>
+                {pinChangeMsg?.error && <div className="pin-error-text">{pinChangeMsg.error}</div>}
+                {pinChangeMsg?.success && <div className="pin-success-text">{pinChangeMsg.success}</div>}
+              </form>
+            )}
           </div>
 
           <div className="parent-grid">

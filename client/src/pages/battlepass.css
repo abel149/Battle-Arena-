@@ -1349,3 +1349,176 @@
   font-weight: 700;
   font-size: 0.9rem;
 }
+
+/* ==========================================================================
+   Parent PIN Gate in BattlePass
+   ========================================================================== */
+
+.parent-pin-card {
+  max-width: 480px;
+  margin: 40px auto;
+  background: var(--bg-card, #262c36);
+  border: var(--border-width, 2.5px) solid var(--border-ink, #0e1116);
+  border-radius: 14px;
+  box-shadow: var(--hard-shadow-lg, 5px 5px 0px #0e1116);
+  padding: 40px 30px;
+  text-align: center;
+}
+
+.parent-pin-card h2 {
+  font-family: var(--font-display, 'Fredoka');
+  font-size: 1.8rem;
+  color: var(--text-main, #f5f6f0);
+  margin: 0 0 10px;
+}
+
+.parent-pin-card p {
+  color: var(--text-dim, #9aa5b5);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin: 0 0 24px;
+}
+
+.parent-pin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 280px;
+  margin: 0 auto;
+}
+
+.parent-pin-input {
+  width: 100%;
+  padding: 12px;
+  font-size: 1.6rem;
+  letter-spacing: 0.35em;
+  text-align: center;
+  background: var(--bg-card-sub, #1e232b);
+  border: var(--border-width, 2.5px) solid var(--border-ink, #0e1116);
+  border-radius: 8px;
+  color: var(--gold-trophy, #f5b700);
+  font-weight: 800;
+}
+
+.parent-pin-input:focus {
+  outline: none;
+  border-color: var(--action-orange, #ff5722);
+}
+
+.btn-pin-submit {
+  width: 100%;
+  padding: 12px;
+  background: var(--action-orange, #ff5722);
+  color: #ffffff;
+  border: var(--border-width, 2.5px) solid var(--border-ink, #0e1116);
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: var(--hard-shadow-sm, 2px 2px 0px #0e1116);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.btn-pin-submit:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: var(--hard-shadow, 3px 3px 0px #0e1116);
+}
+
+.pin-hint {
+  margin-top: 18px;
+  font-size: 0.85rem;
+  color: var(--text-dim, #9aa5b5);
+}
+
+.btn-return-kid {
+  margin-top: 20px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim, #9aa5b5);
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.btn-return-kid:hover {
+  color: var(--text-main, #f5f6f0);
+}
+
+.parent-banner-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.parent-header-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-toggle-pin-sm,
+.btn-lock-parent {
+  padding: 6px 14px;
+  background: var(--bg-card-sub, #1e232b);
+  border: var(--border-width, 2.5px) solid var(--border-ink, #0e1116);
+  color: var(--text-main, #f5f6f0);
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--hard-shadow-sm, 2px 2px 0px #0e1116);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.btn-toggle-pin-sm:hover,
+.btn-lock-parent:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: var(--hard-shadow, 3px 3px 0px #0e1116);
+}
+
+.pin-change-box {
+  margin-top: 18px;
+  padding: 16px;
+  background: var(--bg-card-sub, #1e232b);
+  border: var(--border-width, 2.5px) solid var(--border-ink, #0e1116);
+  border-radius: 10px;
+  max-width: 420px;
+  text-align: left;
+}
+
+.pin-change-box h4 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  color: var(--text-main, #f5f6f0);
+}
+
+.pin-change-row {
+  display: flex;
+  gap: 8px;
+}
+
+.pin-change-input {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--bg-card, #262c36);
+  border: 2px solid var(--border-ink, #0e1116);
+  border-radius: 6px;
+  color: var(--text-main, #f5f6f0);
+  font-size: 1rem;
+}
+
+.btn-save-pin {
+  padding: 8px 16px;
+  background: var(--action-orange, #ff5722);
+  border: 2px solid var(--border-ink, #0e1116);
+  color: #fff;
+  border-radius: 6px;
+  font-weight: 700;
+  cursor: pointer;
+}
