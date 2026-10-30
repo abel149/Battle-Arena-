@@ -23,7 +23,8 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { JsonRpcProvider, Wallet, Contract, NonceManager, getAddress, ZeroAddress, encodeBytes32String, decodeBytes32String } from 'ethers';
+import { Contract, getAddress, ZeroAddress, encodeBytes32String, decodeBytes32String } from 'ethers';
+import { getProvider, getSigner } from './signer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ADDRESS_FILE = path.join(__dirname, 'match-result-address.json');
@@ -56,7 +57,7 @@ async function ensureContract() {
   if (!address) throw new Error('Set MATCH_RESULT_ADDRESS to enable on-chain recording');
   if (!process.env.NODE_HTTP_URL) throw new Error('NODE_HTTP_URL is required when on-chain recording is enabled');
 
-  provider = new JsonRpcProvider(process.env.NODE_HTTP_URL);
+  provider = getProvider();
   const network = await provider.getNetwork();
   if (expectedChainId && network.chainId !== BigInt(expectedChainId)) {
     throw new Error(`Connected to chain ${network.chainId}, expected ${expectedChainId}`);
@@ -64,9 +65,8 @@ async function ensureContract() {
   const code = await provider.getCode(address);
   if (code === '0x') throw new Error(`No contract deployed at ${address} on chain ${network.chainId}`);
 
-  signer = process.env.PRIVATE_KEY
-    ? new NonceManager(new Wallet(process.env.PRIVATE_KEY, provider))
-    : provider;
+  // Shared NonceManager (signer.js) — must be the same instance chain-tokens.js uses.
+  signer = getSigner() || provider;
   contract = new Contract(address, MATCH_RESULT_ABI, signer);
   return contract;
 }
@@ -129,9 +129,7 @@ export function isOnchain() {
 
 /// Record a completed match on-chain. Returns the receipt entry.
 export async function recordMatch({ matchId, gameType, players, winner, moves }) {
-  if (!USE_ONCHAIN) {
-    return recordMatchSimulated({ matchId, gameType, players, winner, moves });
-  }
+  if (!USE_ONCHAIN) throw new Error('Real blockchain required: MATCH_RESULT_ADDRESS is not configured');
 
   const c = await ensureContract();
   if (!c) throw new Error('On-chain recording requested but contract is not available');

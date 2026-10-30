@@ -460,26 +460,17 @@ async function finishRoom(room) {
       moves: game.moves,
     });
   } catch (err) {
-    console.warn('On-chain match recording failed, falling back to simulated ledger:', err.message);
-    try {
-      const { recordMatchSimulated, normalizeLedgerEntry } = await import('./chain-onchain.js');
-      receipt = normalizeLedgerEntry(recordMatchSimulated({
-        matchId: room.id,
-        gameType: room.gameType,
-        players: { X: addrX, O: addrO },
-        winner: winnerAddr || 'draw',
-        moves: game.moves,
-      }));
-    } catch {
-      receipt = {
-        matchId: room.id,
-        gameType: room.gameType,
-        players: { X: addrX, O: addrO },
-        winner: winnerAddr || 'draw',
-        timestamp: Date.now(),
-        error: err.message,
-      };
-    }
+    // Real blockchain only: no simulated fallback. The match still ends for the
+    // players, but the receipt carries the error and has no txHash.
+    console.error('ON-CHAIN RECORDING FAILED for', room.id, '-', err.shortMessage || err.message);
+    receipt = {
+      matchId: room.id,
+      gameType: room.gameType,
+      players: { X: addrX, O: addrO },
+      winner: winnerAddr || 'draw',
+      timestamp: Date.now(),
+      error: err.shortMessage || err.message,
+    };
   }
 
   // Update stats for human players and compute on-chain reward deltas
@@ -1112,15 +1103,14 @@ function restoreActiveRooms() {
 
 restoreActiveRooms();
 
+if (!isOnchain() || !isTokensOnchain()) {
+  console.error('\nReal blockchain required. Start with `npm start` (deploys contracts and sets\nMATCH_RESULT_ADDRESS / ARENA_TOKEN_ADDRESS / ARENA_BADGES_ADDRESS / NODE_HTTP_URL / PRIVATE_KEY).\n');
+  process.exit(1);
+}
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Battle Arena server on http://localhost:${PORT}`);
-  console.log(isOnchain()
-    ? 'On-chain match recording ENABLED (MatchResult.sol)'
-    : 'Match recording: simulated ledger (chain.js)');
-  if (isTokensOnchain()) {
-    const { arenaToken, arenaBadges } = tokenAddresses();
-    console.log(`On-chain rewards ENABLED — ArenaToken ${arenaToken}, ArenaBadges ${arenaBadges}`);
-  } else {
-    console.log('Rewards: simulated only (set ARENA_TOKEN_ADDRESS/ARENA_BADGES_ADDRESS to enable)');
-  }
+  console.log('On-chain match recording ENABLED (MatchResult.sol)');
+  const { arenaToken, arenaBadges } = tokenAddresses();
+  console.log(`On-chain rewards ENABLED — ArenaToken ${arenaToken}, ArenaBadges ${arenaBadges}`);
 });

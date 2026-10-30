@@ -13,7 +13,8 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { JsonRpcProvider, Wallet, Contract, NonceManager, formatUnits } from 'ethers';
+import { Contract, formatUnits } from 'ethers';
+import { getProvider, getSigner } from './signer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TOKEN_ADDRESS_FILE = path.join(__dirname, 'token-address.json');
@@ -61,7 +62,7 @@ async function ensureContracts() {
   if (!process.env.NODE_HTTP_URL) throw new Error('NODE_HTTP_URL is required when on-chain rewards are enabled');
   if (!process.env.PRIVATE_KEY) throw new Error('PRIVATE_KEY is required to mint on-chain rewards');
 
-  provider = new JsonRpcProvider(process.env.NODE_HTTP_URL);
+  provider = getProvider();
   const network = await provider.getNetwork();
   if (expectedChainId && network.chainId !== BigInt(expectedChainId)) {
     throw new Error(`Connected to chain ${network.chainId}, expected ${expectedChainId}`);
@@ -73,7 +74,7 @@ async function ensureContracts() {
 
   // NonceManager avoids the automining nonce race: two sequential sends can
   // otherwise both read the same pending nonce (ensure/twin mints in one award).
-  signer = new NonceManager(new Wallet(process.env.PRIVATE_KEY, provider));
+  signer = getSigner();
   tokenContract = new Contract(tokenAddress, ARENA_TOKEN_ABI, signer);
   badgesContract = new Contract(badgesAddress, ARENA_BADGES_ABI, signer);
   return { tokenContract, badgesContract };
