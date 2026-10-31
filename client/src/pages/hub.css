@@ -46,12 +46,15 @@
   border: var(--border-w) solid var(--border-ink);
   box-shadow: var(--shadow-hard);
   border-radius: 12px;
+  position: relative;
+  z-index: 40;
 }
 
 .hub-top-brand-group {
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: 14px;
+  flex-shrink: 0;
 }
 
 .brand {
@@ -59,12 +62,14 @@
   align-items: center;
   gap: 10px;
   text-decoration: none;
+  flex-shrink: 0;
 }
 
 .brand-mark {
   width: 26px;
   height: 26px;
   fill: var(--action-orange);
+  flex-shrink: 0;
 }
 
 .brand-name {
@@ -73,6 +78,7 @@
   font-weight: 700;
   letter-spacing: 0.3px;
   color: var(--text);
+  white-space: nowrap;
 }
 
 .hub-nav {
@@ -97,6 +103,8 @@
   text-decoration: none;
   cursor: pointer;
   transition: transform 0.08s ease, box-shadow 0.08s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .hub-nav-item:hover {
@@ -124,6 +132,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 /* Tactile Energy Meter (Fuel Gauge, not a pill) */
@@ -203,6 +212,7 @@
 /* Account Dropdown */
 .account-dropdown-wrap {
   position: relative;
+  flex-shrink: 0; /* Profile must NEVER be pushed off */
 }
 
 .account-btn {
@@ -219,11 +229,14 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.08s ease;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .account-btn:hover {
   transform: translate(-1px, -1px);
+  box-shadow: var(--shadow-hard);
 }
 
 .account-avatar {
@@ -237,18 +250,23 @@
   font-weight: 700;
   font-size: 12px;
   border: 1.5px solid var(--border-ink);
+  flex-shrink: 0;
 }
 
 .account-username {
-  max-width: 110px;
+  display: inline-block;
+  max-width: 125px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 700;
+  vertical-align: middle;
 }
 
 .account-chevron {
   font-size: 9px;
   color: var(--muted);
+  flex-shrink: 0;
 }
 
 .account-menu-popover {
@@ -256,6 +274,7 @@
   top: calc(100% + 8px);
   right: 0;
   width: 220px;
+  max-width: calc(100vw - 32px);
   background: var(--panel);
   border: var(--border-w) solid var(--border-ink);
   box-shadow: var(--shadow-hard-lg);
@@ -265,6 +284,135 @@
   flex-direction: column;
   gap: 8px;
   z-index: 50;
+}
+
+/* ---------------- Responsive Header & Profile ---------------- */
+@media (max-width: 1200px) {
+  .hub-top {
+    gap: 12px;
+  }
+  .hub-top-actions {
+    gap: 8px;
+  }
+  .energy-fuel-meter {
+    padding: 5px 8px;
+    gap: 6px;
+  }
+  .energy-meter-title {
+    display: none;
+  }
+  .hub-nav-item {
+    padding: 5px 9px;
+    font-size: 12px;
+  }
+  .account-username {
+    max-width: 100px;
+  }
+}
+
+@media (max-width: 1040px) {
+  .hub-top {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    row-gap: 10px;
+    column-gap: 12px;
+    align-items: center;
+    padding: 10px 14px;
+  }
+
+  .hub-top-brand-group {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .hub-top-actions {
+    grid-column: 2;
+    grid-row: 1;
+    justify-content: flex-end;
+  }
+
+  .hub-nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 4px 0 2px;
+    border-top: 1.5px solid rgba(14, 17, 22, 0.4);
+    gap: 6px;
+  }
+  .hub-nav::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (max-width: 680px) {
+  .hub-top {
+    padding: 8px 12px;
+    margin-bottom: 14px;
+  }
+
+  .brand-name {
+    font-size: 19px;
+  }
+
+  .hub-top-actions {
+    gap: 6px;
+  }
+
+  .energy-fuel-meter {
+    padding: 5px 8px;
+    font-size: 12px;
+  }
+  .energy-meter-cells {
+    display: none;
+  }
+  .energy-fuel-meter::before {
+    content: '⚡ ';
+    font-size: 12px;
+    color: var(--gold);
+  }
+
+  .hub-top-actions .chain-badge {
+    display: none;
+  }
+
+  .player-badge-pill .player-badge-tokens,
+  .player-badge-pill .dot-sep {
+    display: none;
+  }
+
+  .player-badge-pill {
+    padding: 5px 8px;
+    font-size: 12px;
+  }
+
+  .account-btn {
+    padding: 5px 8px;
+    gap: 5px;
+  }
+
+  .account-username {
+    max-width: 85px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 440px) {
+  .brand-name {
+    display: none;
+  }
+
+  .account-username {
+    max-width: 75px;
+    font-size: 11.5px;
+  }
+
+  .player-badge-pill {
+    display: none;
+  }
 }
 
 .account-menu-header {

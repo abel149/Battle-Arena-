@@ -151,32 +151,33 @@ export default function Hub() {
             <BrandMark />
             <span className="brand-name">Battle Arena</span>
           </a>
-          <nav className="hub-nav">
-            <a className="hub-nav-item" href="#battlepass">
-              Quests & Pass
-            </a>
-            <button type="button" className="hub-nav-item" onClick={() => setShowSkinLocker(true)}>
-              Skins
-            </button>
-            <button type="button" className="hub-nav-item" onClick={() => setShowParentModal(true)}>
-              Parents
-            </button>
-            <button
-              type="button"
-              className="hub-nav-item ghost"
-              onClick={() => {
-                const el = document.getElementById('chat-and-watch');
-                if (el) {
-                  el.scrollIntoView({ behavior: 'smooth' });
-                  el.classList.add('cw-highlight');
-                  setTimeout(() => el.classList.remove('cw-highlight'), 1200);
-                }
-              }}
-            >
-              <ChatIcon /> Chat &amp; Watch
-            </button>
-          </nav>
         </div>
+
+        <nav className="hub-nav">
+          <a className="hub-nav-item" href="#battlepass">
+            Quests &amp; Pass
+          </a>
+          <button type="button" className="hub-nav-item" onClick={() => setShowSkinLocker(true)}>
+            Skins
+          </button>
+          <button type="button" className="hub-nav-item" onClick={() => setShowParentModal(true)}>
+            Parents
+          </button>
+          <button
+            type="button"
+            className="hub-nav-item ghost"
+            onClick={() => {
+              const el = document.getElementById('chat-and-watch');
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth' });
+                el.classList.add('cw-highlight');
+                setTimeout(() => el.classList.remove('cw-highlight'), 1200);
+              }
+            }}
+          >
+            <ChatIcon /> Chat &amp; Watch
+          </button>
+        </nav>
 
         <div className="hub-top-actions">
           {/* Tactile Energy Fuel Meter */}
