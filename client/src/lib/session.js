@@ -244,7 +244,7 @@ export function restoreWalletFromInput(input, name) {
 export function exportKeystoreJson(wallet) {
   if (!wallet) return null;
   const backup = {
-    schema: 'swafri-battle-arena-vault-v2',
+    schema: 'battle-arena-vault-v2',
     app: 'Web3 Battle Arena',
     address: wallet.address,
     name: wallet.name || 'Arena Player',

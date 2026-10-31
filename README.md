@@ -274,4 +274,4 @@ npm run build
 
 ## 📄 License
 
-Created for the Swafri Hackathon 2026.
+MIT License. Web3 Battle Arena.

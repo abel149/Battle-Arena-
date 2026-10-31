@@ -83,11 +83,11 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
             <BrandMark />
             <span>Battle Arena</span>
           </div>
-          <h1>{isRegister ? 'Create Your Account' : 'Welcome Back, Champion'}</h1>
+          <h1>{isRegister ? 'Create an account' : 'Welcome back'}</h1>
           <p>
             {isRegister
-              ? 'Join the arena, earn verified energy, and compete for on-chain trophies.'
-              : 'Sign in to jump straight into live matchmaking and claim daily rewards.'}
+              ? 'Sign up to track your ratings, earn badges, and play live matches.'
+              : 'Sign in to access your profile, games, and match history.'}
           </p>
         </div>
 
@@ -99,7 +99,7 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
             className={!isRegister ? 'on' : ''}
             onClick={() => switchTab('login')}
           >
-            <span>🎮</span> Log In
+            Log in
           </button>
           <button
             type="button"
@@ -108,15 +108,9 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
             className={isRegister ? 'on' : ''}
             onClick={() => switchTab('register')}
           >
-            <span>✨</span> Create Account
+            Create account
           </button>
         </div>
-
-        <p className="auth-note">
-          {isRegister
-            ? '💡 Free to play! Your account gets a non-custodial Web3 Profile ID + 5 free Energy.'
-            : '⚡ Ready for duels: Connect Four, Memory Match, Math Arena, and Cyber Blaster.'}
-        </p>
 
         <label>
           <span>
@@ -125,7 +119,7 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
           <input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="e.g. cyber_ninja"
+            placeholder="Username"
             autoComplete="username"
             autoFocus
             required
@@ -141,18 +135,18 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Alex The Great"
+                placeholder="Display name"
               />
             </label>
             <label>
               <span>
-                Email <span className="hint">(Optional — for password recovery)</span>
+                Email <span className="hint">(Optional)</span>
               </span>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="parent-or-kid@example.com"
+                placeholder="Email address"
                 autoComplete="email"
               />
             </label>
@@ -168,7 +162,7 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
               type={showPw ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
+              placeholder="Password"
               autoComplete={isRegister ? 'new-password' : 'current-password'}
               required
             />
@@ -178,20 +172,20 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
               onClick={() => setShowPw((v) => !v)}
               aria-label={showPw ? 'Hide password' : 'Show password'}
             >
-              {showPw ? '🙈 Hide' : '👁️ Show'}
+              {showPw ? 'Hide' : 'Show'}
             </button>
           </div>
         </label>
 
         {isRegister && (
           <label>
-            <span>Repeat Password</span>
+            <span>Repeat password</span>
             <div className="auth-pw">
               <input
                 type={showPw ? 'text' : 'password'}
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
-                placeholder="••••••••"
+                placeholder="Repeat password"
                 autoComplete="new-password"
                 required
               />
@@ -214,26 +208,8 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
             </button>
           )}
           <button type="submit" className="auth-submit" disabled={busy}>
-            {busy ? (
-              <span>⏳ Please wait…</span>
-            ) : isRegister ? (
-              <span>🚀 Create Account &amp; Play</span>
-            ) : (
-              <span>⚔️ Enter the Arena</span>
-            )}
+            {busy ? 'Please wait…' : isRegister ? 'Create account' : 'Log in'}
           </button>
-        </div>
-
-        <div className="auth-trust-footer">
-          <div className="auth-trust-item">
-            <span>🛡️</span> Kid-Safe Chat
-          </div>
-          <div className="auth-trust-item">
-            <span>⚡</span> Proof-of-Chore
-          </div>
-          <div className="auth-trust-item">
-            <span>📜</span> On-Chain Receipts
-          </div>
         </div>
       </form>
     </div>

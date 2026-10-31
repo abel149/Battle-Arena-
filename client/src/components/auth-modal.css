@@ -1,6 +1,6 @@
 /* ==========================================================================
    Battle Arena — Authentication & Account Creation Styles
-   Physical Tabletop Board Game & Neon Arcade Aesthetic (Swafri Hackathon 2026)
+   Physical Tabletop Board Game & Neon Theme
    ========================================================================== */
 
 /* -------------------------------
@@ -12,206 +12,18 @@
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 24px 20px 48px;
+  padding: 32px 20px 48px;
   background-color: var(--bg-table, #1c2026);
   position: relative;
   overflow-x: hidden;
 }
 
-.auth-gate-layout {
-  display: grid;
-  grid-template-columns: 1.15fr 1fr;
-  gap: clamp(24px, 4vw, 56px);
-  max-width: 1240px;
+.auth-container {
   width: 100%;
+  max-width: 440px;
   margin: 0 auto;
-  align-items: center;
   position: relative;
   z-index: 2;
-}
-
-@media (max-width: 960px) {
-  .auth-gate-layout {
-    grid-template-columns: 1fr;
-    max-width: 520px;
-  }
-}
-
-/* -------------------------------
-   Left Side Hero Showcase
-   ------------------------------- */
-.auth-hero {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  color: var(--text-main, #f5f6f0);
-}
-
-.auth-badge-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-}
-
-.auth-hackathon-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(245, 183, 0, 0.12);
-  border: 1.5px solid var(--gold-trophy, #f5b700);
-  color: var(--gold-trophy, #f5b700);
-  border-radius: 999px;
-  padding: 4px 12px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-  font-family: var(--font-body);
-}
-
-.auth-status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--bg-card-sub, #1e232b);
-  border: 1.5px solid var(--border-ink, #0e1116);
-  color: var(--deck-teal, #1fa2a9);
-  border-radius: 999px;
-  padding: 4px 12px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.auth-status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #35cf82;
-  box-shadow: 0 0 8px #35cf82;
-  animation: pulseDot 2s infinite ease-in-out;
-}
-
-@keyframes pulseDot {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.3); opacity: 0.7; }
-}
-
-.auth-hero-title {
-  margin: 0;
-  font-family: var(--font-display, 'Fredoka', sans-serif);
-  font-size: clamp(32px, 4.2vw, 50px);
-  font-weight: 800;
-  line-height: 1.12;
-  color: #ffffff;
-  letter-spacing: -0.5px;
-}
-
-.auth-hero-title .highlight {
-  color: var(--action-orange, #ff5722);
-  text-shadow: 0 0 24px rgba(255, 87, 34, 0.4);
-}
-
-.auth-hero-desc {
-  margin: 0;
-  font-size: 16px;
-  line-height: 1.6;
-  color: var(--text-dim, #9aa5b5);
-  max-width: 540px;
-}
-
-/* Feature grid */
-.auth-hero-features {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  margin-top: 6px;
-}
-
-@media (max-width: 580px) {
-  .auth-hero-features {
-    grid-template-columns: 1fr;
-  }
-}
-
-.auth-feature-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  background: var(--bg-card, #262c36);
-  border: var(--border-width, 2.5px) solid var(--border-ink, #0e1116);
-  box-shadow: var(--hard-shadow-sm, 2px 2px 0px #0e1116);
-  border-radius: 12px;
-  padding: 14px 14px;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-}
-
-.auth-feature-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--hard-shadow, 3px 3px 0px #0e1116);
-}
-
-.auth-feature-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  flex-shrink: 0;
-  border: 2px solid var(--border-ink, #0e1116);
-  box-shadow: 1px 1px 0 #0e1116;
-}
-
-.auth-feature-card:nth-child(1) .auth-feature-icon { background: rgba(255, 87, 34, 0.18); color: var(--action-orange); }
-.auth-feature-card:nth-child(2) .auth-feature-icon { background: rgba(31, 162, 169, 0.18); color: var(--deck-teal); }
-.auth-feature-card:nth-child(3) .auth-feature-icon { background: rgba(245, 183, 0, 0.18); color: var(--gold-trophy); }
-.auth-feature-card:nth-child(4) .auth-feature-icon { background: rgba(36, 87, 197, 0.18); color: #63f0ff; }
-
-.auth-feature-text h4 {
-  margin: 0 0 2px 0;
-  font-family: var(--font-display, 'Fredoka');
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-main, #f5f6f0);
-}
-
-.auth-feature-text p {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--text-dim, #9aa5b5);
-}
-
-/* Game mini strip */
-.auth-game-strip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-top: 4px;
-}
-
-.auth-game-strip-label {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-dim, #9aa5b5);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.auth-game-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--bg-card-sub, #1e232b);
-  border: 1.5px solid var(--border-ink, #0e1116);
-  border-radius: 8px;
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-main, #f5f6f0);
 }
 
 /* -------------------------------
@@ -246,7 +58,6 @@
   border-radius: 16px;
   padding: clamp(20px, 3.2vw, 32px);
   width: 100%;
-  max-width: 480px;
   color: var(--text-main, #f5f6f0);
   font-family: var(--font-body, 'Lexend', system-ui, sans-serif);
   animation: scaleUp 0.18s ease-out;
@@ -294,7 +105,7 @@
 .auth-brand h1 {
   margin: 0 0 6px 0;
   font-family: var(--font-display, 'Fredoka', sans-serif);
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 800;
   color: var(--text-main, #f5f6f0);
 }
@@ -316,7 +127,7 @@
   border-radius: 10px;
   padding: 4px;
   gap: 6px;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
 .auth-tabs button {
@@ -348,17 +159,6 @@
   border: 1.5px solid var(--border-ink, #0e1116);
   box-shadow: var(--hard-shadow-sm, 2px 2px 0px #0e1116);
   transform: translateY(-1px);
-}
-
-.auth-note {
-  margin: 0 0 18px 0;
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--deck-teal, #1fa2a9);
-  background: rgba(31, 162, 169, 0.08);
-  border-left: 3px solid var(--deck-teal, #1fa2a9);
-  padding: 8px 12px;
-  border-radius: 0 8px 8px 0;
 }
 
 /* -------------------------------
@@ -634,28 +434,6 @@
   cursor: not-allowed;
   transform: none;
   box-shadow: var(--hard-shadow-sm, 2px 2px 0px #0e1116);
-}
-
-/* -------------------------------
-   Trust Footnote
-   ------------------------------- */
-.auth-trust-footer {
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1.5px solid rgba(14, 17, 22, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  font-size: 11px;
-  color: var(--text-dim, #9aa5b5);
-}
-
-.auth-trust-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
 }
 
 /* -------------------------------

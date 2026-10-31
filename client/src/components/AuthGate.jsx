@@ -5,8 +5,7 @@ import AuthModal from './AuthModal.jsx';
 import './auth-modal.css';
 import '../pages/hub.css';
 
-// Full-screen sign-in shown before the hub and the games. Nothing else in the
-// app is reachable until the server confirms a registered account.
+// Full-screen sign-in shown before the hub and the games.
 export default function AuthGate({ status }) {
   const [wallet, setWallet] = useState(getOrCreateWallet);
   const [walletError, setWalletError] = useState(null);
@@ -78,73 +77,8 @@ export default function AuthGate({ status }) {
         </div>
       )}
 
-      <div className="auth-gate-layout">
-        {/* Left Side: Game & Platform Showcase */}
-        <section className="auth-hero">
-          <div className="auth-badge-row">
-            <span className="auth-hackathon-badge">🏆 Swafri Hackathon 2026</span>
-            <span className="auth-status-pill">
-              <span className="auth-status-dot" />
-              {status === 'offline' ? 'Connecting to Arena…' : 'Arena Live & Ready'}
-            </span>
-          </div>
-
-          <h2 className="auth-hero-title">
-            Where Learning Fuels the <span className="highlight">Battle Arena</span>
-          </h2>
-
-          <p className="auth-hero-desc">
-            The family-first Web3 esports arena where kids earn game Energy by doing real-world chores
-            and homework, competing in live tactical duels with on-chain cryptographic receipts.
-          </p>
-
-          <div className="auth-hero-features">
-            <div className="auth-feature-card">
-              <div className="auth-feature-icon">⚡</div>
-              <div className="auth-feature-text">
-                <h4>Proof-of-Chore</h4>
-                <p>Non-purchasable Energy earned through parent-verified household tasks.</p>
-              </div>
-            </div>
-
-            <div className="auth-feature-card">
-              <div className="auth-feature-icon">🎮</div>
-              <div className="auth-feature-text">
-                <h4>4 Live Duels</h4>
-                <p>Neon Math Arena, Connect Four, Memory Match, and Cyber Blaster.</p>
-              </div>
-            </div>
-
-            <div className="auth-feature-card">
-              <div className="auth-feature-icon">🛡️</div>
-              <div className="auth-feature-text">
-                <h4>Zero-Gas Web3</h4>
-                <p>Instant dual-vault burner wallet with automatic client-side recovery.</p>
-              </div>
-            </div>
-
-            <div className="auth-feature-card">
-              <div className="auth-feature-icon">📜</div>
-              <div className="auth-feature-text">
-                <h4>Verifiable Receipts</h4>
-                <p>Immutable SHA-256 result hashes and winner proofs committed on-chain.</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="auth-game-strip">
-            <span className="auth-game-strip-label">Arena Duels:</span>
-            <span className="auth-game-pill">🧠 Math Arena</span>
-            <span className="auth-game-pill">🔴 Connect Four</span>
-            <span className="auth-game-pill">🎴 Memory Match</span>
-            <span className="auth-game-pill">🚀 Cyber Blaster</span>
-          </div>
-        </section>
-
-        {/* Right Side: Auth Form Card */}
-        <section className="auth-form-column">
-          <AuthModal gate extra={walletBox} />
-        </section>
+      <div className="auth-container">
+        <AuthModal gate extra={walletBox} />
       </div>
     </div>
   );

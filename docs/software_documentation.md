@@ -2,7 +2,6 @@
 
 **Project Name:** Web3 Battle Arena  
 **Category:** Decentralized Gaming, EdTech & Real-World Web3 Applications  
-**Hackathon:** Swafri Hackathon 2026  
 **Version:** 1.0.0 (Production-Ready Prototype)  
 **Author / Team:** Battle Arena Core Team  
 
