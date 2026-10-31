@@ -1,11 +1,24 @@
-// Memory Match game engine — pluggable module.
-// Turn-based: flip two cards; a match scores a point and keeps the turn,
-// a mismatch flips both back and passes the turn.
-// Interface: createGame(pX, pO, opts), applyMove(game, address, move),
-//            resolve(game), botMove(game), serialize(game)
+/**
+ * @file memory.js
+ * @description Pluggable game engine for Memory Match card game.
+ * Turn-based mechanics: players flip two cards per turn. If pairIds match, player scores a point
+ * and keeps their turn; otherwise, cards are revealed for REVEAL_MS before flipping back and
+ * passing turn to the opponent.
+ *
+ * Security: Server maintains authoritative hidden state; cards are serialized with null content
+ * unless actively flipped or matched, preventing client inspection cheating.
+ */
 
 import { DECKS } from './decks.js';
 
+/**
+ * Fisher-Yates array shuffling algorithm.
+ *
+ * @function shuffle
+ * @template T
+ * @param {Array<T>} arr - Array to shuffle in-place.
+ * @returns {Array<T>} Shuffled array reference.
+ */
 function shuffle(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -14,8 +27,21 @@ function shuffle(arr) {
   return arr;
 }
 
-const REVEAL_MS = 900; // how long a mismatched pair stays face-up
+/** @constant {number} Duration in milliseconds a mismatched pair remains visible before auto-flipping back */
+const REVEAL_MS = 900;
 
+/**
+ * Initializes a new Memory Match game state.
+ *
+ * @function createGame
+ * @param {string} addrX - Player 1 (X) wallet address.
+ * @param {string} addrO - Player 2 (O) wallet address.
+ * @param {Object} [opts={}] - Optional game settings.
+ * @param {string} [opts.deck='flags'] - Educational deck key.
+ * @param {number} [opts.pairs=8] - Number of card pairs.
+ * @param {'easy'|'medium'|'hard'} [opts.difficulty='medium'] - Bot memory recall difficulty.
+ * @returns {Object} Initial game state object.
+ */
 export function createGame(addrX, addrO, opts = {}) {
   const deckId = DECKS[opts.deck] ? opts.deck : 'flags';
   const n = Math.min(opts.pairs || 8, DECKS[deckId].pairs.length);
@@ -43,6 +69,16 @@ export function createGame(addrX, addrO, opts = {}) {
   };
 }
 
+/**
+ * Applies a player's card flip move to the game state.
+ *
+ * @function applyMove
+ * @param {Object} game - Mutable game state object.
+ * @param {string} address - Wallet address of the submitting player.
+ * @param {Object} move - Move payload containing card index.
+ * @param {number} move.index - Index of the card being flipped.
+ * @returns {{ok?: boolean, pendingMs?: number, error?: string}} Move outcome or error string.
+ */
 export function applyMove(game, address, move) {
   if (game.winner) return { error: 'Game is over' };
   if (game.resolving || game.flipped.length >= 2) return { error: 'Wait for cards to resolve' };
@@ -66,7 +102,13 @@ export function applyMove(game, address, move) {
   return { ok: true };
 }
 
-// Called by the server `pendingMs` after a second card was flipped
+/**
+ * Resolves the pair currently flipped face-up after pendingMs expires.
+ * Scores matches, alters turns, and detects game completion.
+ *
+ * @function resolve
+ * @param {Object} game - Mutable game state object.
+ */
 export function resolve(game) {
   if (game.flipped.length !== 2) { game.resolving = false; return; }
   const [i, j] = game.flipped;
@@ -89,6 +131,14 @@ export function resolve(game) {
   }
 }
 
+/**
+ * Selects an intelligent move for an automated bot opponent using probabilistic memory recall.
+ *
+ * @function botMove
+ * @param {Object} game - Active game state.
+ * @param {'easy'|'medium'|'hard'} [difficulty] - Bot difficulty setting.
+ * @returns {{index: number}} Selected card index to flip.
+ */
 export function botMove(game, difficulty = game.difficulty || 'medium') {
   const open = game.cards
     .map((c, i) => (!c.matched && !game.flipped.includes(i) ? i : null))
@@ -147,7 +197,14 @@ export function botMove(game, difficulty = game.difficulty || 'medium') {
   return { index: open[Math.floor(Math.random() * open.length)] };
 }
 
-// Only reveal card content when face-up — server stays authoritative
+/**
+ * Serializes the game state for client broadcast.
+ * Masking rule: Only face-up or matched cards reveal their content, keeping hidden cards secure.
+ *
+ * @function serialize
+ * @param {Object} game - Game state object.
+ * @returns {Object} Public client-safe representation of game state.
+ */
 export function serialize(game) {
   return {
     deck: game.deck,

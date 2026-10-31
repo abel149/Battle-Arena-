@@ -1,23 +1,25 @@
-// On-chain match recording backed by ethers.js + MatchResult.sol.
-// Swap this in for chain.js by setting MATCH_RESULT_ADDRESS and either
-// NODE_HTTP_URL (for a real RPC) or running against a local Hardhat/Anvil node.
-//
-// When the env is not configured, this module falls back to the simulated
-// ledger so the server still works for local dev without a blockchain.
-//
-// Match ID handling:
-//   The contract stores matchId as bytes32. Newer deployments encode the
-//   original server matchId as a bytes32 string via encodeBytes32String, so
-//   it can be recovered with decodeBytes32String. Older deployments may hash
-//   the matchId; in that case we cannot recover the original value and we keep
-//   the raw bytes32. To keep the rest of the server and the REST API from
-//   depending on which encoding a deployment used, this module returns a
-//   normalized entry shape with both fields:
-//     matchId        - the best-effort decoded original matchId, or the raw
-//                      bytes32 value if decoding is not possible
-//     matchIdRaw     - the exact bytes32 value stored on-chain (lowercase)
-//   The verify/ledger paths always use matchId for lookup, and leave
-//   matchIdRaw available when on-chain proof details matter.
+/**
+ * @file chain-onchain.js
+ * @description On-chain match recording backed by ethers.js and MatchResult.sol.
+ * Configured via MATCH_RESULT_ADDRESS and NODE_HTTP_URL (or local Hardhat/Anvil RPC).
+ *
+ * Falls back deterministically to the local simulated ledger (chain.js) when unconfigured,
+ * ensuring seamless execution for local test runners and offline development.
+ *
+ * Match ID handling:
+ *   The contract stores matchId as bytes32. Newer deployments encode the
+ *   original server matchId as a bytes32 string via encodeBytes32String, so
+ *   it can be recovered with decodeBytes32String. Older deployments may hash
+ *   the matchId; in that case we cannot recover the original value and we keep
+ *   the raw bytes32. To keep the rest of the server and the REST API from
+ *   depending on which encoding a deployment used, this module returns a
+ *   normalized entry shape with both fields:
+ *     matchId        - the best-effort decoded original matchId, or the raw
+ *                      bytes32 value if decoding is not possible
+ *     matchIdRaw     - the exact bytes32 value stored on-chain (lowercase)
+ *   The verify/ledger paths always use matchId for lookup, and leave
+ *   matchIdRaw available when on-chain proof details matter.
+ */
 
 import crypto from 'crypto';
 import fs from 'fs';
@@ -29,6 +31,12 @@ import { getProvider, getSigner } from './signer.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ADDRESS_FILE = path.join(__dirname, 'match-result-address.json');
 
+/**
+ * Reads local deployment artifact JSON if present.
+ *
+ * @function readDeployment
+ * @returns {Object | null} Parsed deployment JSON with address and chainId, or null if absent.
+ */
 function readDeployment() {
   try {
     return JSON.parse(fs.readFileSync(ADDRESS_FILE, 'utf8'));
@@ -49,6 +57,14 @@ const USE_ONCHAIN = Boolean(configuredAddress);
 
 let contract, provider, signer;
 
+/**
+ * Initializes and caches the Ethers contract instance for MatchResult.
+ *
+ * @async
+ * @function ensureContract
+ * @returns {Promise<Contract | null>} Contract instance or null if on-chain mode is inactive.
+ * @throws {Error} If required environment variables are missing or network chain ID mismatches.
+ */
 async function ensureContract() {
   if (contract) return contract;
   if (!USE_ONCHAIN) return null;
@@ -65,7 +81,7 @@ async function ensureContract() {
   const code = await provider.getCode(address);
   if (code === '0x') throw new Error(`No contract deployed at ${address} on chain ${network.chainId}`);
 
-  // Shared NonceManager (signer.js) â€” must be the same instance chain-tokens.js uses.
+  // Shared NonceManager (signer.js) — must be the same instance chain-tokens.js uses.
   signer = getSigner() || provider;
   contract = new Contract(address, MATCH_RESULT_ABI, signer);
   return contract;
@@ -80,21 +96,34 @@ const MATCH_RESULT_ABI = [
   'event MatchRecorded(bytes32 matchId, string gameType, address winner, address playerA, address playerB, uint256 moves, uint64 timestamp)',
 ];
 
-// Runtime type tag so other modules can tell whether a ledger/entry came from
-// the on-chain path or the simulated fallback.
+/**
+ * Runtime field mapping labels for cross-module ledger format compatibility.
+ * @constant {Object}
+ */
 export const ONCHAIN_LABELS = {
   matchIdField: 'matchId',
   matchIdRawField: 'matchIdRaw',
 };
 
-// Normalize an address for ethers calls and for the normalized ledger shape.
+/**
+ * Normalizes an Ethereum address into checksum format.
+ *
+ * @function hexAddress
+ * @param {string} addr - Raw Ethereum address string.
+ * @returns {string} EIP-55 checksummed hex address string.
+ */
 function hexAddress(addr) {
   return getAddress(addr);
 }
 
-// Best-effort recovery of the original matchId from the on-chain bytes32.
-// Older deployments that hashed matchIds cannot recover the original value;
-// in that case we keep the raw bytes32 and surface it as matchIdRaw.
+/**
+ * Decodes a bytes32 string back to a readable UTF-8 string.
+ * Falls back to lowercase hex representation if bytes32 was hashed.
+ *
+ * @function decodeMatchId
+ * @param {string} value - Bytes32 hex string from blockchain storage.
+ * @returns {string} Decoded human-readable match ID or hex string.
+ */
 function decodeMatchId(value) {
   try {
     return decodeBytes32String(value);
@@ -104,6 +133,13 @@ function decodeMatchId(value) {
   }
 }
 
+/**
+ * Normalizes raw contract match struct data into standardized server match record shape.
+ *
+ * @function normalizeMatch
+ * @param {Object} match - Raw match struct returned from ethers Contract call.
+ * @returns {Object} Normalized match entry object with hash and player addresses.
+ */
 function normalizeMatch(match) {
   const matchIdRaw = match.matchId.toLowerCase();
   const matchId = decodeMatchId(match.matchId);
@@ -123,9 +159,16 @@ function normalizeMatch(match) {
   return { matchId, matchIdRaw, gameType, players, winner, timestamp, moves, resultHash };
 }
 
+/**
+ * Checks whether live on-chain recording is enabled via configuration.
+ *
+ * @function isOnchain
+ * @returns {boolean} True if on-chain contract address is configured, false otherwise.
+ */
 export function isOnchain() {
   return USE_ONCHAIN;
 }
+
 // Human-readable chain info for the front end (GET /api/chain/status).
 const CHAIN_NAMES = {
   31337: 'Local Hardhat',
@@ -134,6 +177,7 @@ const CHAIN_NAMES = {
   80002: 'Polygon Amoy',
   11155111: 'Sepolia',
 };
+
 // Block-explorer tx URL prefixes. The local Hardhat chain has no explorer.
 const EXPLORER_TX = {
   84532: 'https://sepolia.basescan.org/tx/',
@@ -142,6 +186,13 @@ const EXPLORER_TX = {
   11155111: 'https://sepolia.etherscan.io/tx/',
 };
 
+/**
+ * Retrieves human-readable network, block, and contract diagnostics for client UI display.
+ *
+ * @async
+ * @function chainInfo
+ * @returns {Promise<Object>} Object containing chain status, network name, block number, and explorer links.
+ */
 export async function chainInfo() {
   if (!USE_ONCHAIN) {
     return { onchain: false, network: 'Simulated ledger', chainId: null, blockNumber: null, contract: null, explorerTx: null };
@@ -162,7 +213,21 @@ export async function chainInfo() {
     return { onchain: true, error: err.message, network: 'Chain unreachable', chainId: null, blockNumber: null, contract: configuredAddress, explorerTx: null };
   }
 }
-/// Record a completed match on-chain. Returns the receipt entry.
+
+/**
+ * Records a single completed match on-chain (or in simulated ledger if on-chain is disabled).
+ *
+ * @async
+ * @function recordMatch
+ * @param {Object} params - Match details.
+ * @param {string} params.matchId - Unique match identifier (max 31 UTF-8 bytes for bytes32 storage).
+ * @param {string} params.gameType - Name of game (e.g. 'memory', 'math', 'connectfour', 'cyberblaster').
+ * @param {Object} params.players - Map of players ({ X: address, O: address }).
+ * @param {string} params.winner - Winner wallet address, or 'draw'.
+ * @param {Array|number} params.moves - Array of move records or total count.
+ * @returns {Promise<Object>} Normalized match entry augmented with transaction hash `txHash`.
+ * @throws {Error} If private key is missing or matchId exceeds 31 bytes.
+ */
 export async function recordMatch({ matchId, gameType, players, winner, moves }) {
   if (!USE_ONCHAIN) {
     return recordMatchSimulated({ matchId, gameType, players, winner, moves });
@@ -193,7 +258,14 @@ export async function recordMatch({ matchId, gameType, players, winner, moves })
   return { ...recorded, txHash: receipt.hash };
 }
 
-/// Batch record multiple completed matches in a single atomic transaction.
+/**
+ * Batch records multiple completed matches in a single atomic transaction.
+ *
+ * @async
+ * @function recordMatchBatch
+ * @param {Array<Object>} matchesList - List of match objects to record atomically.
+ * @returns {Promise<Object>} Object with transaction hash `txHash` and total count.
+ */
 export async function recordMatchBatch(matchesList) {
   if (!USE_ONCHAIN) {
     return matchesList.map(m => recordMatchSimulated(m));
@@ -216,12 +288,12 @@ export async function recordMatchBatch(matchesList) {
 }
 
 /**
- * Fetch the full match ledger from the chain (newest first).
+ * Fetches the full match ledger from the chain (or simulation), newest records first.
+ * Each entry uses the normalized shape with both matchId and matchIdRaw.
  *
- * Each entry uses the normalized shape from chain-onchain.js, with both:
- *   matchId     - best-effort decoded original matchId, or raw bytes32
- *   matchIdRaw  - exact bytes32 stored on-chain (lowercase)
- * Simulated fallbacks use the same shape but with matchIdRaw equal to matchId.
+ * @async
+ * @function getLedger
+ * @returns {Promise<Array<Object>>} Array of match entries with on-chain metadata and tx hashes.
  */
 export async function getLedger() {
   if (!USE_ONCHAIN) {
@@ -253,8 +325,13 @@ import { recordMatch as recordMatchSimulated, getLedger as getLedgerSimulated } 
 
 export { recordMatchSimulated, getLedgerSimulated };
 
-// Keep the simulated fallback compatible with the normalized on-chain shape so
-// callers do not have to branch on whether recording went on-chain or not.
+/**
+ * Normalizes a simulated ledger entry to match the on-chain shape.
+ *
+ * @function normalizeLedgerEntry
+ * @param {Object} entry - Ledger entry object.
+ * @returns {Object} Normalized ledger entry with `matchIdRaw` field populated.
+ */
 export function normalizeLedgerEntry(entry) {
   // The on-chain path already returns normalized entries. For the simulated
   // path, matchIdRaw is the same as matchId because the ledger is stored as

@@ -1,8 +1,33 @@
-// Front-end helpers for the blockchain layer (server: /api/chain/status, /api/wallet/:addr/tokens).
+/**
+ * @file chain.js
+ * @description Front-end React hooks and utilities for blockchain state and token balances.
+ * Connects with server endpoints `/api/chain/status` and `/api/wallet/:addr/tokens`,
+ * synchronizing live block height, network diagnostics, and ARENA token balances
+ * triggered by WebSocket `match:end` events and polling timers.
+ */
+
 import { useEffect, useState } from 'react';
 import { API, socket } from '../socket.js';
 
-/** Which chain the server is writing to: { onchain, network, chainId, blockNumber, explorerTx, error?, tokens }. */
+/**
+ * @typedef {Object} ChainStatus
+ * @property {boolean} onchain - True if server has an active on-chain contract connection.
+ * @property {string} network - Human-readable network title (e.g. 'Base Sepolia', 'Local Hardhat').
+ * @property {number | null} chainId - Connected EVM chain ID integer.
+ * @property {number | null} blockNumber - Current highest indexed block number.
+ * @property {string | null} explorerTx - Base URL for blockchain explorer transaction lookups.
+ * @property {string} [error] - Error message if network connection is unreachable.
+ * @property {boolean} [offline] - True if server HTTP status endpoint failed to respond.
+ * @property {Object} [tokens] - Deployed token and badge contract addresses.
+ */
+
+/**
+ * React hook querying server blockchain connection status and network diagnostics.
+ * Periodically polls every 15 seconds and refreshes on WebSocket `match:end` events.
+ *
+ * @function useChainStatus
+ * @returns {ChainStatus | null} Live blockchain status object or null while loading.
+ */
 export function useChainStatus() {
   const [status, setStatus] = useState(null);
 
@@ -27,10 +52,20 @@ export function useChainStatus() {
 }
 
 /**
- * Live ARENA balance for an address.
- * { onchain: true, balance } when read from the ARENA token contract,
- * { onchain: false, balance } when the server falls back to its database.
- * `refreshKey` lets a caller force a re-read (e.g. when a receipt arrives).
+ * @typedef {Object} ChainBalanceInfo
+ * @property {boolean} onchain - True if balance was queried directly from ERC-20 contract.
+ * @property {number} balance - Current ARENA token balance.
+ * @property {string} [tokenAddress] - Deployed ERC-20 token address.
+ */
+
+/**
+ * React hook querying live ARENA token balance for an Ethereum wallet address.
+ * Automatically refetches on `match:end` events or when `refreshKey` increments.
+ *
+ * @function useChainBalance
+ * @param {string | null | undefined} address - Target player wallet address.
+ * @param {number} [refreshKey=0] - Optional dependency key to force balance reload.
+ * @returns {ChainBalanceInfo | null} Balance details or null if uninitialized.
  */
 export function useChainBalance(address, refreshKey = 0) {
   const [info, setInfo] = useState(null);
@@ -55,5 +90,13 @@ export function useChainBalance(address, refreshKey = 0) {
   return info;
 }
 
+/**
+ * Formats a raw numeric ARENA token amount with locale-aware thousand separators
+ * and up to 2 decimal places.
+ *
+ * @function formatArena
+ * @param {number | string | null | undefined} n - Raw token amount.
+ * @returns {string} Formatted token string.
+ */
 export const formatArena = n =>
   Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });

@@ -1,13 +1,10 @@
-// Cyber Blaster Arena game engine — pluggable module for Battle Arena.
-// 2D top-down cyberpunk duel shooter with obstacle cover, powerups,
-// projectile physics, skin-based laser styles, and bot AI (easy, medium, hard).
-//
-// Interface:
-//   createGame(pX, pO, opts) -> game
-//   applyMove(game, address, move) -> { ok: true } | { error }
-//   tick(game, dt) -> { events: [...] }
-//   botMove(game, difficulty) -> move object
-//   serialize(game) -> client-safe state
+/**
+ * @file cyber-blaster.js
+ * @description Cyber Blaster Arena 2D top-down cyberpunk duel shooter game engine.
+ * Real-time physics engine featuring obstacle cover collision, powerup pickups,
+ * projectile trajectory simulation, skin-based laser styles, round resets,
+ * and multi-tiered tactical bot AI (easy, medium, hard).
+ */
 
 const ARENA_WIDTH = 800;
 const ARENA_HEIGHT = 600;
@@ -22,6 +19,10 @@ const SHOOT_COOLDOWN_MS = 350;
 const OVERCHARGE_COOLDOWN_MS = 180;
 const ROUNDS_TO_WIN = 2; // Best of 3 rounds
 
+/**
+ * Static map obstacles defining boundary cover pillars in the arena.
+ * @constant {Array<{x: number, y: number, w: number, h: number}>}
+ */
 export const OBSTACLES = [
   { x: 180, y: 140, w: 50, h: 100 },
   { x: 570, y: 140, w: 50, h: 100 },
@@ -32,6 +33,16 @@ export const OBSTACLES = [
 
 const POWERUP_TYPES = ['shield', 'overcharge', 'speed', 'heal'];
 
+/**
+ * Detects 2D Axis-Aligned Bounding Box (AABB) collision against a circle.
+ *
+ * @function boxCircleCollision
+ * @param {{x: number, y: number, w: number, h: number}} box - Rectangular obstacle box.
+ * @param {number} cx - Circle center X coordinate.
+ * @param {number} cy - Circle center Y coordinate.
+ * @param {number} radius - Circle radius.
+ * @returns {boolean} True if circle overlaps with bounding box.
+ */
 function boxCircleCollision(box, cx, cy, radius) {
   const closestX = Math.max(box.x, Math.min(cx, box.x + box.w));
   const closestY = Math.max(box.y, Math.min(cy, box.y + box.h));
@@ -40,6 +51,15 @@ function boxCircleCollision(box, cx, cy, radius) {
   return dx * dx + dy * dy < radius * radius;
 }
 
+/**
+ * Checks whether a given circular coordinate overlaps with any arena obstacle.
+ *
+ * @function collidesWithObstacles
+ * @param {number} x - Target center X.
+ * @param {number} y - Target center Y.
+ * @param {number} radius - Target radius.
+ * @returns {boolean} True if target collides with any obstacle.
+ */
 function collidesWithObstacles(x, y, radius) {
   for (const obs of OBSTACLES) {
     if (boxCircleCollision(obs, x, y, radius)) return true;
@@ -47,10 +67,25 @@ function collidesWithObstacles(x, y, radius) {
   return false;
 }
 
+/**
+ * Restricts a numeric value within a minimum and maximum range.
+ *
+ * @function clamp
+ * @param {number} val - Value to clamp.
+ * @param {number} min - Lower boundary.
+ * @param {number} max - Upper boundary.
+ * @returns {number} Clamped value.
+ */
 function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val));
 }
 
+/**
+ * Resets player coordinates, health, modifiers, bullets, and powerups for a new round.
+ *
+ * @function resetRoundPositions
+ * @param {Object} game - Mutable game state object.
+ */
 function resetRoundPositions(game) {
   game.pState.X.x = 100;
   game.pState.X.y = 300;
@@ -81,6 +116,18 @@ function resetRoundPositions(game) {
   game.nextPowerupAt = Date.now() + 6000;
 }
 
+/**
+ * Initializes a new Cyber Blaster Arena match instance.
+ *
+ * @function createGame
+ * @param {string} addrX - Player 1 (X) wallet address.
+ * @param {string} addrO - Player 2 (O) wallet address.
+ * @param {Object} [opts={}] - Optional match parameters.
+ * @param {'easy'|'medium'|'hard'} [opts.difficulty='medium'] - Bot difficulty.
+ * @param {Object} [opts.skins] - Cosmetic skin IDs ({ X: string, O: string }).
+ * @param {number} [opts.targetWins=2] - Round wins required to win match.
+ * @returns {Object} New game state object.
+ */
 export function createGame(addrX, addrO, opts = {}) {
   const difficulty = ['easy', 'medium', 'hard'].includes(opts?.difficulty)
     ? opts.difficulty
@@ -120,6 +167,21 @@ export function createGame(addrX, addrO, opts = {}) {
   return game;
 }
 
+/**
+ * Handles directional velocity, aim orientation, dash, and firing moves from players.
+ *
+ * @function applyMove
+ * @param {Object} game - Game state.
+ * @param {string} address - Player wallet address.
+ * @param {Object} move - Input move payload.
+ * @param {string} [move.type] - Move type ('input' or 'dash').
+ * @param {number} [move.vx] - Horizontal movement vector (-1 to 1).
+ * @param {number} [move.vy] - Vertical movement vector (-1 to 1).
+ * @param {number} [move.angle] - Aim angle in radians.
+ * @param {boolean} [move.dash] - Flag indicating dash activation.
+ * @param {boolean} [move.shoot] - Flag indicating bullet fire.
+ * @returns {{ok?: boolean, error?: string}} Move outcome.
+ */
 export function applyMove(game, address, move) {
   if (game.winner) return { error: 'Game already finished' };
   const seat = game.players.X === address ? 'X' : game.players.O === address ? 'O' : null;
@@ -204,6 +266,15 @@ export function applyMove(game, address, move) {
   return { ok: true };
 }
 
+/**
+ * Advance physics simulation step by dtMs: updates player coordinates, spawns powerups,
+ * translates bullets, resolves bullet hits and player damage, and triggers round end.
+ *
+ * @function tick
+ * @param {Object} game - Mutable game state.
+ * @param {number} [dtMs=40] - Delta time in milliseconds.
+ * @returns {{events: Array<Object>}} Simulation events emitted during this tick.
+ */
 export function tick(game, dtMs = 40) {
   if (game.winner) return { events: [] };
   const now = Date.now();
@@ -330,6 +401,15 @@ export function tick(game, dtMs = 40) {
   return { events: tickEvents };
 }
 
+/**
+ * Generates an automated combat decision for bot opponent including predictive aiming,
+ * strafing, bullet dodging, and tactical powerup pickups.
+ *
+ * @function botMove
+ * @param {Object} game - Game state.
+ * @param {'easy'|'medium'|'hard'} [difficulty] - Bot tactical intelligence level.
+ * @returns {Object} Move input object.
+ */
 export function botMove(game, difficulty = game.difficulty || 'medium') {
   const botSeat = 'O';
   const playerSeat = 'X';
@@ -430,6 +510,13 @@ export function botMove(game, difficulty = game.difficulty || 'medium') {
   };
 }
 
+/**
+ * Serializes the complete Cyber Blaster state including static arena geometry.
+ *
+ * @function serialize
+ * @param {Object} game - Game state.
+ * @returns {Object} Full client-safe state.
+ */
 export function serialize(game) {
   return {
     arena: { width: ARENA_WIDTH, height: ARENA_HEIGHT },
@@ -472,7 +559,14 @@ export function serialize(game) {
   };
 }
 
-// Lightweight serializer for 25Hz broadcast — omits static arena & obstacles
+/**
+ * Lightweight serializer for high-frequency (25Hz) real-time game tick broadcasts.
+ * Omits static arena boundaries and obstacles to minimize network bandwidth.
+ *
+ * @function serializeTick
+ * @param {Object} game - Game state.
+ * @returns {Object} Compact tick payload.
+ */
 export function serializeTick(game) {
   return {
     score: game.score,

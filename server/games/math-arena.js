@@ -1,28 +1,44 @@
-// Neon Math Arena game engine — pluggable module.
-// Both players answer the same question at the same time: move on the 2×2
-// floor, lock the tile you are standing on (or send `index: null` when the
-// clock runs out). A correct answer scores, a wrong one costs a life.
-//
-// The client owns the 10s clock and submits its answer when time is up, so the
-// server stays authoritative for scoring without any extra timers.
-//
-// Interface: createGame(pX, pO, opts), applyMove(game, address, move),
-//            botMove(game), serialize(game)
+/**
+ * @file math-arena.js
+ * @description Neon Math Arena competitive arithmetic game engine.
+ * Simultaneous multiplayer mechanics: both players are presented with the same math question.
+ * Players choose from 4 multiple-choice options before the round timer expires.
+ * Correct answers award points; incorrect answers or timeouts deduct a life.
+ *
+ * Security: Server generates questions and enforces authoritative scoring;
+ * question options are sent to clients without revealing the `correct` index.
+ */
 
 const TOTAL_ROUNDS = 8;
 const MAX_LIVES = 3;
 const POINTS = 20;
 
-// Server-side round deadline: the client gets ~10s; the server enforces this
-// after a grace period so an idle opponent cannot stall the match forever.
+/**
+ * Server-side maximum round deadline in milliseconds before timeout enforcement.
+ * @constant {number}
+ */
 export const ROUND_MS = 14000;
 
 const OPERATORS = ['+', '−', '×', '÷'];
 
+/**
+ * Generates an inclusive random integer between min and max.
+ *
+ * @function rand
+ * @param {number} min - Lower bound.
+ * @param {number} max - Upper bound.
+ * @returns {number} Random integer.
+ */
 function rand(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+/**
+ * Generates an arithmetic question with 4 unique multiple-choice answer options.
+ *
+ * @function makeQuestion
+ * @returns {{text: string, expr: string, options: Array<number>, correct: number}} Generated question object.
+ */
 function makeQuestion() {
   const op = OPERATORS[rand(0, OPERATORS.length - 1)];
   let a, b, answer;
@@ -51,6 +67,16 @@ function makeQuestion() {
   };
 }
 
+/**
+ * Creates and initializes a new Neon Math Arena match instance.
+ *
+ * @function createGame
+ * @param {string} addrX - Player 1 (X) address.
+ * @param {string} addrO - Player 2 (O) address.
+ * @param {Object} [opts={}] - Optional configuration.
+ * @param {'easy'|'medium'|'hard'} [opts.difficulty='medium'] - Bot accuracy difficulty.
+ * @returns {Object} Math Arena game state.
+ */
 export function createGame(addrX, addrO, opts = {}) {
   const difficulty = ['easy', 'medium', 'hard'].includes(opts?.difficulty)
     ? opts.difficulty
@@ -71,6 +97,12 @@ export function createGame(addrX, addrO, opts = {}) {
   };
 }
 
+/**
+ * Evaluates terminal win/draw conditions based on remaining lives or completed rounds.
+ *
+ * @function finishIfDone
+ * @param {Object} game - Mutable game state.
+ */
 function finishIfDone(game) {
   if (game.lives.X <= 0 || game.lives.O <= 0 || game.round >= TOTAL_ROUNDS) {
     if (game.lives.X <= 0 && game.lives.O > 0) game.winner = 'O';
@@ -80,6 +112,12 @@ function finishIfDone(game) {
   }
 }
 
+/**
+ * Resolves score rewards, life penalties, and advances round state.
+ *
+ * @function resolveRound
+ * @param {Object} game - Mutable game state.
+ */
 function resolveRound(game) {
   const q = game.questions[game.round];
   const correct = q.correct;
@@ -104,6 +142,16 @@ function resolveRound(game) {
   finishIfDone(game);
 }
 
+/**
+ * Processes a player's answer selection for the active round.
+ *
+ * @function applyMove
+ * @param {Object} game - Game state.
+ * @param {string} address - Submitting player address.
+ * @param {Object} move - Move payload containing option index.
+ * @param {number} move.index - Index 0-3 of selected answer.
+ * @returns {{ok?: boolean, error?: string}} Move outcome.
+ */
 export function applyMove(game, address, move) {
   if (game.winner) return { error: 'Game is over' };
   const seat =
@@ -125,6 +173,13 @@ export function applyMove(game, address, move) {
   return { ok: true };
 }
 
+/**
+ * Server timeout handler: forces uncommitted players to forfeit answer and deducts life.
+ *
+ * @function timeoutRound
+ * @param {Object} game - Game state.
+ * @returns {{ok: boolean, timedOut?: boolean}} Timeout status.
+ */
 export function timeoutRound(game) {
   if (game.winner) return { ok: false };
   let timedOut = false;
@@ -143,9 +198,20 @@ export function timeoutRound(game) {
   return { ok: false };
 }
 
-// Alias for backwards/cross-branch compatibility
+/**
+ * Alias for `timeoutRound` for backwards compatibility.
+ * @constant {Function}
+ */
 export const timeoutMove = timeoutRound;
 
+/**
+ * Generates an automated answer move for bot opponent based on accuracy curve.
+ *
+ * @function botMove
+ * @param {Object} game - Game state.
+ * @param {'easy'|'medium'|'hard'} [difficulty] - Bot difficulty setting.
+ * @returns {{index: number}} Selected answer index (0-3).
+ */
 export function botMove(game, difficulty = game.difficulty || 'medium') {
   const q = game.questions[game.round];
   if (!q) return { index: 0 };
@@ -158,6 +224,14 @@ export function botMove(game, difficulty = game.difficulty || 'medium') {
   return { index: wrong[Math.floor(Math.random() * wrong.length)] };
 }
 
+/**
+ * Serializes the Math Arena game state for client broadcast.
+ * Never exposes the hidden correct index to clients, preventing devtools cheating.
+ *
+ * @function serialize
+ * @param {Object} game - Game state.
+ * @returns {Object} Public sanitized state representation.
+ */
 export function serialize(game) {
   const q = game.questions[game.round] || null;
   return {

@@ -1,6 +1,19 @@
+/**
+ * @file ChainBadge.jsx
+ * @description React UI component rendering a visual badge indicating live blockchain status,
+ * block height, simulated ledger mode, or RPC reachability alerts.
+ */
+
 import './chain.css';
 
-/** Badge that displays the active blockchain or simulated ledger connection. */
+/**
+ * Visual badge displaying the active blockchain or simulated ledger status.
+ *
+ * @component
+ * @param {Object} props - Component props.
+ * @param {import('../lib/chain.js').ChainStatus | null} props.status - Status object from useChainStatus().
+ * @returns {JSX.Element | null} Badge element or null if status is loading.
+ */
 export default function ChainBadge({ status }) {
   if (!status) return null;
 
