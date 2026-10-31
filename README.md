@@ -274,4 +274,4 @@ npm run build
 
 ## 📄 License
 
-MIT License. Created for the Swafri Hackathon 2026.
+Created for the Swafri Hackathon 2026.
