@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import './auth-modal.css';
 
 const CODE_RE = /^[A-Z0-9]{5}$/;
 

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { socket } from '../socket.js';
+import { BrandMark } from './Icons.jsx';
+import './auth-modal.css';
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
 
@@ -76,12 +78,19 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
       }}
     >
       <form className="auth-card" onSubmit={submit}>
-        {gate && (
-          <div className="auth-brand">
-            <h1>Battle Arena</h1>
-            <p>Real-time multiplayer matches with on-chain results, rewards and badges.</p>
+        <div className="auth-brand">
+          <div className="auth-brand-badge">
+            <BrandMark />
+            <span>Battle Arena</span>
           </div>
-        )}
+          <h1>{isRegister ? 'Create Your Account' : 'Welcome Back, Champion'}</h1>
+          <p>
+            {isRegister
+              ? 'Join the arena, earn verified energy, and compete for on-chain trophies.'
+              : 'Sign in to jump straight into live matchmaking and claim daily rewards.'}
+          </p>
+        </div>
+
         <div className="auth-tabs" role="tablist">
           <button
             type="button"
@@ -90,7 +99,7 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
             className={!isRegister ? 'on' : ''}
             onClick={() => switchTab('login')}
           >
-            Log in
+            <span>🎮</span> Log In
           </button>
           <button
             type="button"
@@ -99,21 +108,24 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
             className={isRegister ? 'on' : ''}
             onClick={() => switchTab('register')}
           >
-            Create account
+            <span>✨</span> Create Account
           </button>
         </div>
 
         <p className="auth-note">
           {isRegister
-            ? 'Your account gets a unique blockchain profile ID for ranked matches, badges and rewards.'
-            : 'Welcome back — log in to jump into a match.'}
+            ? '💡 Free to play! Your account gets a non-custodial Web3 Profile ID + 5 free Energy.'
+            : '⚡ Ready for duels: Connect Four, Memory Match, Math Arena, and Cyber Blaster.'}
         </p>
 
         <label>
-          <span>Username</span>
+          <span>
+            Username <span className="hint">(3–20 characters)</span>
+          </span>
           <input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            placeholder="e.g. cyber_ninja"
             autoComplete="username"
             autoFocus
             required
@@ -123,15 +135,24 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
         {isRegister && (
           <>
             <label>
-              <span>Display name (optional)</span>
-              <input value={name} onChange={(e) => setName(e.target.value)} />
+              <span>
+                Display name <span className="hint">(Optional)</span>
+              </span>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Alex The Great"
+              />
             </label>
             <label>
-              <span>Email (optional)</span>
+              <span>
+                Email <span className="hint">(Optional — for password recovery)</span>
+              </span>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                placeholder="parent-or-kid@example.com"
                 autoComplete="email"
               />
             </label>
@@ -139,37 +160,48 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
         )}
 
         <label>
-          <span>Password</span>
+          <span>
+            Password <span className="hint">(Minimum 8 characters)</span>
+          </span>
           <div className="auth-pw">
             <input
               type={showPw ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
               autoComplete={isRegister ? 'new-password' : 'current-password'}
               required
             />
-            <button type="button" onClick={() => setShowPw((v) => !v)}>
-              {showPw ? 'Hide' : 'Show'}
+            <button
+              type="button"
+              className="auth-pw-btn"
+              onClick={() => setShowPw((v) => !v)}
+              aria-label={showPw ? 'Hide password' : 'Show password'}
+            >
+              {showPw ? '🙈 Hide' : '👁️ Show'}
             </button>
           </div>
         </label>
 
         {isRegister && (
           <label>
-            <span>Repeat password</span>
-            <input
-              type={showPw ? 'text' : 'password'}
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              autoComplete="new-password"
-              required
-            />
+            <span>Repeat Password</span>
+            <div className="auth-pw">
+              <input
+                type={showPw ? 'text' : 'password'}
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                placeholder="••••••••"
+                autoComplete="new-password"
+                required
+              />
+            </div>
           </label>
         )}
 
         {error && (
           <div className="auth-error" role="alert">
-            {error}
+            <span>⚠️</span> {error}
           </div>
         )}
 
@@ -182,8 +214,26 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
             </button>
           )}
           <button type="submit" className="auth-submit" disabled={busy}>
-            {busy ? 'Please wait…' : isRegister ? 'Create account' : 'Log in'}
+            {busy ? (
+              <span>⏳ Please wait…</span>
+            ) : isRegister ? (
+              <span>🚀 Create Account &amp; Play</span>
+            ) : (
+              <span>⚔️ Enter the Arena</span>
+            )}
           </button>
+        </div>
+
+        <div className="auth-trust-footer">
+          <div className="auth-trust-item">
+            <span>🛡️</span> Kid-Safe Chat
+          </div>
+          <div className="auth-trust-item">
+            <span>⚡</span> Proof-of-Chore
+          </div>
+          <div className="auth-trust-item">
+            <span>📜</span> On-Chain Receipts
+          </div>
         </div>
       </form>
     </div>
