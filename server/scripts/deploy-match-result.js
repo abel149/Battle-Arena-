@@ -29,9 +29,8 @@ const MATCH_RESULT_ABI = [
  * @throws {Error} If chain ID does not match requested network or required credentials are missing.
  */
 async function main() {
-  const nodeUrl = process.env.NODE_HTTP_URL
-    || process.env.BASE_SEPOLIA_RPC_URL
-    || 'http://127.0.0.1:8545';
+  const nodeUrl =
+    process.env.NODE_HTTP_URL || process.env.BASE_SEPOLIA_RPC_URL || 'http://127.0.0.1:8545';
   const provider = new ethers.JsonRpcProvider(nodeUrl);
   const network = await provider.getNetwork();
   const chainId = Number(network.chainId);
@@ -50,14 +49,22 @@ async function main() {
   }
   const signer = new ethers.Wallet(
     privateKey || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
-    provider,
+    provider
   );
 
   // Read bytecode from the compiled artifact.
-  const artifactPath = path.join(__dirname, '..', 'artifacts', 'contracts', 'MatchResult.sol', 'MatchResult.json');
+  const artifactPath = path.join(
+    __dirname,
+    '..',
+    'artifacts',
+    'contracts',
+    'MatchResult.sol',
+    'MatchResult.json'
+  );
   let artifact;
-  try { artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8')); }
-  catch {
+  try {
+    artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
+  } catch {
     const alt = path.join(__dirname, '..', 'artifacts', 'MatchResult.sol', 'MatchResult.json');
     artifact = JSON.parse(fs.readFileSync(alt, 'utf8'));
   }
@@ -70,15 +77,26 @@ async function main() {
   console.log('MatchResult deployed to:', address);
   console.log('deployer:', await signer.getAddress());
 
-  const outPath = process.env.MATCH_RESULT_DEPLOYMENT_FILE
-    || path.join(__dirname, '..', 'match-result-address.json');
-  fs.writeFileSync(outPath, JSON.stringify({
-    address,
-    network: networkName,
-    chainId,
-    timestamp: Date.now(),
-  }, null, 2));
+  const outPath =
+    process.env.MATCH_RESULT_DEPLOYMENT_FILE ||
+    path.join(__dirname, '..', 'match-result-address.json');
+  fs.writeFileSync(
+    outPath,
+    JSON.stringify(
+      {
+        address,
+        network: networkName,
+        chainId,
+        timestamp: Date.now(),
+      },
+      null,
+      2
+    )
+  );
   console.log('Wrote', outPath);
 }
 
-main().catch(err => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

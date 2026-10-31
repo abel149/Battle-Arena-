@@ -24,7 +24,8 @@ let shared = null;
  */
 export function getSharedSigner() {
   if (shared) return shared;
-  if (!process.env.NODE_HTTP_URL) throw new Error('NODE_HTTP_URL is required for on-chain features');
+  if (!process.env.NODE_HTTP_URL)
+    throw new Error('NODE_HTTP_URL is required for on-chain features');
   const provider = new JsonRpcProvider(process.env.NODE_HTTP_URL);
   const signer = process.env.PRIVATE_KEY
     ? new NonceManager(new Wallet(process.env.PRIVATE_KEY, provider))

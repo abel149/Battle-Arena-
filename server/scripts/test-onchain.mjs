@@ -18,8 +18,12 @@ const privateKey = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4
 let hardhatProc;
 let serverProc;
 
-function log(tag, message) { console.log(`[${tag}] ${message}`); }
-function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+function log(tag, message) {
+  console.log(`[${tag}] ${message}`);
+}
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 async function waitForHttp(url, expectedStatus, { timeoutMs = 40000, intervalMs = 500 } = {}) {
   const deadline = Date.now() + timeoutMs;
@@ -44,22 +48,29 @@ async function waitForHttp(url, expectedStatus, { timeoutMs = 40000, intervalMs 
     }
     await sleep(intervalMs);
   }
-  throw new Error(`HTTP service did not become ready: ${url} (waited ${timeoutMs}ms, ${attempts} attempts)`);
+  throw new Error(
+    `HTTP service did not become ready: ${url} (waited ${timeoutMs}ms, ${attempts} attempts)`
+  );
 }
 
 async function startHardhatNode() {
-  hardhatProc = spawn('npx', ['hardhat', 'node', '--port', String(NODE_PORT), '--chain-id', '31337'], {
-    cwd: SERVER_DIR,
-    stdio: 'inherit',
-  });
-  await waitForHttp(NODE_URL, status => status === 404 || status === 200);
+  hardhatProc = spawn(
+    'npx',
+    ['hardhat', 'node', '--port', String(NODE_PORT), '--chain-id', '31337'],
+    {
+      cwd: SERVER_DIR,
+      stdio: 'inherit',
+    }
+  );
+  await waitForHttp(NODE_URL, (status) => status === 404 || status === 200);
   const rpc = await fetch(NODE_URL, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_chainId', params: [], id: 1 }),
   });
   const { result } = await rpc.json();
-  if (Number(BigInt(result)) !== 31337) throw new Error(`Expected local chain 31337, got ${result}`);
+  if (Number(BigInt(result)) !== 31337)
+    throw new Error(`Expected local chain 31337, got ${result}`);
 }
 
 function deployContract() {
@@ -76,7 +87,8 @@ function deployContract() {
     },
   });
   const deployment = JSON.parse(fs.readFileSync(deploymentFile, 'utf8'));
-  if (deployment.chainId !== 31337) throw new Error(`Unexpected deployment chain id ${deployment.chainId}`);
+  if (deployment.chainId !== 31337)
+    throw new Error(`Unexpected deployment chain id ${deployment.chainId}`);
   return deployment.address;
 }
 
@@ -93,7 +105,7 @@ async function startServer(contractAddress) {
       PRIVATE_KEY: privateKey,
     },
   });
-  await waitForHttp(SERVER_URL, status => status === 404 || status === 200, { timeoutMs: 40000 });
+  await waitForHttp(SERVER_URL, (status) => status === 404 || status === 200, { timeoutMs: 40000 });
 }
 
 function waitFor(socket, event, predicate = () => true, timeoutMs = 30000) {
@@ -102,7 +114,7 @@ function waitFor(socket, event, predicate = () => true, timeoutMs = 30000) {
       socket.off(event, listener);
       reject(new Error(`Timed out waiting for ${event}`));
     }, timeoutMs);
-    const listener = value => {
+    const listener = (value) => {
       if (!predicate(value)) return;
       clearTimeout(timeout);
       socket.off(event, listener);
@@ -127,15 +139,21 @@ async function playMatch() {
     const match = await start;
     let lastMoveCount = -1;
     socket.on('game:state', ({ roomId, game }) => {
-      if (roomId !== match.roomId || game.winner || game.locked
-        || game.players[game.turn] !== wallet || game.moveCount === lastMoveCount) return;
-      const index = game.cards.findIndex(card => !card.matched && !card.flipped);
+      if (
+        roomId !== match.roomId ||
+        game.winner ||
+        game.locked ||
+        game.players[game.turn] !== wallet ||
+        game.moveCount === lastMoveCount
+      )
+        return;
+      const index = game.cards.findIndex((card) => !card.matched && !card.flipped);
       if (index < 0) return;
       lastMoveCount = game.moveCount;
       setTimeout(() => socket.emit('game:move', { roomId, index }), 80);
     });
     const ended = waitFor(socket, 'match:end', () => true, 60000);
-    const index = match.game.cards.findIndex(card => !card.matched && !card.flipped);
+    const index = match.game.cards.findIndex((card) => !card.matched && !card.flipped);
     socket.emit('game:move', { roomId: match.roomId, index });
     return await ended;
   } finally {
@@ -153,18 +171,26 @@ function onceConnected(socket) {
 
 async function verifyReceipt(matchEnd) {
   const { receipt } = matchEnd;
-  if (!receipt?.matchId || !receipt.txHash) throw new Error('Match receipt is missing its ID or transaction hash');
+  if (!receipt?.matchId || !receipt.txHash)
+    throw new Error('Match receipt is missing its ID or transaction hash');
   const response = await fetch(`${SERVER_URL}/api/verify/${encodeURIComponent(receipt.matchId)}`);
   if (!response.ok) throw new Error(`Verify endpoint returned HTTP ${response.status}`);
   const verification = await response.json();
   if (!verification.valid) throw new Error(`Receipt match ID ${receipt.matchId} did not verify`);
-  if (verification.entry.matchId !== receipt.matchId) throw new Error('Verified match ID differs from receipt match ID');
-  if (verification.entry.txHash !== receipt.txHash) throw new Error('Ledger transaction hash differs from receipt transaction hash');
+  if (verification.entry.matchId !== receipt.matchId)
+    throw new Error('Verified match ID differs from receipt match ID');
+  if (verification.entry.txHash !== receipt.txHash)
+    throw new Error('Ledger transaction hash differs from receipt transaction hash');
   const tx = await fetch(`${NODE_URL}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_getTransactionByHash', params: [receipt.txHash], id: 2 }),
-  }).then(response => response.json());
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'eth_getTransactionByHash',
+      params: [receipt.txHash],
+      id: 2,
+    }),
+  }).then((response) => response.json());
   if (!tx.result) throw new Error(`Transaction ${receipt.txHash} not found on local chain`);
   log('verify', `match ${receipt.matchId} verified with transaction ${receipt.txHash}`);
   return verification.entry;
@@ -177,11 +203,15 @@ async function cleanup() {
     await Promise.race([once(child, 'exit'), sleep(2000)]);
     if (child.exitCode === null) child.kill('SIGKILL');
   }
-  try { fs.unlinkSync(deploymentFile); } catch { /* no file if deployment failed */ }
+  try {
+    fs.unlinkSync(deploymentFile);
+  } catch {
+    /* no file if deployment failed */
+  }
 }
 
 async function once(child, event) {
-  return new Promise(resolve => child.once(event, resolve));
+  return new Promise((resolve) => child.once(event, resolve));
 }
 
 try {
@@ -190,7 +220,10 @@ try {
   await startServer(contractAddress);
   const result = await playMatch();
   const verified = await verifyReceipt(result);
-  log('RESULT', `PASS: ${verified.matchId} verified with actual chain transaction hash ${verified.txHash}`);
+  log(
+    'RESULT',
+    `PASS: ${verified.matchId} verified with actual chain transaction hash ${verified.txHash}`
+  );
 } catch (error) {
   console.error('[ERROR]', error);
   process.exitCode = 1;

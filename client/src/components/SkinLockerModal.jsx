@@ -49,7 +49,7 @@ export default function SkinLockerModal({ kidAddress, parentAddress, onClose, on
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 
-      setSkins(prev => prev.map(s => ({ ...s, equipped: s.id === skinId })));
+      setSkins((prev) => prev.map((s) => ({ ...s, equipped: s.id === skinId })));
       if (onSkinEquipped) onSkinEquipped(skinId);
     } catch (err) {
       alert(err.message || 'Failed to equip skin');
@@ -60,12 +60,13 @@ export default function SkinLockerModal({ kidAddress, parentAddress, onClose, on
 
   return (
     <div className="skin-modal-overlay" onClick={onClose}>
-      <div className="skin-modal-dialog skin-locker-dialog" onClick={e => e.stopPropagation()}>
+      <div className="skin-modal-dialog skin-locker-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="skin-modal-header">
           <div>
             <div className="skin-modal-badge">🚀 Cyber Ship Armory & Skins</div>
             <p className="skin-modal-subtitle">
-              Skins cannot be bought with money! Complete real-world chores and get parent approval to unlock them.
+              Skins cannot be bought with money! Complete real-world chores and get parent approval
+              to unlock them.
             </p>
           </div>
           <div className="header-actions">
@@ -77,14 +78,18 @@ export default function SkinLockerModal({ kidAddress, parentAddress, onClose, on
             >
               🛡️ Parent Approval Portal
             </button>
-            <button type="button" className="skin-modal-close" onClick={onClose}>×</button>
+            <button type="button" className="skin-modal-close" onClick={onClose}>
+              ×
+            </button>
           </div>
         </div>
 
         {celebration && (
           <div className="skin-celebration-toast">
             {celebration}
-            <button type="button" onClick={() => setCelebration(null)}>✕</button>
+            <button type="button" onClick={() => setCelebration(null)}>
+              ✕
+            </button>
           </div>
         )}
 
@@ -92,7 +97,7 @@ export default function SkinLockerModal({ kidAddress, parentAddress, onClose, on
           <div className="skin-loading">Loading armory skins...</div>
         ) : (
           <div className="skins-grid">
-            {skins.map(skin => (
+            {skins.map((skin) => (
               <div
                 key={skin.id}
                 className={`skin-card ${skin.equipped ? 'equipped' : ''} ${skin.unlocked ? 'unlocked' : 'locked'}`}
@@ -111,7 +116,9 @@ export default function SkinLockerModal({ kidAddress, parentAddress, onClose, on
                 </div>
 
                 <div className="skin-card-details">
-                  <h4 className="skin-name" style={{ color: skin.primaryColor }}>{skin.name}</h4>
+                  <h4 className="skin-name" style={{ color: skin.primaryColor }}>
+                    {skin.name}
+                  </h4>
                   <div className="skin-bullet-type">
                     <span>Weapon:</span> <strong>{skin.bulletType.toUpperCase()} LASER</strong>
                   </div>
@@ -125,9 +132,7 @@ export default function SkinLockerModal({ kidAddress, parentAddress, onClose, on
                       <div className="chore-req-desc">{skin.choreDescription}</div>
                     </div>
                   ) : (
-                    <div className="skin-unlocked-banner">
-                      ✅ Unlocked & Battle Ready
-                    </div>
+                    <div className="skin-unlocked-banner">✅ Unlocked & Battle Ready</div>
                   )}
                 </div>
 
@@ -175,7 +180,9 @@ export default function SkinLockerModal({ kidAddress, parentAddress, onClose, on
             onClose={() => setSelectedChoreSkin(null)}
             onSuccess={() => {
               loadSkins();
-              setCelebration(`Chore submitted for ${selectedChoreSkin.name}! Ask your parent to approve it in the Parent Portal.`);
+              setCelebration(
+                `Chore submitted for ${selectedChoreSkin.name}! Ask your parent to approve it in the Parent Portal.`
+              );
             }}
           />
         )}
@@ -218,8 +225,24 @@ function ShipGraphic({ skin }) {
       {/* Cockpit canopy */}
       <polygon points="50,28 62,55 50,49 38,55" fill="#ffffff" opacity="0.9" />
       {/* Wing blasters */}
-      <line x1="22" y1="62" x2="22" y2="40" stroke={skin.laserColor} strokeWidth="3" strokeLinecap="round" />
-      <line x1="78" y1="62" x2="78" y2="40" stroke={skin.laserColor} strokeWidth="3" strokeLinecap="round" />
+      <line
+        x1="22"
+        y1="62"
+        x2="22"
+        y2="40"
+        stroke={skin.laserColor}
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+      <line
+        x1="78"
+        y1="62"
+        x2="78"
+        y2="40"
+        stroke={skin.laserColor}
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

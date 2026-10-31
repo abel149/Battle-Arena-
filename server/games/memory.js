@@ -46,10 +46,12 @@ export function createGame(addrX, addrO, opts = {}) {
   const deckId = DECKS[opts.deck] ? opts.deck : 'flags';
   const n = Math.min(opts.pairs || 8, DECKS[deckId].pairs.length);
   const picked = shuffle([...DECKS[deckId].pairs]).slice(0, n);
-  const cards = shuffle(picked.flatMap((p, i) => [
-    { pairId: i, content: p.a, matched: false },
-    { pairId: i, content: p.b, matched: false },
-  ]));
+  const cards = shuffle(
+    picked.flatMap((p, i) => [
+      { pairId: i, content: p.a, matched: false },
+      { pairId: i, content: p.b, matched: false },
+    ])
+  );
   const difficulty = ['easy', 'medium', 'hard'].includes(opts?.difficulty)
     ? opts.difficulty
     : 'medium';
@@ -57,15 +59,15 @@ export function createGame(addrX, addrO, opts = {}) {
     deck: deckId,
     deckLabel: DECKS[deckId].label,
     cards,
-    flipped: [],                       // indices currently face-up (max 2)
+    flipped: [], // indices currently face-up (max 2)
     scores: { [addrX]: 0, [addrO]: 0 },
     players: { X: addrX, O: addrO },
     turn: 'X',
     difficulty,
-    seen: {},                          // index -> pairId of cards revealed during game
+    seen: {}, // index -> pairId of cards revealed during game
     moves: [],
     winner: null,
-    resolving: false,                  // a pair is face-up waiting to resolve
+    resolving: false, // a pair is face-up waiting to resolve
   };
 }
 
@@ -82,9 +84,7 @@ export function createGame(addrX, addrO, opts = {}) {
 export function applyMove(game, address, move) {
   if (game.winner) return { error: 'Game is over' };
   if (game.resolving || game.flipped.length >= 2) return { error: 'Wait for cards to resolve' };
-  const seat =
-    game.players.X === address ? 'X' :
-    game.players.O === address ? 'O' : null;
+  const seat = game.players.X === address ? 'X' : game.players.O === address ? 'O' : null;
   if (!seat) return { error: 'Not a player in this game' };
   if (seat !== game.turn) return { error: 'Not your turn' };
   const index = move?.index;
@@ -110,9 +110,13 @@ export function applyMove(game, address, move) {
  * @param {Object} game - Mutable game state object.
  */
 export function resolve(game) {
-  if (game.flipped.length !== 2) { game.resolving = false; return; }
+  if (game.flipped.length !== 2) {
+    game.resolving = false;
+    return;
+  }
   const [i, j] = game.flipped;
-  const a = game.cards[i], b = game.cards[j];
+  const a = game.cards[i],
+    b = game.cards[j];
   if (a.pairId === b.pairId) {
     a.matched = b.matched = true;
     game.scores[game.players[game.turn]] += 1;
@@ -142,10 +146,10 @@ export function resolve(game) {
 export function botMove(game, difficulty = game.difficulty || 'medium') {
   const open = game.cards
     .map((c, i) => (!c.matched && !game.flipped.includes(i) ? i : null))
-    .filter(v => v !== null);
+    .filter((v) => v !== null);
   if (open.length === 0) return { index: 0 };
 
-  const unseen = open.filter(i => game.seen[i] === undefined);
+  const unseen = open.filter((i) => game.seen[i] === undefined);
 
   // Group open cards that have already been seen by pairId
   const seenByPair = {};
@@ -160,12 +164,10 @@ export function botMove(game, difficulty = game.difficulty || 'medium') {
   if (game.flipped.length === 1) {
     const firstIdx = game.flipped[0];
     const targetPairId = game.cards[firstIdx].pairId;
-    const matchIdx = open.find(i => game.seen[i] === targetPairId);
+    const matchIdx = open.find((i) => game.seen[i] === targetPairId);
 
     // Recall rate: easy 20%, medium 65%, hard 95%
-    const recallRate =
-      difficulty === 'easy' ? 0.20 :
-      difficulty === 'hard' ? 0.95 : 0.65;
+    const recallRate = difficulty === 'easy' ? 0.2 : difficulty === 'hard' ? 0.95 : 0.65;
 
     if (matchIdx !== undefined && Math.random() < recallRate) {
       return { index: matchIdx };
@@ -179,10 +181,8 @@ export function botMove(game, difficulty = game.difficulty || 'medium') {
   }
 
   // Case 2: Opening pick of the turn
-  const knownPairs = Object.values(seenByPair).filter(arr => arr.length === 2);
-  const pairRecallRate =
-    difficulty === 'easy' ? 0.15 :
-    difficulty === 'hard' ? 0.95 : 0.60;
+  const knownPairs = Object.values(seenByPair).filter((arr) => arr.length === 2);
+  const pairRecallRate = difficulty === 'easy' ? 0.15 : difficulty === 'hard' ? 0.95 : 0.6;
 
   if (knownPairs.length > 0 && Math.random() < pairRecallRate) {
     const chosenPair = knownPairs[Math.floor(Math.random() * knownPairs.length)];
@@ -190,7 +190,7 @@ export function botMove(game, difficulty = game.difficulty || 'medium') {
   }
 
   // Explore unseen cards to build knowledge
-  if (unseen.length > 0 && (difficulty === 'hard' || Math.random() < 0.70)) {
+  if (unseen.length > 0 && (difficulty === 'hard' || Math.random() < 0.7)) {
     return { index: unseen[Math.floor(Math.random() * unseen.length)] };
   }
 

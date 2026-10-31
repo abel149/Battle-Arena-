@@ -12,7 +12,11 @@ process.env.PORT = '3987';
 
 after(() => {
   for (const suffix of ['', '-wal', '-shm']) {
-    try { fs.rmSync(tmpDb + suffix, { force: true }); } catch { /* ignore */ }
+    try {
+      fs.rmSync(tmpDb + suffix, { force: true });
+    } catch {
+      /* ignore */
+    }
   }
 });
 
@@ -27,15 +31,18 @@ test('Full flow: two players register, matchmake, complete match, record receipt
   const sock2 = ClientIO(serverUrl, { reconnection: false });
 
   await Promise.all([
-    new Promise(r => sock1.on('connect', r)),
-    new Promise(r => sock2.on('connect', r)),
+    new Promise((r) => sock1.on('connect', r)),
+    new Promise((r) => sock2.on('connect', r)),
   ]);
 
   // Setup registration promises before identify
   const reg1Promise = new Promise((resolve) => {
     sock1.on('player:registered', (yes) => {
       if (!yes) {
-        sock1.emit('player:register', { username: 'alice_' + Math.random().toString(36).slice(2, 8), password: 'password123' });
+        sock1.emit('player:register', {
+          username: 'alice_' + Math.random().toString(36).slice(2, 8),
+          password: 'password123',
+        });
       }
     });
     sock1.on('auth:success', resolve);
@@ -44,7 +51,10 @@ test('Full flow: two players register, matchmake, complete match, record receipt
   const reg2Promise = new Promise((resolve) => {
     sock2.on('player:registered', (yes) => {
       if (!yes) {
-        sock2.emit('player:register', { username: 'bob_' + Math.random().toString(36).slice(2, 8), password: 'password123' });
+        sock2.emit('player:register', {
+          username: 'bob_' + Math.random().toString(36).slice(2, 8),
+          password: 'password123',
+        });
       }
     });
     sock2.on('auth:success', resolve);
@@ -95,7 +105,7 @@ test('Full flow: two players register, matchmake, complete match, record receipt
   const resMatches = await fetch(`${serverUrl}/api/matches`);
   assert.ok(resMatches.ok);
   const ledger = await resMatches.json();
-  const entry = ledger.find(m => m.matchId === matchEnd.receipt.matchId);
+  const entry = ledger.find((m) => m.matchId === matchEnd.receipt.matchId);
   assert.ok(entry, 'Match in ledger');
   assert.equal(entry.winner, w1.address);
 
@@ -103,13 +113,13 @@ test('Full flow: two players register, matchmake, complete match, record receipt
   const resLb = await fetch(`${serverUrl}/api/leaderboard`);
   assert.ok(resLb.ok);
   const lb = await resLb.json();
-  const aliceRow = lb.find(p => p.address === w1.address);
+  const aliceRow = lb.find((p) => p.address === w1.address);
   assert.ok(aliceRow, 'Alice in leaderboard');
   assert.equal(aliceRow.wins, 1);
 
   sock1.disconnect();
   sock2.disconnect();
   io.close();
-  await new Promise(r => server.close(r));
+  await new Promise((r) => server.close(r));
   process.exit(0);
 });

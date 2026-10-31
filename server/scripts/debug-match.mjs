@@ -18,19 +18,28 @@ const SERVER_URL = `http://127.0.0.1:${PORT}`;
 let hardhatProc = null;
 let serverProc = null;
 
-function log(tag, msg) { console.log(`[${tag}] ${msg}`); }
+function log(tag, msg) {
+  console.log(`[${tag}] ${msg}`);
+}
 
 async function startHardhatNode() {
   log('node', 'starting Hardhat node');
-  hardhatProc = spawn('npx', ['hardhat', 'node', '--port', String(NODE_PORT), '--chain-id', '31337'], {
-    cwd: SERVER_DIR,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, NODE_HTTP_URL: NODE_URL },
-  });
+  hardhatProc = spawn(
+    'npx',
+    ['hardhat', 'node', '--port', String(NODE_PORT), '--chain-id', '31337'],
+    {
+      cwd: SERVER_DIR,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, NODE_HTTP_URL: NODE_URL },
+    }
+  );
   for (let i = 1; i <= 30; i++) {
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise((r) => setTimeout(r, 1000));
     try {
-      execSync(`curl -s -X POST -H 'Content-Type: application/json' --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' ${NODE_URL}`, { cwd: SERVER_DIR, timeout: 3000 });
+      execSync(
+        `curl -s -X POST -H 'Content-Type: application/json' --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' ${NODE_URL}`,
+        { cwd: SERVER_DIR, timeout: 3000 }
+      );
       log('node', `RPC reachable after ${i}s`);
       return;
     } catch {
@@ -41,7 +50,16 @@ async function startHardhatNode() {
 
 async function deployContract() {
   log('deploy', 'deploying MatchResult');
-  execSync('node scripts/deploy-match-result.js', { cwd: SERVER_DIR, stdio: 'inherit', timeout: 30000, env: { ...process.env, NODE_HTTP_URL: NODE_URL, PRIVATE_KEY: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' } });
+  execSync('node scripts/deploy-match-result.js', {
+    cwd: SERVER_DIR,
+    stdio: 'inherit',
+    timeout: 30000,
+    env: {
+      ...process.env,
+      NODE_HTTP_URL: NODE_URL,
+      PRIVATE_KEY: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+    },
+  });
   if (!fs.existsSync(ADDRESS_FILE)) throw new Error('deploy did not write ' + ADDRESS_FILE);
   const raw = fs.readFileSync(ADDRESS_FILE, 'utf8');
   const cfg = JSON.parse(raw);
@@ -63,14 +81,21 @@ async function startServer(contractAddress) {
     },
   });
   for (let i = 1; i <= 30; i++) {
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise((r) => setTimeout(r, 1000));
     try {
-      const out = execSync(`curl -s -o /dev/null -w '%{http_code}' ${SERVER_URL}/`, { cwd: SERVER_DIR, timeout: 3000 }).toString().trim();
+      const out = execSync(`curl -s -o /dev/null -w '%{http_code}' ${SERVER_URL}/`, {
+        cwd: SERVER_DIR,
+        timeout: 3000,
+      })
+        .toString()
+        .trim();
       if (out === '404' || out === '200') {
         log('server', `HTTP up (status ${out}) after ${i}s`);
         return;
       }
-    } catch { /* not ready yet */ }
+    } catch {
+      /* not ready yet */
+    }
     if (i === 30) {
       const err = new Error('Server did not become reachable after 30s');
       console.error('server stderr:', serverProc.stderr ? serverProc.stderr.read() : 'n/a');
@@ -88,17 +113,23 @@ async function registerPlayer() {
   const password = 'securepass123';
   const signature = await signer.signMessage(`Battle Arena login for ${wallet}`);
   const body = JSON.stringify({ address: wallet, username, password, signature });
-  const r = execSync(`curl -s -X POST ${SERVER_URL}/api/register -H 'Content-Type: application/json' -d '${body.replace(/'/g, "%27")}'`, { cwd: SERVER_DIR, timeout: 10000 });
+  const r = execSync(
+    `curl -s -X POST ${SERVER_URL}/api/register -H 'Content-Type: application/json' -d '${body.replace(/'/g, '%27')}'`,
+    { cwd: SERVER_DIR, timeout: 10000 }
+  );
   const reg = JSON.parse(r.toString());
   if (reg.error) throw new Error('register failed: ' + JSON.stringify(reg));
-  log('register', `registered ${username} -> ${wallet.slice(0,10)}…`);
+  log('register', `registered ${username} -> ${wallet.slice(0, 10)}…`);
   log('register', `password stripped: ${'password' in reg ? 'NO' : 'YES'}`);
   return { wallet, username, password, signer };
 }
 
 async function loginPlayer({ username, password }) {
   log('login', 'logging in by credentials');
-  const r = execSync(`curl -s -X POST ${SERVER_URL}/api/login -H 'Content-Type: application/json' -d '{"username":"${username}","password":"${password}"}'`, { cwd: SERVER_DIR, timeout: 10000 });
+  const r = execSync(
+    `curl -s -X POST ${SERVER_URL}/api/login -H 'Content-Type: application/json' -d '{"username":"${username}","password":"${password}"}'`,
+    { cwd: SERVER_DIR, timeout: 10000 }
+  );
   const login = JSON.parse(r.toString());
   if (login.error) throw new Error('login failed: ' + JSON.stringify(login));
   log('login', `login OK, password stripped: ${'password' in login ? 'NO' : 'YES'}`);
@@ -130,16 +161,22 @@ async function playBotMatch({ wallet, signer }) {
     });
 
     socket.on('game:state', ({ game }) => {
-      log('match', `game:state turn=${game.turn} locked=${game.locked} winner=${game.winner} moveCount=${game.moveCount}`);
+      log(
+        'match',
+        `game:state turn=${game.turn} locked=${game.locked} winner=${game.winner} moveCount=${game.moveCount}`
+      );
       actOn(game);
     });
 
     function actOn(game) {
       if (!game || game.winner) return;
       const myTurn = game.players[game.turn] === wallet;
-      log('match', `actOn: myTurn=${myTurn} turn=${game.turn} players=${JSON.stringify(game.players)}`);
+      log(
+        'match',
+        `actOn: myTurn=${myTurn} turn=${game.turn} players=${JSON.stringify(game.players)}`
+      );
       if (!myTurn || game.locked) return;
-      const idx = game.cards.findIndex(c => !c.matched && !c.flipped);
+      const idx = game.cards.findIndex((c) => !c.matched && !c.flipped);
       log('match', `actOn: available card index=${idx}`);
       if (idx === -1) return;
       moves++;
@@ -153,9 +190,15 @@ async function playBotMatch({ wallet, signer }) {
       resolve({ roomId, moves, receipt: d.receipt });
     });
 
-    socket.on('game:error', (e) => { log('match', 'game:error ' + JSON.stringify(e)); });
-    socket.on('player:error', (e) => { log('match', 'player:error ' + JSON.stringify(e)); });
-    socket.on('connect_error', (e) => { log('match', 'connect_error ' + e.message); });
+    socket.on('game:error', (e) => {
+      log('match', 'game:error ' + JSON.stringify(e));
+    });
+    socket.on('player:error', (e) => {
+      log('match', 'player:error ' + JSON.stringify(e));
+    });
+    socket.on('connect_error', (e) => {
+      log('match', 'connect_error ' + e.message);
+    });
 
     setTimeout(() => {
       log('match', 'TIMEOUT: match did not finish');
@@ -171,7 +214,7 @@ async function verifyLedger(matchId) {
   const ledger = JSON.parse(r.toString());
   log('verify', `on-chain matches count: ${ledger.length}`);
   log('verify', `ledger: ${JSON.stringify(ledger, null, 2).slice(0, 1000)}`);
-  const entry = ledger.find(e => e.matchId === matchId);
+  const entry = ledger.find((e) => e.matchId === matchId);
   if (!entry) throw new Error('match not found on-chain: ' + matchId);
   log('verify', `found on-chain: ${JSON.stringify(entry)}`);
   return entry;
@@ -179,8 +222,14 @@ async function verifyLedger(matchId) {
 
 async function cleanup() {
   log('cleanup', 'stopping processes');
-  if (serverProc) { serverProc.kill(); await new Promise(r => setTimeout(r, 1000)); }
-  if (hardhatProc) { hardhatProc.kill(); await new Promise(r => setTimeout(r, 1000)); }
+  if (serverProc) {
+    serverProc.kill();
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  if (hardhatProc) {
+    hardhatProc.kill();
+    await new Promise((r) => setTimeout(r, 1000));
+  }
 }
 
 async function main() {

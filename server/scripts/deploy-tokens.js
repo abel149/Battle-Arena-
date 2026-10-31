@@ -41,9 +41,8 @@ const LOCAL_PK = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2
  * @throws {Error} If chain ID does not match expected network or private key is missing.
  */
 async function main() {
-  const nodeUrl = process.env.NODE_HTTP_URL
-    || process.env.BASE_SEPOLIA_RPC_URL
-    || 'http://127.0.0.1:8545';
+  const nodeUrl =
+    process.env.NODE_HTTP_URL || process.env.BASE_SEPOLIA_RPC_URL || 'http://127.0.0.1:8545';
   const provider = new ethers.JsonRpcProvider(nodeUrl);
   const network = await provider.getNetwork();
   const chainId = Number(network.chainId);
@@ -73,31 +72,49 @@ async function main() {
   const baseNonce = Number(await provider.getTransactionCount(signer.address, 'pending'));
 
   // ---- ArenaToken (ERC-20 ARENA) ----
-  const ArenaToken = new ethers.ContractFactory(ARENA_TOKEN_ABI, loadArtifact('ArenaToken').bytecode, signer);
+  const ArenaToken = new ethers.ContractFactory(
+    ARENA_TOKEN_ABI,
+    loadArtifact('ArenaToken').bytecode,
+    signer
+  );
   const arenaToken = await ArenaToken.deploy(signer.address, { nonce: baseNonce });
   await arenaToken.waitForDeployment();
   const tokenAddress = await arenaToken.getAddress();
   console.log('ArenaToken (ARENA) deployed to:', tokenAddress);
 
   // ---- ArenaBadges (ERC-1155 badges) ----
-  const ArenaBadges = new ethers.ContractFactory(ARENA_BADGES_ABI, loadArtifact('ArenaBadges').bytecode, signer);
+  const ArenaBadges = new ethers.ContractFactory(
+    ARENA_BADGES_ABI,
+    loadArtifact('ArenaBadges').bytecode,
+    signer
+  );
   const arenaBadges = await ArenaBadges.deploy(signer.address, { nonce: baseNonce + 1 });
   await arenaBadges.waitForDeployment();
   const badgesAddress = await arenaBadges.getAddress();
   console.log('ArenaBadges deployed to:', badgesAddress);
   console.log('deployer (minter):', signer.address);
 
-  const outPath = process.env.TOKEN_DEPLOYMENT_FILE
-    || path.join(__dirname, '..', 'token-address.json');
-  fs.writeFileSync(outPath, JSON.stringify({
-    arenaToken: tokenAddress,
-    arenaBadges: badgesAddress,
-    minter: signer.address,
-    network: networkName,
-    chainId,
-    timestamp: Date.now(),
-  }, null, 2));
+  const outPath =
+    process.env.TOKEN_DEPLOYMENT_FILE || path.join(__dirname, '..', 'token-address.json');
+  fs.writeFileSync(
+    outPath,
+    JSON.stringify(
+      {
+        arenaToken: tokenAddress,
+        arenaBadges: badgesAddress,
+        minter: signer.address,
+        network: networkName,
+        chainId,
+        timestamp: Date.now(),
+      },
+      null,
+      2
+    )
+  );
   console.log('Wrote', outPath);
 }
 
-main().catch(err => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

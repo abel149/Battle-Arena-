@@ -7,10 +7,12 @@
 
 import { io } from 'socket.io-client';
 import { ethers } from 'ethers';
+export * from '../../shared/constants.js';
 
-const defaultServer = typeof window !== 'undefined' && window.location?.hostname
-  ? `${window.location.protocol}//${window.location.hostname}:3001`
-  : 'http://localhost:3001';
+const defaultServer =
+  typeof window !== 'undefined' && window.location?.hostname
+    ? `${window.location.protocol}//${window.location.hostname}:3001`
+    : 'http://localhost:3001';
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || defaultServer;
 
 /** @type {import('socket.io-client').Socket} Singleton WebSocket connection instance */
@@ -36,7 +38,7 @@ export const getSessionToken = () => localStorage.getItem(SESSION_KEY);
  * @function saveSessionToken
  * @param {string} token - Session token string.
  */
-export const saveSessionToken = token => localStorage.setItem(SESSION_KEY, token);
+export const saveSessionToken = (token) => localStorage.setItem(SESSION_KEY, token);
 
 /**
  * Clears the authenticated session token from localStorage.
@@ -70,7 +72,10 @@ export async function signAuth(wallet) {
   const issuedAt = Date.now();
   const message = authMessage(wallet.address, issuedAt);
   if (wallet.source === 'metamask' && window.ethereum) {
-    const signature = await window.ethereum.request({ method: 'personal_sign', params: [message, wallet.address] });
+    const signature = await window.ethereum.request({
+      method: 'personal_sign',
+      params: [message, wallet.address],
+    });
     return { signature, issuedAt };
   }
   if (wallet.privateKey) {
@@ -91,7 +96,12 @@ export async function signAndIdentify(wallet) {
   const token = getSessionToken();
   if (token) return socket.emit('identify', { token });
   const signed = await signAuth(wallet);
-  socket.emit('identify', { address: wallet.address, name: wallet.name, signature: signed?.signature, issuedAt: signed?.issuedAt });
+  socket.emit('identify', {
+    address: wallet.address,
+    name: wallet.name,
+    signature: signed?.signature,
+    issuedAt: signed?.issuedAt,
+  });
 }
 
 // Attach the login session token to every request to our own API, so the server can

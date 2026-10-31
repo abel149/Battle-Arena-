@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { socket } from '../socket.js';
+import { BrandMark } from './Icons.jsx';
+import './auth-modal.css';
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
 
@@ -17,12 +19,17 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    const onOk = () => { setBusy(false); onClose?.(); };
+    const onOk = () => {
+      setBusy(false);
+      onClose?.();
+    };
     const onErr = ({ error: msg } = {}) => {
       setBusy(false);
       setError(msg || 'Something went wrong. Try again.');
     };
-    const onKey = e => { if (e.key === 'Escape') onClose?.(); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose?.();
+    };
     socket.on('auth:success', onOk);
     socket.on('player:error', onErr);
     window.addEventListener('keydown', onKey);
@@ -42,7 +49,8 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
     e.preventDefault();
     setError(null);
     const u = username.trim();
-    if (!USERNAME_RE.test(u)) return setError('Username must be 3–20 letters, numbers or underscores.');
+    if (!USERNAME_RE.test(u))
+      return setError('Username must be 3–20 letters, numbers or underscores.');
     if (password.length < 8) return setError('Password must be at least 8 characters.');
     if (tab === 'register' && password !== confirm) return setError('Passwords do not match.');
     if (!socket.connected) return setError('Cannot reach the server. Is it running?');
@@ -63,74 +71,169 @@ export default function AuthModal({ onClose, gate = false, extra = null }) {
   const isRegister = tab === 'register';
 
   return (
-    <div className={`auth-overlay ${gate ? 'gate' : ''}`}
-      onMouseDown={e => { if (e.target === e.currentTarget) onClose?.(); }}>
+    <div
+      className={`auth-overlay ${gate ? 'gate' : ''}`}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose?.();
+      }}
+    >
       <form className="auth-card" onSubmit={submit}>
-        {gate && (
-          <div className="auth-brand">
-            <h1>Battle Arena</h1>
-            <p>Real-time multiplayer matches with on-chain results, rewards and badges.</p>
+        <div className="auth-brand">
+          <div className="auth-brand-badge">
+            <BrandMark />
+            <span>Battle Arena</span>
           </div>
-        )}
+          <h1>{isRegister ? 'Create Your Account' : 'Welcome Back, Champion'}</h1>
+          <p>
+            {isRegister
+              ? 'Join the arena, earn verified energy, and compete for on-chain trophies.'
+              : 'Sign in to jump straight into live matchmaking and claim daily rewards.'}
+          </p>
+        </div>
+
         <div className="auth-tabs" role="tablist">
-          <button type="button" role="tab" aria-selected={!isRegister}
-            className={!isRegister ? 'on' : ''} onClick={() => switchTab('login')}>Log in</button>
-          <button type="button" role="tab" aria-selected={isRegister}
-            className={isRegister ? 'on' : ''} onClick={() => switchTab('register')}>Create account</button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!isRegister}
+            className={!isRegister ? 'on' : ''}
+            onClick={() => switchTab('login')}
+          >
+            <span>🎮</span> Log In
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={isRegister}
+            className={isRegister ? 'on' : ''}
+            onClick={() => switchTab('register')}
+          >
+            <span>✨</span> Create Account
+          </button>
         </div>
 
         <p className="auth-note">
           {isRegister
-            ? 'Your account gets a unique blockchain profile ID for ranked matches, badges and rewards.'
-            : 'Welcome back — log in to jump into a match.'}
+            ? '💡 Free to play! Your account gets a non-custodial Web3 Profile ID + 5 free Energy.'
+            : '⚡ Ready for duels: Connect Four, Memory Match, Math Arena, and Cyber Blaster.'}
         </p>
 
         <label>
-          <span>Username</span>
-          <input value={username} onChange={e => setUsername(e.target.value)}
-            autoComplete="username" autoFocus required />
+          <span>
+            Username <span className="hint">(3–20 characters)</span>
+          </span>
+          <input
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="e.g. cyber_ninja"
+            autoComplete="username"
+            autoFocus
+            required
+          />
         </label>
 
         {isRegister && (
           <>
             <label>
-              <span>Display name (optional)</span>
-              <input value={name} onChange={e => setName(e.target.value)} />
+              <span>
+                Display name <span className="hint">(Optional)</span>
+              </span>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Alex The Great"
+              />
             </label>
             <label>
-              <span>Email (optional)</span>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
+              <span>
+                Email <span className="hint">(Optional — for password recovery)</span>
+              </span>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="parent-or-kid@example.com"
+                autoComplete="email"
+              />
             </label>
           </>
         )}
 
         <label>
-          <span>Password</span>
+          <span>
+            Password <span className="hint">(Minimum 8 characters)</span>
+          </span>
           <div className="auth-pw">
-            <input type={showPw ? 'text' : 'password'} value={password}
-              onChange={e => setPassword(e.target.value)}
-              autoComplete={isRegister ? 'new-password' : 'current-password'} required />
-            <button type="button" onClick={() => setShowPw(v => !v)}>{showPw ? 'Hide' : 'Show'}</button>
+            <input
+              type={showPw ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              autoComplete={isRegister ? 'new-password' : 'current-password'}
+              required
+            />
+            <button
+              type="button"
+              className="auth-pw-btn"
+              onClick={() => setShowPw((v) => !v)}
+              aria-label={showPw ? 'Hide password' : 'Show password'}
+            >
+              {showPw ? '🙈 Hide' : '👁️ Show'}
+            </button>
           </div>
         </label>
 
         {isRegister && (
           <label>
-            <span>Repeat password</span>
-            <input type={showPw ? 'text' : 'password'} value={confirm}
-              onChange={e => setConfirm(e.target.value)} autoComplete="new-password" required />
+            <span>Repeat Password</span>
+            <div className="auth-pw">
+              <input
+                type={showPw ? 'text' : 'password'}
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                placeholder="••••••••"
+                autoComplete="new-password"
+                required
+              />
+            </div>
           </label>
         )}
 
-        {error && <div className="auth-error" role="alert">{error}</div>}
+        {error && (
+          <div className="auth-error" role="alert">
+            <span>⚠️</span> {error}
+          </div>
+        )}
 
         {isRegister && extra}
 
         <div className="auth-actions">
-          {onClose && <button type="button" className="auth-cancel" onClick={onClose}>Cancel</button>}
+          {onClose && (
+            <button type="button" className="auth-cancel" onClick={onClose}>
+              Cancel
+            </button>
+          )}
           <button type="submit" className="auth-submit" disabled={busy}>
-            {busy ? 'Please wait…' : isRegister ? 'Create account' : 'Log in'}
+            {busy ? (
+              <span>⏳ Please wait…</span>
+            ) : isRegister ? (
+              <span>🚀 Create Account &amp; Play</span>
+            ) : (
+              <span>⚔️ Enter the Arena</span>
+            )}
           </button>
+        </div>
+
+        <div className="auth-trust-footer">
+          <div className="auth-trust-item">
+            <span>🛡️</span> Kid-Safe Chat
+          </div>
+          <div className="auth-trust-item">
+            <span>⚡</span> Proof-of-Chore
+          </div>
+          <div className="auth-trust-item">
+            <span>📜</span> On-Chain Receipts
+          </div>
         </div>
       </form>
     </div>

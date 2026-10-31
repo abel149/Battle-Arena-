@@ -25,7 +25,13 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { Contract, getAddress, ZeroAddress, encodeBytes32String, decodeBytes32String } from 'ethers';
+import {
+  Contract,
+  getAddress,
+  ZeroAddress,
+  encodeBytes32String,
+  decodeBytes32String,
+} from 'ethers';
 import { getProvider, getSigner } from './signer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -46,13 +52,16 @@ function readDeployment() {
 }
 
 const deployment = readDeployment();
-const localDeployment = ['hardhat', 'hardhat-local', 'localhost'].includes(deployment?.network)
-  || Number(deployment?.chainId) === 31337;
+const localDeployment =
+  ['hardhat', 'hardhat-local', 'localhost'].includes(deployment?.network) ||
+  Number(deployment?.chainId) === 31337;
 const deploymentAddress = localDeployment ? null : deployment?.address;
 const configuredAddress = process.env.MATCH_RESULT_ADDRESS || deploymentAddress;
-const configuredAddressMatchesDeployment = configuredAddress?.toLowerCase() === deploymentAddress?.toLowerCase();
-const expectedChainId = process.env.MATCH_RESULT_CHAIN_ID
-  || (configuredAddressMatchesDeployment ? deployment?.chainId : null);
+const configuredAddressMatchesDeployment =
+  configuredAddress?.toLowerCase() === deploymentAddress?.toLowerCase();
+const expectedChainId =
+  process.env.MATCH_RESULT_CHAIN_ID ||
+  (configuredAddressMatchesDeployment ? deployment?.chainId : null);
 const USE_ONCHAIN = Boolean(configuredAddress);
 
 let contract, provider, signer;
@@ -71,7 +80,8 @@ async function ensureContract() {
 
   const address = configuredAddress;
   if (!address) throw new Error('Set MATCH_RESULT_ADDRESS to enable on-chain recording');
-  if (!process.env.NODE_HTTP_URL) throw new Error('NODE_HTTP_URL is required when on-chain recording is enabled');
+  if (!process.env.NODE_HTTP_URL)
+    throw new Error('NODE_HTTP_URL is required when on-chain recording is enabled');
 
   provider = getProvider();
   const network = await provider.getNetwork();
@@ -79,7 +89,8 @@ async function ensureContract() {
     throw new Error(`Connected to chain ${network.chainId}, expected ${expectedChainId}`);
   }
   const code = await provider.getCode(address);
-  if (code === '0x') throw new Error(`No contract deployed at ${address} on chain ${network.chainId}`);
+  if (code === '0x')
+    throw new Error(`No contract deployed at ${address} on chain ${network.chainId}`);
 
   // Shared NonceManager (signer.js) — must be the same instance chain-tokens.js uses.
   signer = getSigner() || provider;
@@ -147,15 +158,17 @@ function normalizeMatch(match) {
     X: hexAddress(match.playerA),
     O: hexAddress(match.playerB),
   };
-  const winner = match.winner.toLowerCase() === ZeroAddress.toLowerCase()
-    ? 'draw'
-    : hexAddress(match.winner);
+  const winner =
+    match.winner.toLowerCase() === ZeroAddress.toLowerCase() ? 'draw' : hexAddress(match.winner);
   const timestamp = Number(match.timestamp);
   const gameType = match.gameType;
   const moves = Number(match.moves);
-  const resultHash = '0x' + crypto.createHash('sha256')
-    .update(JSON.stringify({ matchId, gameType, players, winner, moves, timestamp }))
-    .digest('hex');
+  const resultHash =
+    '0x' +
+    crypto
+      .createHash('sha256')
+      .update(JSON.stringify({ matchId, gameType, players, winner, moves, timestamp }))
+      .digest('hex');
   return { matchId, matchIdRaw, gameType, players, winner, timestamp, moves, resultHash };
 }
 
@@ -195,11 +208,21 @@ const EXPLORER_TX = {
  */
 export async function chainInfo() {
   if (!USE_ONCHAIN) {
-    return { onchain: false, network: 'Simulated ledger', chainId: null, blockNumber: null, contract: null, explorerTx: null };
+    return {
+      onchain: false,
+      network: 'Simulated ledger',
+      chainId: null,
+      blockNumber: null,
+      contract: null,
+      explorerTx: null,
+    };
   }
   try {
     await ensureContract();
-    const [network, blockNumber] = await Promise.all([provider.getNetwork(), provider.getBlockNumber()]);
+    const [network, blockNumber] = await Promise.all([
+      provider.getNetwork(),
+      provider.getBlockNumber(),
+    ]);
     const chainId = Number(network.chainId);
     return {
       onchain: true,
@@ -210,7 +233,15 @@ export async function chainInfo() {
       explorerTx: EXPLORER_TX[chainId] || null,
     };
   } catch (err) {
-    return { onchain: true, error: err.message, network: 'Chain unreachable', chainId: null, blockNumber: null, contract: configuredAddress, explorerTx: null };
+    return {
+      onchain: true,
+      error: err.message,
+      network: 'Chain unreachable',
+      chainId: null,
+      blockNumber: null,
+      contract: configuredAddress,
+      explorerTx: null,
+    };
   }
 }
 
@@ -268,12 +299,12 @@ export async function recordMatch({ matchId, gameType, players, winner, moves })
  */
 export async function recordMatchBatch(matchesList) {
   if (!USE_ONCHAIN) {
-    return matchesList.map(m => recordMatchSimulated(m));
+    return matchesList.map((m) => recordMatchSimulated(m));
   }
   const c = await ensureContract();
   if (!c) throw new Error('On-chain recording requested but contract is not available');
 
-  const formattedInputs = matchesList.map(m => ({
+  const formattedInputs = matchesList.map((m) => ({
     matchId: encodeBytes32String(m.matchId),
     gameType: m.gameType,
     winner: m.winner && m.winner !== 'draw' ? hexAddress(m.winner) : ZeroAddress,
@@ -307,10 +338,9 @@ export async function getLedger() {
     c.matchCount(),
     c.queryFilter(c.filters.MatchRecorded(), 0, 'latest'),
   ]);
-  const txHashByMatchId = new Map(events.map(event => [
-    decodeMatchId(event.args.matchId).toLowerCase(),
-    event.transactionHash,
-  ]));
+  const txHashByMatchId = new Map(
+    events.map((event) => [decodeMatchId(event.args.matchId).toLowerCase(), event.transactionHash])
+  );
   const entries = [];
   for (let i = 0; i < Number(count); i++) {
     const match = normalizeMatch(await c.getMatchByIndex(i));

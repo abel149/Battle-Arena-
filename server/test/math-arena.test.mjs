@@ -65,3 +65,38 @@ test('timeoutRound deducts life from unanswered seats and resolves round', () =>
   assert.equal(g.scores.X, 20);
   assert.equal(g.lives.O, 2); // 0xB lost life on timeout
 });
+
+test('rejects double answers and foreign players in Math Arena', () => {
+  const g = mathArena.createGame('0xA', '0xB');
+  // First answer locks
+  const r1 = mathArena.applyMove(g, '0xA', { index: 1 });
+  assert.ok(!r1.error);
+  assert.equal(g.answered.X, true);
+
+  // Second answer by same player in same round rejected
+  const r2 = mathArena.applyMove(g, '0xA', { index: 2 });
+  assert.equal(r2.error, 'Answer already locked');
+
+  // Foreign player rejected
+  const r3 = mathArena.applyMove(g, '0xForeign', { index: 0 });
+  assert.equal(r3.error, 'Not a player in this game');
+});
+
+test('game terminates with winner when a player loses all 3 lives', () => {
+  const g = mathArena.createGame('0xA', '0xB');
+  // 3 rounds of wrong answers for O, correct for X
+  for (let r = 0; r < 3; r++) {
+    const q = g.questions[g.round];
+    const correct = q.correct;
+    const wrong = (correct + 1) % 4;
+    mathArena.applyMove(g, '0xA', { index: correct });
+    mathArena.applyMove(g, '0xB', { index: wrong });
+  }
+  assert.equal(g.lives.O, 0);
+  assert.equal(g.lives.X, 3);
+  assert.equal(g.winner, 'X');
+
+  // Any further move after game over is rejected
+  const afterOver = mathArena.applyMove(g, '0xA', { index: 0 });
+  assert.equal(afterOver.error, 'Game is over');
+});

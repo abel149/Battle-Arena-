@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { short, exportKeystoreJson, restoreWalletFromInput, getOrCreateWallet, saveWallet, clearWalletSession } from '../lib/session.js';
+import {
+  short,
+  exportKeystoreJson,
+  restoreWalletFromInput,
+  getOrCreateWallet,
+  saveWallet,
+  clearWalletSession,
+} from '../lib/session.js';
 import { signAndIdentify } from '../socket.js';
 import './account-modal.css';
 
@@ -9,7 +16,7 @@ export default function AccountModal({ wallet, setWallet, profile, onClose }) {
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [copiedWords, setCopiedWords] = useState(false);
-  
+
   // Restore form
   const [importInput, setImportInput] = useState('');
   const [importName, setImportName] = useState('');
@@ -59,7 +66,11 @@ export default function AccountModal({ wallet, setWallet, profile, onClose }) {
   }
 
   function handleCreateNew() {
-    if (confirm('Create a new guest account? Any unsaved tokens or skins on this account will be lost unless you have backed up your secret key.')) {
+    if (
+      confirm(
+        'Create a new guest account? Any unsaved tokens or skins on this account will be lost unless you have backed up your secret key.'
+      )
+    ) {
       clearWalletSession();
       const fresh = getOrCreateWallet();
       setWallet(fresh);
@@ -70,13 +81,15 @@ export default function AccountModal({ wallet, setWallet, profile, onClose }) {
 
   return (
     <div className="account-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="account-modal" onClick={e => e.stopPropagation()}>
+      <div className="account-modal" onClick={(e) => e.stopPropagation()}>
         <div className="account-modal-header">
           <div className="account-modal-title">
             <span className="key-icon">🛡️</span>
             <h3>Web3 Identity & Key Vault</h3>
           </div>
-          <button type="button" className="account-modal-close" onClick={onClose}>✕</button>
+          <button type="button" className="account-modal-close" onClick={onClose}>
+            ✕
+          </button>
         </div>
 
         <div className="account-tabs">
@@ -114,7 +127,9 @@ export default function AccountModal({ wallet, setWallet, profile, onClose }) {
                 <div className="identity-row">
                   <span className="identity-label">Account Address:</span>
                   <div className="address-copy-box">
-                    <span className="address-val" title={wallet.address}>{wallet.address}</span>
+                    <span className="address-val" title={wallet.address}>
+                      {wallet.address}
+                    </span>
                     <button
                       type="button"
                       className="btn-copy-chip"
@@ -137,7 +152,10 @@ export default function AccountModal({ wallet, setWallet, profile, onClose }) {
                   <div className="security-notice">
                     <span className="shield-icon">🛡️</span>
                     <p>
-                      <strong>Parent / Player Backup:</strong> Your burner key is stored safely on this device in dual local storage. Back up your 12-word phrase or private key so you can play on other devices or restore your account if your browser data is cleared.
+                      <strong>Parent / Player Backup:</strong> Your burner key is stored safely on
+                      this device in dual local storage. Back up your 12-word phrase or private key
+                      so you can play on other devices or restore your account if your browser data
+                      is cleared.
                     </p>
                   </div>
 
@@ -192,7 +210,11 @@ export default function AccountModal({ wallet, setWallet, profile, onClose }) {
                   </div>
 
                   <div className="backup-download-box">
-                    <button type="button" className="btn-download-keystore" onClick={downloadBackup}>
+                    <button
+                      type="button"
+                      className="btn-download-keystore"
+                      onClick={downloadBackup}
+                    >
                       💾 Download Account Backup File (.json)
                     </button>
                   </div>
@@ -204,7 +226,8 @@ export default function AccountModal({ wallet, setWallet, profile, onClose }) {
           {activeTab === 'restore' && (
             <form className="tab-pane" onSubmit={handleRestore}>
               <p className="restore-desc">
-                Switching to a new tablet, school computer, or restoring after clearing cookies? Enter your 12-word recovery phrase or 64-character private key below.
+                Switching to a new tablet, school computer, or restoring after clearing cookies?
+                Enter your 12-word recovery phrase or 64-character private key below.
               </p>
 
               {restoreError && <div className="vault-error-alert">{restoreError}</div>}
@@ -217,7 +240,7 @@ export default function AccountModal({ wallet, setWallet, profile, onClose }) {
                   rows={3}
                   placeholder="e.g. apple banana chair dog ... OR 0xac0974bec39..."
                   value={importInput}
-                  onChange={e => setImportInput(e.target.value)}
+                  onChange={(e) => setImportInput(e.target.value)}
                   required
                 />
               </div>
@@ -229,7 +252,7 @@ export default function AccountModal({ wallet, setWallet, profile, onClose }) {
                   className="vault-input"
                   placeholder="Keep current or enter custom nickname"
                   value={importName}
-                  onChange={e => setImportName(e.target.value)}
+                  onChange={(e) => setImportName(e.target.value)}
                 />
               </div>
 
@@ -244,11 +267,13 @@ export default function AccountModal({ wallet, setWallet, profile, onClose }) {
               <div className="new-account-box">
                 <h4>Generate a Brand-New Account</h4>
                 <p>
-                  Need to start fresh as a guest or let a sibling play on this browser?
-                  Click below to generate a new embedded burner wallet.
+                  Need to start fresh as a guest or let a sibling play on this browser? Click below
+                  to generate a new embedded burner wallet.
                 </p>
                 <div className="warning-box">
-                  ⚠️ Make sure you have copied your current account's 12-word phrase or downloaded the backup file first, or your current stats and tokens will be inaccessible on this device!
+                  ⚠️ Make sure you have copied your current account's 12-word phrase or downloaded
+                  the backup file first, or your current stats and tokens will be inaccessible on
+                  this device!
                 </div>
                 <button type="button" className="btn-create-new-wallet" onClick={handleCreateNew}>
                   ✨ Create Fresh Account

@@ -48,7 +48,7 @@ test('tick detects bullet hit on player and reduces HP', () => {
   const tickRes = cb.tick(g, 40);
   assert.equal(g.pState.O.hp, 80); // Took 20 damage
   assert.equal(g.bullets.length, 0); // Bullet consumed
-  const hitEvent = tickRes.events.find(e => e.type === 'player_hit');
+  const hitEvent = tickRes.events.find((e) => e.type === 'player_hit');
   assert.ok(hitEvent);
   assert.equal(hitEvent.targetSeat, 'O');
 });

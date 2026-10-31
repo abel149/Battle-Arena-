@@ -53,7 +53,10 @@ async function ensureContract() {
   if (!signerKey) return null;
 
   const signer = new Wallet(signerKey, provider);
-  const artifactPath = path.join(__dirname, 'artifacts/contracts/ProofOfChore.sol/ProofOfChore.json');
+  const artifactPath = path.join(
+    __dirname,
+    'artifacts/contracts/ProofOfChore.sol/ProofOfChore.json'
+  );
   if (!fs.existsSync(artifactPath)) return null;
 
   const { abi } = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
@@ -120,7 +123,7 @@ export async function recordChoreVerification({
   allowanceGranted = 5,
 }) {
   const timestamp = Date.now();
-  const c = await ensureContract().catch(err => {
+  const c = await ensureContract().catch((err) => {
     console.warn('ProofOfChore onchain init failed, using simulated ledger:', err.message);
     return null;
   });
@@ -189,7 +192,7 @@ export async function recordChoreVerification({
 export function getChoreLedger(kidAddress = null) {
   const entries = readLedger();
   if (!kidAddress) return entries;
-  return entries.filter(e => e.kidAddress.toLowerCase() === kidAddress.toLowerCase());
+  return entries.filter((e) => e.kidAddress.toLowerCase() === kidAddress.toLowerCase());
 }
 
 /**

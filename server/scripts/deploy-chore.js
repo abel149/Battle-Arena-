@@ -26,10 +26,18 @@ async function main() {
   const chainId = Number(network.chainId);
   const isLocalChain = chainId === 31337;
 
-  const privateKey = process.env.PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+  const privateKey =
+    process.env.PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
   const signer = new ethers.Wallet(privateKey, provider);
 
-  const artifactPath = path.join(__dirname, '..', 'artifacts', 'contracts', 'ProofOfChore.sol', 'ProofOfChore.json');
+  const artifactPath = path.join(
+    __dirname,
+    '..',
+    'artifacts',
+    'contracts',
+    'ProofOfChore.sol',
+    'ProofOfChore.json'
+  );
   const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
 
   const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, signer);
@@ -53,7 +61,7 @@ async function main() {
   console.log(`Saved deployment info to ${outFile}`);
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error(err);
   process.exit(1);
 });

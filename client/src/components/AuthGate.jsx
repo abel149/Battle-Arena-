@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { signAndIdentify } from '../socket.js';
 import { getOrCreateWallet, saveWallet, short } from '../lib/session.js';
 import AuthModal from './AuthModal.jsx';
+import './auth-modal.css';
 import '../pages/hub.css';
 
 // Full-screen sign-in shown before the hub and the games. Nothing else in the
@@ -9,6 +10,7 @@ import '../pages/hub.css';
 export default function AuthGate({ status }) {
   const [wallet, setWallet] = useState(getOrCreateWallet);
   const [walletError, setWalletError] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   // Optional: register with a MetaMask address as the blockchain profile ID
   // instead of the auto-generated one.
@@ -27,28 +29,123 @@ export default function AuthGate({ status }) {
     }
   }
 
+  function copyAddress() {
+    if (!wallet?.address) return;
+    navigator.clipboard.writeText(wallet.address);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   const walletBox = (
     <div className="auth-wallet">
-      <span>
-        Profile ID <b title={wallet.address}>{short(wallet.address)}</b>
-        {wallet.source === 'metamask' ? ' (MetaMask)' : ''}
-      </span>
+      <div className="auth-wallet-header">
+        <span className="auth-wallet-title">
+          <span>⚡</span> Web3 Profile ID (Dual-Vault)
+        </span>
+        <span className="auth-wallet-tag">Gasless Account</span>
+      </div>
+
+      <div className="auth-wallet-addr">
+        <span title={wallet.address}>{short(wallet.address)}</span>
+        <button
+          type="button"
+          className="auth-copy-btn"
+          onClick={copyAddress}
+          title="Copy full blockchain address"
+        >
+          {copied ? '✓ Copied!' : '📋 Copy'}
+        </button>
+      </div>
+
       {wallet.source !== 'metamask' && (
-        <button type="button" onClick={useMetaMask}>Use my MetaMask wallet</button>
+        <button type="button" className="auth-metamask-btn" onClick={useMetaMask}>
+          <span>🦊</span> Connect MetaMask Wallet
+        </button>
       )}
-      {walletError && <em>{walletError}</em>}
+
+      {walletError && <em>⚠️ {walletError}</em>}
     </div>
   );
 
   return (
     <div className="hub auth-gate">
       <div className="hub-glow" aria-hidden="true" />
+
       {status === 'offline' && (
-        <div className="hub-alert">
-          Cannot reach the arena server. Start it with "cd server &amp;&amp; npm start" — this page reconnects automatically.
+        <div className="hub-alert" style={{ marginBottom: '24px', zIndex: 10 }}>
+          ⚠️ Cannot reach the arena server. Start it with "cd server &amp;&amp; npm start" — this page
+          reconnects automatically.
         </div>
       )}
-      <AuthModal gate extra={walletBox} />
+
+      <div className="auth-gate-layout">
+        {/* Left Side: Game & Platform Showcase */}
+        <section className="auth-hero">
+          <div className="auth-badge-row">
+            <span className="auth-hackathon-badge">🏆 Swafri Hackathon 2026</span>
+            <span className="auth-status-pill">
+              <span className="auth-status-dot" />
+              {status === 'offline' ? 'Connecting to Arena…' : 'Arena Live & Ready'}
+            </span>
+          </div>
+
+          <h2 className="auth-hero-title">
+            Where Learning Fuels the <span className="highlight">Battle Arena</span>
+          </h2>
+
+          <p className="auth-hero-desc">
+            The family-first Web3 esports arena where kids earn game Energy by doing real-world chores
+            and homework, competing in live tactical duels with on-chain cryptographic receipts.
+          </p>
+
+          <div className="auth-hero-features">
+            <div className="auth-feature-card">
+              <div className="auth-feature-icon">⚡</div>
+              <div className="auth-feature-text">
+                <h4>Proof-of-Chore</h4>
+                <p>Non-purchasable Energy earned through parent-verified household tasks.</p>
+              </div>
+            </div>
+
+            <div className="auth-feature-card">
+              <div className="auth-feature-icon">🎮</div>
+              <div className="auth-feature-text">
+                <h4>4 Live Duels</h4>
+                <p>Neon Math Arena, Connect Four, Memory Match, and Cyber Blaster.</p>
+              </div>
+            </div>
+
+            <div className="auth-feature-card">
+              <div className="auth-feature-icon">🛡️</div>
+              <div className="auth-feature-text">
+                <h4>Zero-Gas Web3</h4>
+                <p>Instant dual-vault burner wallet with automatic client-side recovery.</p>
+              </div>
+            </div>
+
+            <div className="auth-feature-card">
+              <div className="auth-feature-icon">📜</div>
+              <div className="auth-feature-text">
+                <h4>Verifiable Receipts</h4>
+                <p>Immutable SHA-256 result hashes and winner proofs committed on-chain.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="auth-game-strip">
+            <span className="auth-game-strip-label">Arena Duels:</span>
+            <span className="auth-game-pill">🧠 Math Arena</span>
+            <span className="auth-game-pill">🔴 Connect Four</span>
+            <span className="auth-game-pill">🎴 Memory Match</span>
+            <span className="auth-game-pill">🚀 Cyber Blaster</span>
+          </div>
+        </section>
+
+        {/* Right Side: Auth Form Card */}
+        <section className="auth-form-column">
+          <AuthModal gate extra={walletBox} />
+        </section>
+      </div>
     </div>
   );
 }

@@ -11,7 +11,11 @@ const store = await import('../store.js');
 
 after(() => {
   for (const suffix of ['', '-wal', '-shm']) {
-    try { fs.rmSync(tmpDb + suffix, { force: true }); } catch { /* ignore */ }
+    try {
+      fs.rmSync(tmpDb + suffix, { force: true });
+    } catch {
+      /* ignore */
+    }
   }
 });
 
@@ -48,7 +52,7 @@ test('Active match persistence survives server restart and rehydration', () => {
 
   // 2. Simulate server restart: query database directly as if cold-booting
   const activeRooms = store.listActiveRooms();
-  const restored = activeRooms.find(r => r.roomId === matchId);
+  const restored = activeRooms.find((r) => r.roomId === matchId);
 
   assert.ok(restored, 'Active room was rehydrated from SQLite');
   assert.equal(restored.roomId, matchId);

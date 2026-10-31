@@ -4,7 +4,7 @@ import './match-chat.css';
 
 const PRESETS = ['Good luck!', 'Nice one!', 'Well played!', 'Thanks!', 'Rematch?', 'Oops!'];
 const COOLDOWN_MS = 1500; // the server has no rate limit, so slow spamming down here
-const KEEP = 4;           // how many recent messages stay on screen
+const KEEP = 4; // how many recent messages stay on screen
 
 export default function MatchChat({ roomId, myAddress }) {
   const [messages, setMessages] = useState([]);
@@ -14,7 +14,7 @@ export default function MatchChat({ roomId, myAddress }) {
   useEffect(() => {
     setMessages([]);
     // The server sends chat to everyone in the room, including the sender.
-    const onMessage = msg => setMessages(list => [...list.slice(-(KEEP - 1)), msg]);
+    const onMessage = (msg) => setMessages((list) => [...list.slice(-(KEEP - 1)), msg]);
     socket.on('chat:message', onMessage);
     return () => socket.off('chat:message', onMessage);
   }, [roomId]);
@@ -45,7 +45,7 @@ export default function MatchChat({ roomId, myAddress }) {
         )}
       </div>
       <div className="match-chat-presets">
-        {PRESETS.map(p => (
+        {PRESETS.map((p) => (
           <button key={p} type="button" disabled={cooling} onClick={() => send(p)}>
             {p}
           </button>

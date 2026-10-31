@@ -28,7 +28,7 @@ export const OBSTACLES = [
   { x: 570, y: 140, w: 50, h: 100 },
   { x: 180, y: 360, w: 50, h: 100 },
   { x: 570, y: 360, w: 50, h: 100 },
-  { x: 375, y: 260, w: 50, h: 80 },  // Central cyber pillar
+  { x: 375, y: 260, w: 50, h: 80 }, // Central cyber pillar
 ];
 
 const POWERUP_TYPES = ['shield', 'overcharge', 'speed', 'heal'];
@@ -148,12 +148,32 @@ export function createGame(addrX, addrO, opts = {}) {
     winner: null,
     pState: {
       X: {
-        x: 100, y: 300, vx: 0, vy: 0, angle: 0, hp: 100, maxHp: 100,
-        shield: 0, speedBoostUntil: 0, overchargeUntil: 0, lastShot: 0, lastDash: 0,
+        x: 100,
+        y: 300,
+        vx: 0,
+        vy: 0,
+        angle: 0,
+        hp: 100,
+        maxHp: 100,
+        shield: 0,
+        speedBoostUntil: 0,
+        overchargeUntil: 0,
+        lastShot: 0,
+        lastDash: 0,
       },
       O: {
-        x: 700, y: 300, vx: 0, vy: 0, angle: Math.PI, hp: 100, maxHp: 100,
-        shield: 0, speedBoostUntil: 0, overchargeUntil: 0, lastShot: 0, lastDash: 0,
+        x: 700,
+        y: 300,
+        vx: 0,
+        vy: 0,
+        angle: Math.PI,
+        hp: 100,
+        maxHp: 100,
+        shield: 0,
+        speedBoostUntil: 0,
+        overchargeUntil: 0,
+        lastShot: 0,
+        lastDash: 0,
       },
     },
     bullets: [],
@@ -196,8 +216,8 @@ export function applyMove(game, address, move) {
     const rawVy = Number(move.vy) || 0;
     const len = Math.hypot(rawVx, rawVy);
     if (len > 0) {
-      p.vx = (rawVx / len);
-      p.vy = (rawVy / len);
+      p.vx = rawVx / len;
+      p.vy = rawVy / len;
     } else {
       p.vx = 0;
       p.vy = 0;
@@ -211,8 +231,16 @@ export function applyMove(game, address, move) {
     if (move.dash && now - p.lastDash >= DASH_COOLDOWN_MS) {
       p.lastDash = now;
       const dashAngle = len > 0 ? Math.atan2(p.vy, p.vx) : p.angle;
-      const targetX = clamp(p.x + Math.cos(dashAngle) * DASH_DISTANCE, PLAYER_RADIUS, ARENA_WIDTH - PLAYER_RADIUS);
-      const targetY = clamp(p.y + Math.sin(dashAngle) * DASH_DISTANCE, PLAYER_RADIUS, ARENA_HEIGHT - PLAYER_RADIUS);
+      const targetX = clamp(
+        p.x + Math.cos(dashAngle) * DASH_DISTANCE,
+        PLAYER_RADIUS,
+        ARENA_WIDTH - PLAYER_RADIUS
+      );
+      const targetY = clamp(
+        p.y + Math.sin(dashAngle) * DASH_DISTANCE,
+        PLAYER_RADIUS,
+        ARENA_HEIGHT - PLAYER_RADIUS
+      );
       if (!collidesWithObstacles(targetX, targetY, PLAYER_RADIUS)) {
         p.x = targetX;
         p.y = targetY;
@@ -252,8 +280,16 @@ export function applyMove(game, address, move) {
   if (move?.type === 'dash') {
     if (now - p.lastDash >= DASH_COOLDOWN_MS) {
       p.lastDash = now;
-      const targetX = clamp(p.x + Math.cos(p.angle) * DASH_DISTANCE, PLAYER_RADIUS, ARENA_WIDTH - PLAYER_RADIUS);
-      const targetY = clamp(p.y + Math.sin(p.angle) * DASH_DISTANCE, PLAYER_RADIUS, ARENA_HEIGHT - PLAYER_RADIUS);
+      const targetX = clamp(
+        p.x + Math.cos(p.angle) * DASH_DISTANCE,
+        PLAYER_RADIUS,
+        ARENA_WIDTH - PLAYER_RADIUS
+      );
+      const targetY = clamp(
+        p.y + Math.sin(p.angle) * DASH_DISTANCE,
+        PLAYER_RADIUS,
+        ARENA_HEIGHT - PLAYER_RADIUS
+      );
       if (!collidesWithObstacles(targetX, targetY, PLAYER_RADIUS)) {
         p.x = targetX;
         p.y = targetY;
@@ -322,7 +358,13 @@ export function tick(game, dtMs = 40) {
         else if (pow.type === 'speed') p.speedBoostUntil = now + 8000;
         else if (pow.type === 'heal') p.hp = Math.min(p.maxHp, p.hp + 25);
 
-        tickEvents.push({ type: 'powerup_collect', seat, powerupType: pow.type, x: pow.x, y: pow.y });
+        tickEvents.push({
+          type: 'powerup_collect',
+          seat,
+          powerupType: pow.type,
+          x: pow.x,
+          y: pow.y,
+        });
         game.powerups.splice(i, 1);
         break;
       }
@@ -547,7 +589,7 @@ export function serialize(game) {
         overcharged: Date.now() < game.pState.O.overchargeUntil,
       },
     },
-    bullets: game.bullets.map(b => ({
+    bullets: game.bullets.map((b) => ({
       id: b.id,
       seat: b.seat,
       x: Math.round(b.x),
@@ -592,7 +634,7 @@ export function serializeTick(game) {
         overcharged: Date.now() < game.pState.O.overchargeUntil,
       },
     },
-    bullets: game.bullets.map(b => ({
+    bullets: game.bullets.map((b) => ({
       id: b.id,
       seat: b.seat,
       x: Math.round(b.x),

@@ -1,73 +1,55 @@
-import crypto from 'crypto';
-import fs from 'fs';
-import net from 'net';
-import { Server } from 'socket.io';
 import { io } from 'socket.io-client';
 
 const SERVER_URL = process.env.SERVER_URL || 'http://localhost:3000';
 
-const pk = process.env.WALLET_PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+const pk =
+  process.env.WALLET_PRIVATE_KEY ||
+  '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 const walletAddress = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
 
 const issuedAt = Date.now();
 const MATCH_MESSAGE = `Battle Arena login for ${walletAddress}\nIssued: ${issuedAt}`;
 
+let socket;
+let matchId;
+
 function actOn(game) {
-  if (game?.winner) return;
-  const available = game.cards
+  if (!game || game.winner) return;
+  const myTurn = game.players?.[game.turn]?.toLowerCase() === walletAddress.toLowerCase();
+  if (!myTurn || game.locked) return;
+  const available = (game.cards || [])
     .map((card, i) => (!card.matched && !card.flipped ? i : null))
     .filter((i) => i !== null);
   if (!available.length) return;
-  const idx = available[Math.floor(Math.random() * available.length)];
-  socket.emit('game:move', { roomId: matchId, index: idx });
-}
-
-async function startServer() {
-  const resultAddr = process.env.MATCH_RESULT_ADDRESS;
-  const tokenAddr = process.env.ARENA_TOKEN_ADDRESS;
-  const badgesAddr = process.env.ARENA_BADGES_ADDRESS;
-  const matchResultChainId = process.env.MATCH_RESULT_CHAIN_ID;
-  const arenaChainId = process.env.ARENA_CHAIN_ID;
-  const dbPath = process.env.ARENA_DB_PATH;
-  const port = 3000;
-
-  const server = new Server(port, { cors: { origin: '*' } });
-  // use the in-memory onchain chain
-  const chain = await import('../chain-onchain.js');
-  await import('../index.js');
-  // This would normally boot the express+io server; for CI we just verify via
-  // the e2e shell that already started it. This file only performs the steps.
-}
-
-async function once(child, event) {
-  return new Promise((resolve) => {
-    child.once(event, resolve);
-  });
+  const idx = available[0];
+  setTimeout(() => socket.emit('game:move', { roomId: matchId, index: idx }), 80);
 }
 
 async function main() {
   console.log('[ci:e2e] connecting socket...');
-  const socket = io(SERVER_URL, { autoConnect: true });
+  socket = io(SERVER_URL, { autoConnect: true });
   socket.on('connect', async () => {
     console.log(`[ci:e2e] connected as ${socket.id}`);
     // Identify with a real signed message
     const sig = await signMessage(pk, MATCH_MESSAGE);
-    socket.emit('identify', { address: walletAddress, name: 'CI Runner', signature: sig, issuedAt });
+    socket.emit('identify', {
+      address: walletAddress,
+      name: 'CI Runner',
+      signature: sig,
+      issuedAt,
+    });
   });
 
-  socket.on('registered', async () => {
+  socket.on('player:registered', async () => {
     console.log('[ci:e2e] registered');
     // create a bot match
     socket.emit('match:bot', { gameType: 'memory' });
   });
 
-  socket.on('match:created', (room) => {
-    console.log(`[ci:e2e] match created room ${room}`);
-    matchId = room;
-  });
-
-  socket.on('match:bot-join', () => {
-    console.log('[ci:e2e] bot joined');
+  socket.on('match:start', (d) => {
+    console.log(`[ci:e2e] match created room ${d.roomId}`);
+    matchId = d.roomId;
+    actOn(d.game);
   });
 
   socket.on('game:state', (payload) => {
@@ -122,7 +104,6 @@ async function signMessage(privateKeyHex, message) {
   return wallet.signMessage(message);
 }
 
-let matchId;
 main().catch((e) => {
   console.error('[ci:e2e] error:', e);
   process.exit(1);

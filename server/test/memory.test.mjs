@@ -12,11 +12,11 @@ function playMatch(deck = 'flags', pairs = 4) {
     const addr = g.players[g.turn];
     const open = g.cards
       .map((c, i) => (!c.matched && !g.flipped.includes(i) ? i : null))
-      .filter(v => v !== null);
+      .filter((v) => v !== null);
     if (!open.length) break;
     // Try to complete a known pair; otherwise reveal the first unknown card.
-    let pick = open.find(i => known.has(g.cards[i].pairId) && known.get(g.cards[i].pairId) !== i);
-    if (pick === undefined) pick = open.find(i => !known.has(g.cards[i].pairId)) ?? open[0];
+    let pick = open.find((i) => known.has(g.cards[i].pairId) && known.get(g.cards[i].pairId) !== i);
+    if (pick === undefined) pick = open.find((i) => !known.has(g.cards[i].pairId)) ?? open[0];
     const res = memory.applyMove(g, addr, { index: pick });
     if (res.error) break;
     if (g.flipped.length === 1 && !known.has(g.cards[pick].pairId)) {
@@ -31,9 +31,9 @@ function playMatch(deck = 'flags', pairs = 4) {
 test('createGame builds a shuffled 2n-card board from a deck', () => {
   const g = memory.createGame('0xA', '0xB', { deck: 'flags', pairs: 4 });
   assert.equal(g.cards.length, 8);
-  const pairIds = g.cards.map(c => c.pairId);
+  const pairIds = g.cards.map((c) => c.pairId);
   for (let id = 0; id < 4; id++) {
-    assert.equal(pairIds.filter(p => p === id).length, 2);
+    assert.equal(pairIds.filter((p) => p === id).length, 2);
   }
   assert.equal(g.turn, 'X');
   assert.equal(g.winner, null);
@@ -43,7 +43,9 @@ test('matching a pair scores and keeps the turn', () => {
   const g = memory.createGame('0xA', '0xB', { deck: 'flags', pairs: 4 });
   // Find an actual matching pair of indices by pairId.
   const ids = {};
-  g.cards.forEach((c, i) => { (ids[c.pairId] ??= []).push(i); });
+  g.cards.forEach((c, i) => {
+    (ids[c.pairId] ??= []).push(i);
+  });
   const pairId = Object.keys(ids)[0];
   const [i, j] = ids[pairId];
   const seat = g.players.X;
@@ -60,7 +62,9 @@ test('matching a pair scores and keeps the turn', () => {
 test('a mismatch passes the turn', () => {
   const g = memory.createGame('0xA', '0xB', { deck: 'flags', pairs: 4 });
   const ids = {};
-  g.cards.forEach((c, i) => { (ids[c.pairId] ??= []).push(i); });
+  g.cards.forEach((c, i) => {
+    (ids[c.pairId] ??= []).push(i);
+  });
   const pairIds = Object.keys(ids);
   const [i] = ids[pairIds[0]];
   const [j] = ids[pairIds[1]]; // different pairIds
@@ -84,11 +88,11 @@ test('full first-seat win: perfect play wins every pair for seat X', () => {
 
 test('rejects invalid flips: out of turn, foreign, after resolve lock', () => {
   const g = memory.createGame('0xA', '0xB', { deck: 'flags', pairs: 4 });
-  assert.ok(memory.applyMove(g, '0xB', { index: 0 }).error);        // not their turn
-  assert.ok(memory.applyMove(g, '0xEE', { index: 0 }).error);       // not a player
-  assert.ok(!memory.applyMove(g, '0xA', { index: 0 }).error);        // X flips card 0
-  g.resolving = true;                                               // simulate the reveal lock
-  assert.ok(memory.applyMove(g, '0xA', { index: 1 }).error);        // locked while resolving
+  assert.ok(memory.applyMove(g, '0xB', { index: 0 }).error); // not their turn
+  assert.ok(memory.applyMove(g, '0xEE', { index: 0 }).error); // not a player
+  assert.ok(!memory.applyMove(g, '0xA', { index: 0 }).error); // X flips card 0
+  g.resolving = true; // simulate the reveal lock
+  assert.ok(memory.applyMove(g, '0xA', { index: 1 }).error); // locked while resolving
   memory.resolve(g);
 });
 
@@ -111,7 +115,9 @@ test('botMove in hard mode recalls seen matching card on second flip', () => {
   const g = memory.createGame('0xA', '0xB', { deck: 'flags', pairs: 4, difficulty: 'hard' });
   // Find two cards with the same pairId
   const ids = {};
-  g.cards.forEach((c, i) => { (ids[c.pairId] ??= []).push(i); });
+  g.cards.forEach((c, i) => {
+    (ids[c.pairId] ??= []).push(i);
+  });
   const pairId = Object.keys(ids)[0];
   const [c1, c2] = ids[pairId];
 
@@ -130,4 +136,42 @@ test('botMove in hard mode recalls seen matching card on second flip', () => {
     if (mv.index === c2) recalled++;
   }
   assert.ok(recalled >= 32, `Expected high recall in hard mode, got ${recalled}/40`);
+});
+
+test('rejects flipping the same card twice on the same turn', () => {
+  const g = memory.createGame('0xA', '0xB', { deck: 'flags', pairs: 4 });
+  const first = memory.applyMove(g, '0xA', { index: 0 });
+  assert.ok(!first.error);
+  assert.deepEqual(g.flipped, [0]);
+
+  // Flipping index 0 again must be rejected
+  const second = memory.applyMove(g, '0xA', { index: 0 });
+  assert.equal(second.error, 'Invalid card');
+  assert.deepEqual(g.flipped, [0]);
+});
+
+test('detects a draw when both players finish with equal pairs', () => {
+  const g = memory.createGame('0xA', '0xB', { deck: 'flags', pairs: 2 });
+  // Total 2 pairs (4 cards). Give 1 pair to X, 1 pair to O.
+  g.scores['0xA'] = 1;
+  g.scores['0xB'] = 0;
+  g.turn = 'O';
+
+  // Find the remaining pair that is not yet matched
+  const remaining = g.cards.map((c, i) => (c.pairId === 1 ? i : null)).filter((i) => i !== null);
+
+  // Mark pair 0 as already matched
+  g.cards.forEach((c) => {
+    if (c.pairId === 0) c.matched = true;
+  });
+
+  // O flips the second pair
+  memory.applyMove(g, '0xB', { index: remaining[0] });
+  const res = memory.applyMove(g, '0xB', { index: remaining[1] });
+  assert.ok(res.pendingMs > 0);
+  memory.resolve(g);
+
+  assert.equal(g.scores['0xA'], 1);
+  assert.equal(g.scores['0xB'], 1);
+  assert.equal(g.winner, 'draw');
 });

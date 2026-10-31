@@ -83,7 +83,9 @@ export default function ParentApprovalModal({ parentAddress, onClose, onChoreApp
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 
-      setSuccessMsg(`🎉 Approved! Granted ${chore.energyReward} Energy, ${chore.xpReward} XP${data.unlockedSkin ? ` and unlocked '${data.unlockedSkin.name}' skin!` : '!'}`);
+      setSuccessMsg(
+        `🎉 Approved! Granted ${chore.energyReward} Energy, ${chore.xpReward} XP${data.unlockedSkin ? ` and unlocked '${data.unlockedSkin.name}' skin!` : '!'}`
+      );
       if (onChoreApproved) onChoreApproved(data);
       loadPendingChores();
     } catch (err) {
@@ -121,21 +123,23 @@ export default function ParentApprovalModal({ parentAddress, onClose, onChoreApp
 
   return (
     <div className="skin-modal-overlay" onClick={onClose}>
-      <div className="skin-modal-dialog parent-dialog" onClick={e => e.stopPropagation()}>
+      <div className="skin-modal-dialog parent-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="skin-modal-header">
-          <div className="skin-modal-badge parent-badge">
-            🛡️ Parent Approval Portal
-          </div>
-          <button type="button" className="skin-modal-close" onClick={onClose}>×</button>
+          <div className="skin-modal-badge parent-badge">🛡️ Parent Approval Portal</div>
+          <button type="button" className="skin-modal-close" onClick={onClose}>
+            ×
+          </button>
         </div>
 
         {!authenticated ? (
           <div className="parent-pin-gate">
             <div className="parent-gate-icon">🔒</div>
             <h3>{setupMode ? 'Create Your Parent PIN' : 'Enter Parent PIN'}</h3>
-            <p>{setupMode
-              ? 'No Parent PIN is set yet. Choose a 4-6 digit PIN that only a parent knows.'
-              : 'Protected area for parents to approve chores and unlock arena skins.'}</p>
+            <p>
+              {setupMode
+                ? 'No Parent PIN is set yet. Choose a 4-6 digit PIN that only a parent knows.'
+                : 'Protected area for parents to approve chores and unlock arena skins.'}
+            </p>
             <form onSubmit={handlePinSubmit} className="parent-pin-form">
               <input
                 type="password"
@@ -145,7 +149,7 @@ export default function ParentApprovalModal({ parentAddress, onClose, onChoreApp
                 className="parent-pin-input"
                 placeholder={setupMode ? 'New PIN' : 'PIN'}
                 value={pin}
-                onChange={e => setPin(e.target.value)}
+                onChange={(e) => setPin(e.target.value)}
                 autoFocus
               />
               {pinError && <div className="pin-error-text">{pinError}</div>}
@@ -180,13 +184,17 @@ export default function ParentApprovalModal({ parentAddress, onClose, onChoreApp
                     maxLength={6}
                     placeholder="New 4-6 digit PIN"
                     value={newPin}
-                    onChange={e => setNewPin(e.target.value)}
+                    onChange={(e) => setNewPin(e.target.value)}
                     className="pin-change-input"
                   />
-                  <button type="submit" className="btn-save-pin">Save PIN</button>
+                  <button type="submit" className="btn-save-pin">
+                    Save PIN
+                  </button>
                 </div>
                 {pinChangeMsg?.error && <div className="pin-error-text">{pinChangeMsg.error}</div>}
-                {pinChangeMsg?.success && <div className="pin-success-text">{pinChangeMsg.success}</div>}
+                {pinChangeMsg?.success && (
+                  <div className="pin-success-text">{pinChangeMsg.success}</div>
+                )}
               </form>
             )}
 
@@ -198,11 +206,14 @@ export default function ParentApprovalModal({ parentAddress, onClose, onChoreApp
               <div className="parent-empty-state">
                 <div className="empty-icon">✨</div>
                 <h4>All Caught Up!</h4>
-                <p>No chores are waiting for parent review right now. Tell your kids to submit chore proofs from the Skin Locker or Battle Pass!</p>
+                <p>
+                  No chores are waiting for parent review right now. Tell your kids to submit chore
+                  proofs from the Skin Locker or Battle Pass!
+                </p>
               </div>
             ) : (
               <div className="pending-chores-list">
-                {chores.map(chore => (
+                {chores.map((chore) => (
                   <div key={chore.id} className="pending-chore-card">
                     <div className="chore-card-main">
                       <div className="chore-card-title">
@@ -217,8 +228,16 @@ export default function ParentApprovalModal({ parentAddress, onClose, onChoreApp
                         </div>
                       )}
                       <div className="chore-card-meta">
-                        <span>Submitted: {new Date(chore.submittedAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        <span>Rewards: +{chore.energyReward}⚡ Energy • +{chore.xpReward} XP</span>
+                        <span>
+                          Submitted:{' '}
+                          {new Date(chore.submittedAt || Date.now()).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                        <span>
+                          Rewards: +{chore.energyReward}⚡ Energy • +{chore.xpReward} XP
+                        </span>
                       </div>
                     </div>
                     <div className="chore-card-actions">

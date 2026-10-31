@@ -7,12 +7,12 @@ test('getSkins returns 6 skins with neon-striker unlocked by default', () => {
   store.upsertPlayer(kid, 'SkinKid');
   const skins = store.getSkins(kid);
   assert.equal(skins.length, 6);
-  const starter = skins.find(s => s.id === 'neon-striker');
+  const starter = skins.find((s) => s.id === 'neon-striker');
   assert.ok(starter);
   assert.equal(starter.unlocked, true);
   assert.equal(starter.equipped, true);
 
-  const phoenix = skins.find(s => s.id === 'crimson-phoenix');
+  const phoenix = skins.find((s) => s.id === 'crimson-phoenix');
   assert.ok(phoenix);
   assert.equal(phoenix.unlocked, false);
 });
@@ -38,7 +38,7 @@ test('parent chore verification auto-unlocks corresponding skin', () => {
   const parent = '0xParent' + Math.random().toString(36).slice(2, 8);
   store.upsertPlayer(kid, 'SkinKid3');
   const chores = store.getChores(kid);
-  const roomChore = chores.find(c => c.category === 'room');
+  const roomChore = chores.find((c) => c.category === 'room');
   assert.ok(roomChore);
 
   // Kid submits chore

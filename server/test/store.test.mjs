@@ -13,36 +13,43 @@ const tmpLegacy = path.join(os.tmpdir(), `arena-legacy-${process.pid}-${Date.now
 const legacyAddress = '0x' + 'e'.repeat(40);
 process.env.ARENA_DB_PATH = tmpDb;
 process.env.ARENA_LEGACY_DATA_PATH = tmpLegacy;
-fs.writeFileSync(tmpLegacy, JSON.stringify({
-  players: {
-    [legacyAddress]: {
-      address: legacyAddress,
-      name: 'Legacy Tester',
-      username: 'legacy_tester',
-      email: null,
-      password: await bcrypt.hash('legacy-pass-123', 4),
-      registered: true,
-      wins: 3,
-      losses: 1,
-      draws: 0,
-      matches: 4,
-      tokens: 30,
-      xp: 150,
-      level: 2,
-      streak: 1,
-      bestStreak: 2,
-      memoryWins: 0,
-      deckStats: {},
-      badges: [],
+fs.writeFileSync(
+  tmpLegacy,
+  JSON.stringify({
+    players: {
+      [legacyAddress]: {
+        address: legacyAddress,
+        name: 'Legacy Tester',
+        username: 'legacy_tester',
+        email: null,
+        password: await bcrypt.hash('legacy-pass-123', 4),
+        registered: true,
+        wins: 3,
+        losses: 1,
+        draws: 0,
+        matches: 4,
+        tokens: 30,
+        xp: 150,
+        level: 2,
+        streak: 1,
+        bestStreak: 2,
+        memoryWins: 0,
+        deckStats: {},
+        badges: [],
+      },
     },
-  },
-}));
+  })
+);
 
 const store = await import('../store.js');
 
 after(() => {
   for (const suffix of ['', '-wal', '-shm']) {
-    try { fs.rmSync(tmpDb + suffix, { force: true }); } catch { /* ignore */ }
+    try {
+      fs.rmSync(tmpDb + suffix, { force: true });
+    } catch {
+      /* ignore */
+    }
   }
   fs.rmSync(tmpLegacy, { force: true });
 });
@@ -54,7 +61,10 @@ test('upsertPlayer creates a profile; saveMatch + getReplay round-trips', () => 
   store.upsertPlayer(A, 'Alice');
   assert.equal(store.getPlayer(A).name, 'Alice');
 
-  const moves = [{ index: 0, symbol: 'X', address: A, t: 1 }, { index: 4, symbol: 'O', address: B, t: 2 }];
+  const moves = [
+    { index: 0, symbol: 'X', address: A, t: 1 },
+    { index: 4, symbol: 'O', address: B, t: 2 },
+  ];
   store.saveMatch({
     matchId: 'match_test1',
     gameType: 'math-arena',
@@ -85,7 +95,7 @@ test('applyResult awards tokens, xp, levels and increments weekly points', () =>
   assert.equal(p.level, Math.floor(p.xp / 100) + 1);
 
   const weekly = store.leaderboardWeekly();
-  const row = weekly.find(r => r.address === A);
+  const row = weekly.find((r) => r.address === A);
   assert.ok(row, 'A appears in weekly leaderboard');
   assert.equal(row.points, 10);
   assert.equal(row.wins, 1);
@@ -118,7 +128,10 @@ test('weekly leaderboard key rotation acts as the reset', () => {
 
 test('badges are awarded by stats and map to deterministic token ids', () => {
   const p = store.getPlayer(A);
-  assert.ok(p.badges.some(b => b.id === 'first_blood'), 'first win badge awarded');
+  assert.ok(
+    p.badges.some((b) => b.id === 'first_blood'),
+    'first win badge awarded'
+  );
   assert.equal(store.badgeNumericId('first_blood'), 1); // index 0 + 1
   assert.equal(store.badgeNumericId('hat_trick'), 2);
   assert.equal(store.badgeNumericId('memory_king'), 10);
@@ -130,7 +143,11 @@ test('badges are awarded by stats and map to deterministic token ids', () => {
 
 test('registration validates username, hashes password and logins verify it', async () => {
   const u = 'weekly_tester';
-  const reg = await store.registerPlayer('0x' + 'c'.repeat(40), { username: u, password: 'supersecret9', name: 'Weekly' });
+  const reg = await store.registerPlayer('0x' + 'c'.repeat(40), {
+    username: u,
+    password: 'supersecret9',
+    name: 'Weekly',
+  });
   assert.ok(!reg.error, reg.error || '');
   assert.ok(reg.password, 'store keeps the hash internally for auth');
   assert.ok(reg.password.startsWith('$2'), 'hash is bcrypt');
@@ -142,7 +159,10 @@ test('registration validates username, hashes password and logins verify it', as
   const bad = await store.loginPlayerByCredentials({ username: u, password: 'wrongpass1' });
   assert.equal(bad.error, 'Incorrect password');
 
-  const short = await store.registerPlayer('0x' + 'd'.repeat(40), { username: 'x', password: 'longenough1' });
+  const short = await store.registerPlayer('0x' + 'd'.repeat(40), {
+    username: 'x',
+    password: 'longenough1',
+  });
   assert.match(short.error, /3–20/);
 });
 
@@ -194,7 +214,7 @@ test('saveActiveRoom, getActiveRoom, listActiveRooms, removeActiveRoom survive p
   assert.equal(fetched.spectators[0], 'socket_spectator_1');
 
   const list = store.listActiveRooms();
-  assert.ok(list.some(r => r.roomId === roomId));
+  assert.ok(list.some((r) => r.roomId === roomId));
 
   store.removeActiveRoom(roomId);
   assert.equal(store.getActiveRoom(roomId), null);

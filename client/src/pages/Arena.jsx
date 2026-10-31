@@ -20,7 +20,7 @@ const TILES = [
 const seatOf = (game, address) =>
   !game ? null : game.players.X === address ? 'X' : game.players.O === address ? 'O' : null;
 
-const otherSeat = seat => (seat === 'X' ? 'O' : 'X');
+const otherSeat = (seat) => (seat === 'X' ? 'O' : 'X');
 
 export default function Arena() {
   const route = useRoute();
@@ -34,17 +34,17 @@ export default function Arena() {
   const [difficulty, setDifficulty] = useState(initialDiff);
   const { wallet } = useProfile();
 
-  const [room, setRoom] = useState(null);          // { roomId, names, gameType }
+  const [room, setRoom] = useState(null); // { roomId, names, gameType }
   const [game, setGame] = useState(null);
   const [queued, setQueued] = useState(false);
-  const [roomCode, setRoomCode] = useState(null);  // private room code while waiting for a friend
+  const [roomCode, setRoomCode] = useState(null); // private room code while waiting for a friend
   const [error, setError] = useState(null);
   const [receipt, setReceipt] = useState(null);
   const [tile, setTile] = useState(2);
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS);
-  const [reveal, setReveal] = useState(null);      // previous round result
+  const [reveal, setReveal] = useState(null); // previous round result
   const [tileRects, setTileRects] = useState([]);
-  const [oppTile, setOppTile] = useState(3);      // where the rival last landed
+  const [oppTile, setOppTile] = useState(3); // where the rival last landed
 
   const sentRound = useRef(-1);
   const revealRound = useRef(-1);
@@ -55,9 +55,15 @@ export default function Arena() {
   const questionsByRound = useRef({});
   const wasRevealing = useRef(false);
 
-  useEffect(() => { tileRef.current = tile; }, [tile]);
-  useEffect(() => { gameRef.current = game; }, [game]);
-  useEffect(() => { roomRef.current = room; }, [room]);
+  useEffect(() => {
+    tileRef.current = tile;
+  }, [tile]);
+  useEffect(() => {
+    gameRef.current = game;
+  }, [game]);
+  useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
   useEffect(() => {
     if (game?.question) questionsByRound.current[game.round] = game.question;
   }, [game?.round, game?.question]);
@@ -66,7 +72,7 @@ export default function Arena() {
   const oppSeat = mySeat ? otherSeat(mySeat) : null;
   const myName = room?.names?.[wallet.address] || 'You';
   const oppAddr = oppSeat && game ? game.players[oppSeat] : null;
-  const oppName = oppAddr ? (room?.names?.[oppAddr] || short(oppAddr)) : 'Opponent';
+  const oppName = oppAddr ? room?.names?.[oppAddr] || short(oppAddr) : 'Opponent';
 
   /* ------------------------------ connection ------------------------------ */
   useEffect(() => {
@@ -92,7 +98,7 @@ export default function Arena() {
   }, [mode, watchRoom, inviteCode, joinCode]);
 
   useEffect(() => {
-    const onStart = data => {
+    const onStart = (data) => {
       // Set the ref first: state updates are async, and game:state can arrive
       // before the render that would refresh roomRef.
       const next = { roomId: data.roomId, names: data.names || {}, gameType: data.gameType };
@@ -110,17 +116,23 @@ export default function Arena() {
       questionsByRound.current = {};
     };
     // Ignore traffic from any other room still open on this socket.
-    const mine = roomId => !!roomId && roomId === roomRef.current?.roomId;
-    const onState = data => { if (mine(data.roomId)) setGame(data.game); };
-    const onEnd = data => {
+    const mine = (roomId) => !!roomId && roomId === roomRef.current?.roomId;
+    const onState = (data) => {
+      if (mine(data.roomId)) setGame(data.game);
+    };
+    const onEnd = (data) => {
       if (!mine(data.roomId)) return;
       setReceipt({ ...(data.receipt || {}), winner: data.winner, result: data.result });
     };
     const onWaiting = () => setQueued(true);
     const onRoomWaiting = ({ code }) => setRoomCode(code);
-    const onRoomExpired = () => { setRoomCode(null); setError('This room expired. Go back and create a new one.'); };
-    const onError = msg => setError(typeof msg === 'string' ? msg : msg?.error || 'Something went wrong');
-    const onMatchError = data => {
+    const onRoomExpired = () => {
+      setRoomCode(null);
+      setError('This room expired. Go back and create a new one.');
+    };
+    const onError = (msg) =>
+      setError(typeof msg === 'string' ? msg : msg?.error || 'Something went wrong');
+    const onMatchError = (data) => {
       setError(data?.error || 'Match error');
       setQueued(false);
     };
@@ -155,15 +167,21 @@ export default function Arena() {
   // or still running old code — say so instead of spinning forever.
   useEffect(() => {
     if (mode === 'match' || game || roomCode || error) return;
-    const id = setTimeout(() => setError(
-      'The arena server did not respond. Restart it ("npm start" in the server folder) so it runs the latest code.'
-    ), 6000);
+    const id = setTimeout(
+      () =>
+        setError(
+          'The arena server did not respond. Restart it ("npm start" in the server folder) so it runs the latest code.'
+        ),
+      6000
+    );
     return () => clearTimeout(id);
   }, [mode, game, roomCode, error]);
 
   useEffect(() => {
     document.title = 'Neon Math Arena — Battle Arena';
-    return () => { document.title = 'Battle Arena'; };
+    return () => {
+      document.title = 'Battle Arena';
+    };
   }, []);
 
   /* -------------------------- layout measurements ------------------------- */
@@ -174,7 +192,7 @@ export default function Arena() {
 
     const measure = () => {
       const hostRect = host.getBoundingClientRect();
-      const rects = [...tilesEl.querySelectorAll('.tile')].map(el => {
+      const rects = [...tilesEl.querySelectorAll('.tile')].map((el) => {
         const r = el.getBoundingClientRect();
         return {
           x: r.left - hostRect.left + r.width / 2,
@@ -207,7 +225,10 @@ export default function Arena() {
 
   // When the round result closes, both players return to their start tiles.
   useEffect(() => {
-    if (reveal) { wasRevealing.current = true; return; }
+    if (reveal) {
+      wasRevealing.current = true;
+      return;
+    }
     if (!wasRevealing.current) return;
     wasRevealing.current = false;
     setTile(2);
@@ -246,22 +267,27 @@ export default function Arena() {
 
   const locked = mode === 'watch' || !!(game && mySeat && game.answered?.[mySeat]);
 
-  const answer = useCallback(index => {
-    if (mode === 'watch') return;
-    const g = gameRef.current;
-    const r = roomRef.current;
-    const seat = seatOf(g, wallet.address);
-    if (!g || !r || !seat || g.winner || g.answered?.[seat]) return;
-    if (sentRound.current === g.round) return;
-    sentRound.current = g.round;
-    socket.emit('game:move', { roomId: r.roomId, index });
-  }, [wallet.address]);
+  const answer = useCallback(
+    (index) => {
+      if (mode === 'watch') return;
+      const g = gameRef.current;
+      const r = roomRef.current;
+      const seat = seatOf(g, wallet.address);
+      if (!g || !r || !seat || g.winner || g.answered?.[seat]) return;
+      if (sentRound.current === g.round) return;
+      sentRound.current = g.round;
+      socket.emit('game:move', { roomId: r.roomId, index });
+    },
+    [wallet.address]
+  );
 
   // Countdown. When it reaches zero, the tile you stand on is locked in.
   // The clock lives in the interval itself, so a new round can never inherit a
   // leftover "0" and submit an instant timeout.
   const answerRef = useRef(answer);
-  useEffect(() => { answerRef.current = answer; }, [answer]);
+  useEffect(() => {
+    answerRef.current = answer;
+  }, [answer]);
 
   useEffect(() => {
     if (!hasQuestion || game.winner || reveal) return;
@@ -280,7 +306,7 @@ export default function Arena() {
 
   function movePlayer(dir) {
     if (locked || !game?.question || game.winner || reveal) return;
-    setTile(current => {
+    setTile((current) => {
       const row = Math.floor(current / 2);
       const col = current % 2;
       let next = current;
@@ -303,10 +329,14 @@ export default function Arena() {
       if (!game?.question || game.winner) return;
       const key = event.key.toLowerCase();
       const dirs = {
-        w: 'up', arrowup: 'up',
-        s: 'down', arrowdown: 'down',
-        a: 'left', arrowleft: 'left',
-        d: 'right', arrowright: 'right',
+        w: 'up',
+        arrowup: 'up',
+        s: 'down',
+        arrowdown: 'down',
+        a: 'left',
+        arrowleft: 'left',
+        d: 'right',
+        arrowright: 'right',
       };
       if (dirs[key]) {
         event.preventDefault();
@@ -416,8 +446,14 @@ export default function Arena() {
           >
             ✕ Quit match
           </button>
-          <div className="stage-banner left"><TrophyIcon /><span /></div>
-          <div className="stage-banner right"><TrophyIcon /><span /></div>
+          <div className="stage-banner left">
+            <TrophyIcon />
+            <span />
+          </div>
+          <div className="stage-banner right">
+            <TrophyIcon />
+            <span />
+          </div>
           <div className="brazier left" />
           <div className="brazier right" />
 
@@ -428,19 +464,26 @@ export default function Arena() {
                   {TILES.map((t, i) => {
                     const isPick = tile === i;
                     const isCorrect = reveal ? i === reveal.correct : false;
-                    const isMyMiss = reveal ? i === reveal.picks?.[mySeat] && i !== reveal.correct : false;
+                    const isMyMiss = reveal
+                      ? i === reveal.picks?.[mySeat] && i !== reveal.correct
+                      : false;
                     return (
                       <button
                         key={t.key}
                         type="button"
                         className={[
-                          'tile', t.cls,
+                          'tile',
+                          t.cls,
                           isPick && !locked ? 'selected' : '',
                           locked && isPick ? 'committed' : '',
                           isCorrect ? 'is-correct' : '',
                           isMyMiss ? 'is-miss' : '',
-                        ].filter(Boolean).join(' ')}
-                        onClick={() => { if (!locked && !reveal) setTile(i); }}
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        onClick={() => {
+                          if (!locked && !reveal) setTile(i);
+                        }}
                         aria-label={`Tile ${t.key}${shownQ ? `, answer ${shownQ.options[i]}` : ''}`}
                       >
                         <span className="tile-letter">{t.key}</span>
@@ -452,7 +495,6 @@ export default function Arena() {
               </div>
             </div>
 
-            
             <div className="actor-layer">
               <div className="actor p1" style={actorStyle(tile, 'p1')}>
                 <div className="actor-tag p1">P1</div>
@@ -470,7 +512,11 @@ export default function Arena() {
           <div className="stage-hint">
             <span className={`hint-pill ${locked ? 'on' : ''}`}>
               {game?.winner
-                ? (game.winner === mySeat ? '🏆 Victory!' : game.winner === 'draw' ? '🤝 Match Drawn' : '⚔️ Defeat')
+                ? game.winner === mySeat
+                  ? '🏆 Victory!'
+                  : game.winner === 'draw'
+                    ? '🤝 Match Drawn'
+                    : '⚔️ Defeat'
                 : locked
                   ? 'Answer locked — waiting for your rival'
                   : 'Move with WASD, then lock in the tile you stand on'}
@@ -567,21 +613,33 @@ const WAITING_COPY = {
   watch: ['Spectator Mode', 'Connecting to the live arena match…'],
   create: ['Room ready', 'Share this code with a friend — the match starts as soon as they join.'],
   join: ['Joining room', 'Connecting you to your friend’s room…'],
-  match: ['Finding an opponent', 'Waiting for another player to join Neon Math Arena. Send your invite link to duel directly:'],
+  match: [
+    'Finding an opponent',
+    'Waiting for another player to join Neon Math Arena. Send your invite link to duel directly:',
+  ],
 };
 
 function Waiting({ mode, code, error, onCancel, inviteCode, onSwitchToBot }) {
   const [copied, setCopied] = useState(false);
-  const shareCode = code || inviteCode || (typeof window !== 'undefined' ? (window.arenaInviteCode ??= Math.random().toString(36).slice(2, 6).toUpperCase()) : 'MATH');
-  const inviteUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}${window.location.pathname}#arena?mode=match&invite=${shareCode}`
-    : '';
+  const shareCode =
+    code ||
+    inviteCode ||
+    (typeof window !== 'undefined'
+      ? (window.arenaInviteCode ??= Math.random().toString(36).slice(2, 6).toUpperCase())
+      : 'MATH');
+  const inviteUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}${window.location.pathname}#arena?mode=match&invite=${shareCode}`
+      : '';
 
   function copyInvite() {
-    navigator.clipboard?.writeText(inviteUrl).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    }).catch(() => {});
+    navigator.clipboard
+      ?.writeText(inviteUrl)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+      })
+      .catch(() => {});
   }
 
   const [title, text] = WAITING_COPY[mode] || WAITING_COPY.match;
@@ -606,7 +664,9 @@ function Waiting({ mode, code, error, onCancel, inviteCode, onSwitchToBot }) {
               🤖 Play vs Bot
             </button>
           )}
-          <button type="button" className="lock-btn" onClick={onCancel}>{error ? 'Back to hub' : 'Cancel'}</button>
+          <button type="button" className="lock-btn" onClick={onCancel}>
+            {error ? 'Back to hub' : 'Cancel'}
+          </button>
         </div>
       </div>
     </div>
@@ -623,7 +683,9 @@ function PlayerCard({ side, name, score, lives, maxLives, you, difficulty }) {
         <div className="p-name">
           {name}
           {you && <span className="you-tag">YOU</span>}
-          {difficulty && <span className={`diff-tag diff-${difficulty}`}>{difficulty.toUpperCase()}</span>}
+          {difficulty && (
+            <span className={`diff-tag diff-${difficulty}`}>{difficulty.toUpperCase()}</span>
+          )}
         </div>
         <div className="p-score">
           <span className="star">★</span> {score}
@@ -669,11 +731,22 @@ function RoundResult({ result, question, mySeat, myName, oppName }) {
         <h2 className="round-title">{mineOk ? 'Correct!' : 'Not quite!'}</h2>
         <div className="round-players">
           <div className={`res-pill p1 ${mineOk ? 'good' : 'bad'}`}>
-            <span className="res-name">{myName}{question && mine !== null ? ` · chose ${question.options[mine]}` : ''}</span>
-            <span className="res-value">{mineOk ? '+20 Points' : mine === null ? 'No answer' : '−1 Life'}</span>
+            <span className="res-name">
+              {myName}
+              {question && mine !== null ? ` · chose ${question.options[mine]}` : ''}
+            </span>
+            <span className="res-value">
+              {mineOk ? '+20 Points' : mine === null ? 'No answer' : '−1 Life'}
+            </span>
           </div>
           <div className={`res-pill p2 ${theirsOk ? 'good' : 'bad'}`}>
-            <span className="res-name">{oppName}{question && theirs !== null ? ` · chose ${question.options[theirs]}` : ''}</span>            <span className="res-value">{theirsOk ? '+20 Points' : theirs === null ? 'No answer' : '−1 Life'}</span>
+            <span className="res-name">
+              {oppName}
+              {question && theirs !== null ? ` · chose ${question.options[theirs]}` : ''}
+            </span>{' '}
+            <span className="res-value">
+              {theirsOk ? '+20 Points' : theirs === null ? 'No answer' : '−1 Life'}
+            </span>
           </div>
         </div>
         {question && (
@@ -685,7 +758,18 @@ function RoundResult({ result, question, mySeat, myName, oppName }) {
   );
 }
 
-function MatchResult({ game, mySeat, myName, oppName, receipt, onPlayAgain, canRematch, onLeave, difficulty, onSelectDifficulty }) {
+function MatchResult({
+  game,
+  mySeat,
+  myName,
+  oppName,
+  receipt,
+  onPlayAgain,
+  canRematch,
+  onLeave,
+  difficulty,
+  onSelectDifficulty,
+}) {
   const chain = useChainStatus();
   const [verifying, setVerifying] = useState(false);
   const chainBal = useChainBalance(game.players?.[mySeat], receipt ? 1 : 0);
@@ -708,7 +792,9 @@ function MatchResult({ game, mySeat, myName, oppName, receipt, onPlayAgain, canR
   return (
     <div className="match-overlay">
       <div className={`final-card ${iWon ? 'p1' : draw ? 'draw' : 'p2'}`}>
-        <div className="final-trophy"><TrophyIcon /></div>
+        <div className="final-trophy">
+          <TrophyIcon />
+        </div>
         <div className="final-eyebrow">{subtitle}</div>
         <h2>{draw ? 'It’s a draw!' : iWon ? `${myName} wins!` : `${oppName} wins!`}</h2>
         <div className="final-score">
@@ -730,27 +816,34 @@ function MatchResult({ game, mySeat, myName, oppName, receipt, onPlayAgain, canR
                   ? `⛓ Recorded on ${chain?.network || 'chain'}: ${short(receipt.txHash || receipt.matchId)}`
                   : `🧪 Simulated record: ${short(receipt.txHash || receipt.matchId)}`}
               {receipt.rewards && receipt.rewards[game.players?.[mySeat]]?.tokens ? (
-                <span className="reward-tag"> (+{receipt.rewards[game.players[mySeat]].tokens} ARENA)</span>
+                <span className="reward-tag">
+                  {' '}
+                  (+{receipt.rewards[game.players[mySeat]].tokens} ARENA)
+                </span>
               ) : null}
               <span> · Verify</span>
             </button>
             {chainBal?.onchain && (
-              <div className="receipt-balance">Wallet balance: {formatArena(chainBal.balance)} ARENA (on-chain)</div>
+              <div className="receipt-balance">
+                Wallet balance: {formatArena(chainBal.balance)} ARENA (on-chain)
+              </div>
             )}
             {verifying && (
-              <VerifyPanel matchId={receipt.matchId} status={chain} onClose={() => setVerifying(false)} />
+              <VerifyPanel
+                matchId={receipt.matchId}
+                status={chain}
+                onClose={() => setVerifying(false)}
+              />
             )}
           </>
         ) : (
-          <div className="receipt-link recording">
-            ⛓ Confirming on blockchain…
-          </div>
+          <div className="receipt-link recording">⛓ Confirming on blockchain…</div>
         )}
         {canRematch && onSelectDifficulty && (
           <div className="rematch-difficulty">
             <span className="diff-title">🤖 Bot Level:</span>
             <div className="diff-selector" role="radiogroup" aria-label="Bot Difficulty">
-              {['easy', 'medium', 'hard'].map(lvl => (
+              {['easy', 'medium', 'hard'].map((lvl) => (
                 <button
                   key={lvl}
                   type="button"
@@ -791,8 +884,20 @@ function Fighter({ side }) {
       <path d="M63 100 L66 129 L79 129 L73 101 Z" fill="#0b1426" />
       <ellipse cx="48" cy="130" rx="11" ry="5.5" fill={blue ? '#dbe9ff' : '#ffe0e6'} />
       <ellipse cx="72" cy="130" rx="11" ry="5.5" fill={blue ? '#c8dcf8' : '#ffccd6'} />
-      <path d="M35 70 Q24 78 28 96 L38 96 L44 78 Z" fill={jerseyDark} stroke="#0a1224" strokeWidth="3" strokeLinejoin="round" />
-      <path d="M85 70 Q96 78 92 96 L82 96 L76 78 Z" fill={jerseyDark} stroke="#0a1224" strokeWidth="3" strokeLinejoin="round" />
+      <path
+        d="M35 70 Q24 78 28 96 L38 96 L44 78 Z"
+        fill={jerseyDark}
+        stroke="#0a1224"
+        strokeWidth="3"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M85 70 Q96 78 92 96 L82 96 L76 78 Z"
+        fill={jerseyDark}
+        stroke="#0a1224"
+        strokeWidth="3"
+        strokeLinejoin="round"
+      />
       <circle cx="33" cy="99" r="6.5" fill={skin} stroke="#0a1224" strokeWidth="2.5" />
       <circle cx="87" cy="99" r="6.5" fill={skin} stroke="#0a1224" strokeWidth="2.5" />
       <path
@@ -839,7 +944,13 @@ function Fighter({ side }) {
       <circle cx="69" cy="38" r="3.6" fill="#101827" />
       <circle cx="52.2" cy="36.8" r="1.2" fill="#fff" />
       <circle cx="70.2" cy="36.8" r="1.2" fill="#fff" />
-      <path d="M54 47 Q60 53 66 47" stroke="#8c3a35" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+      <path
+        d="M54 47 Q60 53 66 47"
+        stroke="#8c3a35"
+        strokeWidth="2.4"
+        fill="none"
+        strokeLinecap="round"
+      />
       <circle cx="45" cy="45" r="3.5" fill="rgba(255,120,120,.25)" />
       <circle cx="75" cy="45" r="3.5" fill="rgba(255,120,120,.25)" />
     </svg>

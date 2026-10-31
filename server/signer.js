@@ -24,7 +24,8 @@ let signer = null;
  */
 export function getProvider() {
   if (!provider) {
-    if (!process.env.NODE_HTTP_URL) throw new Error('NODE_HTTP_URL is required for on-chain access');
+    if (!process.env.NODE_HTTP_URL)
+      throw new Error('NODE_HTTP_URL is required for on-chain access');
     provider = new JsonRpcProvider(process.env.NODE_HTTP_URL);
   }
   return provider;

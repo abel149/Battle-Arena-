@@ -61,7 +61,7 @@ export default function ArenaPreview3D({ className = '' }) {
     // arena floor + neon grid
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(9, 8),
-      new THREE.MeshStandardMaterial({ color: 0x081a2f, roughness: 0.92, metalness: 0.1 }),
+      new THREE.MeshStandardMaterial({ color: 0x081a2f, roughness: 0.92, metalness: 0.1 })
     );
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = -0.03;
@@ -90,7 +90,7 @@ export default function ArenaPreview3D({ className = '' }) {
 
       const edges = new THREE.LineSegments(
         new THREE.EdgesGeometry(geo),
-        new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.28 }),
+        new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.28 })
       );
       edges.position.copy(mesh.position);
       scene.add(edges);
@@ -98,19 +98,32 @@ export default function ArenaPreview3D({ className = '' }) {
       const tex = letterTexture(tile.letter);
       const letter = new THREE.Mesh(
         new THREE.PlaneGeometry(0.72, 0.72),
-        new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }),
+        new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false })
       );
       letter.rotation.x = -Math.PI / 2;
       letter.position.set(tile.x, 0.145, tile.z);
       scene.add(letter);
 
-      disposables.push(geo, mat, edges.geometry, edges.material, tex, letter.geometry, letter.material);
+      disposables.push(
+        geo,
+        mat,
+        edges.geometry,
+        edges.material,
+        tex,
+        letter.geometry,
+        letter.material
+      );
     }
 
     // glowing rim behind the arena
     const halo = new THREE.Mesh(
       new THREE.RingGeometry(2.6, 2.66, 64),
-      new THREE.MeshBasicMaterial({ color: 0x3fe0ff, transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({
+        color: 0x3fe0ff,
+        transparent: true,
+        opacity: 0.5,
+        side: THREE.DoubleSide,
+      })
     );
     halo.rotation.x = -Math.PI / 2;
     halo.position.y = 0.01;
@@ -147,7 +160,7 @@ export default function ArenaPreview3D({ className = '' }) {
     return () => {
       cancelAnimationFrame(raf);
       observer.disconnect();
-      disposables.forEach(d => d.dispose?.());
+      disposables.forEach((d) => d.dispose?.());
       renderer.dispose();
       if (renderer.domElement.parentNode === host) host.removeChild(renderer.domElement);
       void frame;

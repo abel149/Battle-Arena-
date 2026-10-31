@@ -11,7 +11,11 @@ process.env.PORT = '3988';
 
 after(() => {
   for (const suffix of ['', '-wal', '-shm']) {
-    try { fs.rmSync(tmpDb + suffix, { force: true }); } catch { /* ignore */ }
+    try {
+      fs.rmSync(tmpDb + suffix, { force: true });
+    } catch {
+      /* ignore */
+    }
   }
 });
 
@@ -25,7 +29,11 @@ test('Security SEC-01 & SEC-02: rejecting unauthenticated login and registration
   const regRes = await fetch(`${serverUrl}/api/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ address: victimWallet, username: 'hackeduser', password: 'password123' }),
+    body: JSON.stringify({
+      address: victimWallet,
+      username: 'hackeduser',
+      password: 'password123',
+    }),
   });
   assert.equal(regRes.status, 401, 'Register without signature must be 401 Unauthorized');
   const regJson = await regRes.json();
@@ -37,7 +45,11 @@ test('Security SEC-01 & SEC-02: rejecting unauthenticated login and registration
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ address: victimWallet }),
   });
-  assert.equal(loginRes.status, 401, 'Login without signature or password must be 401 Unauthorized');
+  assert.equal(
+    loginRes.status,
+    401,
+    'Login without signature or password must be 401 Unauthorized'
+  );
 
   // 3. Legitimate registration with signed message succeeds
   const legitWallet = ethers.Wallet.createRandom();
@@ -85,15 +97,23 @@ test('Security SEC-01 & SEC-02: rejecting unauthenticated login and registration
   const { io: ClientIO } = await import('socket.io-client');
   const guestWallet = ethers.Wallet.createRandom();
   const guestSock = ClientIO(serverUrl, { reconnection: false });
-  await new Promise(r => guestSock.on('connect', r));
+  await new Promise((r) => guestSock.on('connect', r));
   const guestSig = await guestWallet.signMessage(`Battle Arena login for ${guestWallet.address}`);
-  guestSock.emit('identify', { address: guestWallet.address, name: 'GuestUser', signature: guestSig });
-  await new Promise(r => setTimeout(r, 80));
+  guestSock.emit('identify', {
+    address: guestWallet.address,
+    name: 'GuestUser',
+    signature: guestSig,
+  });
+  await new Promise((r) => setTimeout(r, 80));
 
-  const guestErrPromise = new Promise(resolve => guestSock.on('player:error', resolve));
+  const guestErrPromise = new Promise((resolve) => guestSock.on('player:error', resolve));
   guestSock.emit('queue:join', { gameType: 'memory' });
   const guestErr = await guestErrPromise;
-  assert.equal(guestErr.code, 'AUTH_REQUIRED', 'Unregistered guest must be blocked from matchmaking queue');
+  assert.equal(
+    guestErr.code,
+    'AUTH_REQUIRED',
+    'Unregistered guest must be blocked from matchmaking queue'
+  );
 
   // 7. Brain Quiz cooldown check (SEC-11)
   const quiz1 = await fetch(`${serverUrl}/api/chores/quiz-complete`, {
@@ -147,8 +167,16 @@ test('Security SEC-01 & SEC-02: rejecting unauthenticated login and registration
   // 10. Public leaderboard child privacy check (SEC-15)
   const lbData = await headRes.json();
   for (const entry of lbData) {
-    assert.equal(entry.parentAddress, undefined, 'parentAddress must not be exposed on public leaderboard');
-    assert.equal(entry.allowanceBalance, undefined, 'allowanceBalance must not be exposed on public leaderboard');
+    assert.equal(
+      entry.parentAddress,
+      undefined,
+      'parentAddress must not be exposed on public leaderboard'
+    );
+    assert.equal(
+      entry.allowanceBalance,
+      undefined,
+      'allowanceBalance must not be exposed on public leaderboard'
+    );
   }
 
   // 11. Malformed socket event crash resilience (SEC-14)
@@ -156,13 +184,13 @@ test('Security SEC-01 & SEC-02: rejecting unauthenticated login and registration
   guestSock.emit('spectate', null);
   guestSock.emit('chat:send', null);
   guestSock.emit('lobby:chat:send', null);
-  await new Promise(r => setTimeout(r, 80));
+  await new Promise((r) => setTimeout(r, 80));
   // Server must still be alive and responsive
   const pingRes = await fetch(`${serverUrl}/api/leaderboard`);
   assert.ok(pingRes.ok, 'Server survived malformed null socket payloads');
 
   guestSock.disconnect();
   io.close();
-  await new Promise(r => server.close(r));
+  await new Promise((r) => server.close(r));
   process.exit(0);
 });

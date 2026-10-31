@@ -20,12 +20,48 @@ const DEFAULT_OBSTACLES = [
 
 // Skin color palettes for client rendering
 const SKIN_PALETTES = {
-  'neon-striker': { primary: '#00f0ff', accent: '#0077ff', laser: '#00ffff', trail: '#00d4ff', type: 'plasma' },
-  'crimson-phoenix': { primary: '#ff2d55', accent: '#ff9500', laser: '#ff3b30', trail: '#ff6b4a', type: 'fireball' },
-  'shadow-phantom': { primary: '#af52de', accent: '#5856d6', laser: '#bf5af2', trail: '#9d4edd', type: 'shuriken' },
-  'emerald-titan': { primary: '#34c759', accent: '#30d158', laser: '#32d74b', trail: '#00ff88', type: 'railgun' },
-  'solar-sovereign': { primary: '#ffd60a', accent: '#ff9f0a', laser: '#ffe600', trail: '#ffea70', type: 'solar' },
-  'cosmic-dragon': { primary: '#00f5d4', accent: '#7b2cbf', laser: '#00f5d4', trail: '#70e000', type: 'dragon' },
+  'neon-striker': {
+    primary: '#00f0ff',
+    accent: '#0077ff',
+    laser: '#00ffff',
+    trail: '#00d4ff',
+    type: 'plasma',
+  },
+  'crimson-phoenix': {
+    primary: '#ff2d55',
+    accent: '#ff9500',
+    laser: '#ff3b30',
+    trail: '#ff6b4a',
+    type: 'fireball',
+  },
+  'shadow-phantom': {
+    primary: '#af52de',
+    accent: '#5856d6',
+    laser: '#bf5af2',
+    trail: '#9d4edd',
+    type: 'shuriken',
+  },
+  'emerald-titan': {
+    primary: '#34c759',
+    accent: '#30d158',
+    laser: '#32d74b',
+    trail: '#00ff88',
+    type: 'railgun',
+  },
+  'solar-sovereign': {
+    primary: '#ffd60a',
+    accent: '#ff9f0a',
+    laser: '#ffe600',
+    trail: '#ffea70',
+    type: 'solar',
+  },
+  'cosmic-dragon': {
+    primary: '#00f5d4',
+    accent: '#7b2cbf',
+    laser: '#00f5d4',
+    trail: '#70e000',
+    type: 'dragon',
+  },
 };
 
 // Web Audio API Synthesizer
@@ -51,7 +87,8 @@ function playLaserSound(type = 'plasma') {
     gain.connect(ctx.destination);
 
     const now = ctx.currentTime;
-    const freq = type === 'fireball' ? 380 : type === 'railgun' ? 900 : type === 'shuriken' ? 650 : 520;
+    const freq =
+      type === 'fireball' ? 380 : type === 'railgun' ? 900 : type === 'shuriken' ? 650 : 520;
     osc.type = type === 'railgun' ? 'sawtooth' : 'triangle';
     osc.frequency.setValueAtTime(freq, now);
     osc.frequency.exponentialRampToValueAtTime(110, now + 0.14);
@@ -134,7 +171,9 @@ export default function CyberBlaster() {
   const roomRef = useRef(null);
   const particlesRef = useRef([]);
 
-  useEffect(() => { roomRef.current = room; }, [room]);
+  useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
 
   // Start match
   const startMatch = useCallback(async () => {
@@ -173,11 +212,12 @@ export default function CyberBlaster() {
     };
 
     const handleBlasterTick = (state) => {
-      setGameState(prev => ({ ...prev, ...state }));
+      setGameState((prev) => ({ ...prev, ...state }));
       // Sound triggers from events
       if (state.events && state.events.length > 0) {
-        state.events.forEach(e => {
-          if (e.type === 'shoot') playLaserSound(e.skinId ? SKIN_PALETTES[e.skinId]?.type : 'plasma');
+        state.events.forEach((e) => {
+          if (e.type === 'shoot')
+            playLaserSound(e.skinId ? SKIN_PALETTES[e.skinId]?.type : 'plasma');
           if (e.type === 'player_hit') playHitSound();
           if (e.type === 'powerup_collect') playPowerupSound();
         });
@@ -237,9 +277,13 @@ export default function CyberBlaster() {
   // Server silence safeguard
   useEffect(() => {
     if (mode === 'match' || gameState || roomCode || error) return;
-    const id = setTimeout(() => setError(
-      'The arena server did not respond. Restart it ("npm start" in the server folder) so it runs the latest code.'
-    ), 6000);
+    const id = setTimeout(
+      () =>
+        setError(
+          'The arena server did not respond. Restart it ("npm start" in the server folder) so it runs the latest code.'
+        ),
+      6000
+    );
     return () => clearTimeout(id);
   }, [mode, gameState, roomCode, error]);
 
@@ -359,10 +403,16 @@ export default function CyberBlaster() {
       ctx.strokeStyle = 'rgba(0, 240, 255, 0.05)';
       ctx.lineWidth = 1;
       for (let x = 0; x < ARENA_WIDTH; x += 40) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, ARENA_HEIGHT); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, ARENA_HEIGHT);
+        ctx.stroke();
       }
       for (let y = 0; y < ARENA_HEIGHT; y += 40) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(ARENA_WIDTH, y); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(ARENA_WIDTH, y);
+        ctx.stroke();
       }
 
       // Arena boundary glow
@@ -373,7 +423,7 @@ export default function CyberBlaster() {
       if (gameState) {
         // 2. Obstacles
         const obstacles = gameState.obstacles || DEFAULT_OBSTACLES;
-        obstacles.forEach(obs => {
+        obstacles.forEach((obs) => {
           ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
           ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
           ctx.strokeStyle = '#00f0ff';
@@ -387,12 +437,19 @@ export default function CyberBlaster() {
 
         // 3. Powerups
         if (gameState.powerups) {
-          gameState.powerups.forEach(pow => {
+          gameState.powerups.forEach((pow) => {
             const time = Date.now() / 400;
             const floatOffset = Math.sin(time) * 4;
             ctx.beginPath();
             ctx.arc(pow.x, pow.y + floatOffset, 14, 0, Math.PI * 2);
-            ctx.fillStyle = pow.type === 'shield' ? '#00f0ff' : pow.type === 'overcharge' ? '#ffd60a' : pow.type === 'speed' ? '#af52de' : '#34c759';
+            ctx.fillStyle =
+              pow.type === 'shield'
+                ? '#00f0ff'
+                : pow.type === 'overcharge'
+                  ? '#ffd60a'
+                  : pow.type === 'speed'
+                    ? '#af52de'
+                    : '#34c759';
             ctx.fill();
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 2;
@@ -401,14 +458,21 @@ export default function CyberBlaster() {
             ctx.font = '14px sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            const icon = pow.type === 'shield' ? '🛡️' : pow.type === 'overcharge' ? '⚡' : pow.type === 'speed' ? '💨' : '❤️';
+            const icon =
+              pow.type === 'shield'
+                ? '🛡️'
+                : pow.type === 'overcharge'
+                  ? '⚡'
+                  : pow.type === 'speed'
+                    ? '💨'
+                    : '❤️';
             ctx.fillText(icon, pow.x, pow.y + floatOffset);
           });
         }
 
         // 4. Bullets
         if (gameState.bullets) {
-          gameState.bullets.forEach(b => {
+          gameState.bullets.forEach((b) => {
             const pal = SKIN_PALETTES[b.skinId] || SKIN_PALETTES['neon-striker'];
             ctx.save();
             ctx.beginPath();
@@ -422,7 +486,7 @@ export default function CyberBlaster() {
         }
 
         // 5. Players
-        ['X', 'O'].forEach(seat => {
+        ['X', 'O'].forEach((seat) => {
           const p = gameState.pState?.[seat];
           if (!p) return;
           const skinId = gameState.skins?.[seat] || 'neon-striker';
@@ -512,11 +576,20 @@ export default function CyberBlaster() {
       {/* Top Navigation */}
       <header className="blaster-header">
         <div className="header-left">
-          <a className="btn-back" href="#" onClick={e => { e.preventDefault(); navigate(''); }}>
+          <a
+            className="btn-back"
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              navigate('');
+            }}
+          >
             ← Hub
           </a>
           <span className="blaster-title">⚔️ Cyber Blaster Arena</span>
-          <span className="blaster-mode-badge">{mode === 'bot' ? `Bot (${difficulty})` : 'Online 1v1'}</span>
+          <span className="blaster-mode-badge">
+            {mode === 'bot' ? `Bot (${difficulty})` : 'Online 1v1'}
+          </span>
         </div>
 
         <div className="header-right">
@@ -539,28 +612,30 @@ export default function CyberBlaster() {
 
       {/* Main Game Stage */}
       <main className="blaster-arena-container">
-        {!gameState && (queued || mode === 'create' || mode === 'join' || mode === 'watch' || error) ? (
+        {!gameState &&
+        (queued || mode === 'create' || mode === 'join' || mode === 'watch' || error) ? (
           <div className="blaster-queue-card">
             <div className="queue-spinner" aria-hidden="true" />
             <h2>
               {error
                 ? 'Match error'
                 : mode === 'watch'
-                ? 'Spectator Mode'
-                : mode === 'create'
-                ? 'Room Ready'
-                : mode === 'join'
-                ? 'Joining Room'
-                : 'Searching for Opponent...'}
+                  ? 'Spectator Mode'
+                  : mode === 'create'
+                    ? 'Room Ready'
+                    : mode === 'join'
+                      ? 'Joining Room'
+                      : 'Searching for Opponent...'}
             </h2>
             <p>
-              {error || (mode === 'watch'
-                ? 'Connecting to live arena match as spectator…'
-                : mode === 'create'
-                ? 'Share this code with a friend — your duel begins as soon as they join.'
-                : mode === 'join'
-                ? 'Connecting to your friend’s arena room…'
-                : 'Matching you with a pilot across the arena network.')}
+              {error ||
+                (mode === 'watch'
+                  ? 'Connecting to live arena match as spectator…'
+                  : mode === 'create'
+                    ? 'Share this code with a friend — your duel begins as soon as they join.'
+                    : mode === 'join'
+                      ? 'Connecting to your friend’s arena room…'
+                      : 'Matching you with a pilot across the arena network.')}
             </p>
             {!error && mode === 'create' && roomCode && <RoomCode code={roomCode} />}
             <button
@@ -568,7 +643,8 @@ export default function CyberBlaster() {
               className="btn-cancel-queue"
               onClick={() => {
                 socket.emit('queue:leave');
-                if (roomRef.current?.roomId) socket.emit('match:leave', { roomId: roomRef.current.roomId });
+                if (roomRef.current?.roomId)
+                  socket.emit('match:leave', { roomId: roomRef.current.roomId });
                 navigate('');
               }}
             >
@@ -601,9 +677,7 @@ export default function CyberBlaster() {
                   <span className="score-divider">:</span>
                   <span className="score-val">{gameState?.score?.O ?? 0}</span>
                 </div>
-                <div className="hud-round">
-                  Round {gameState?.round ?? 1} / Best of 3
-                </div>
+                <div className="hud-round">Round {gameState?.round ?? 1} / Best of 3</div>
               </div>
 
               {/* Player Right */}
@@ -635,7 +709,10 @@ export default function CyberBlaster() {
             {/* Bottom Controls Info */}
             <div className="blaster-controls-bar">
               <div className="control-item">
-                <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move
+                <kbd>W</kbd>
+                <kbd>A</kbd>
+                <kbd>S</kbd>
+                <kbd>D</kbd> Move
               </div>
               <div className="control-item">
                 <kbd>MOUSE</kbd> Aim Direction
@@ -655,12 +732,8 @@ export default function CyberBlaster() {
       {matchEnd && (
         <div className="match-end-overlay">
           <div className="match-end-dialog">
-            <div className="end-trophy">
-              {matchEnd.winner === mySeat ? '🏆' : '💀'}
-            </div>
-            <h2>
-              {matchEnd.winner === mySeat ? 'VICTORY!' : 'DEFEAT'}
-            </h2>
+            <div className="end-trophy">{matchEnd.winner === mySeat ? '🏆' : '💀'}</div>
+            <h2>{matchEnd.winner === mySeat ? 'VICTORY!' : 'DEFEAT'}</h2>
             <p>
               {matchEnd.winner === mySeat
                 ? 'Outstanding piloting! You won the Cyber Blaster duel.'
@@ -677,7 +750,11 @@ export default function CyberBlaster() {
               <button type="button" className="btn-end-play" onClick={startMatch}>
                 Play Again 🔄
               </button>
-              <button type="button" className="btn-end-armory" onClick={() => setShowSkinLocker(true)}>
+              <button
+                type="button"
+                className="btn-end-armory"
+                onClick={() => setShowSkinLocker(true)}
+              >
                 🎨 Change Skin
               </button>
               <button type="button" className="btn-end-hub" onClick={() => navigate('')}>

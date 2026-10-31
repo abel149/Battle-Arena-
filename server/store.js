@@ -9,31 +9,134 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { ENERGY_CONFIG, REWARD_CONFIG } from '../shared/constants.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_FILE = process.env.ARENA_DB_PATH || path.join(__dirname, 'data.sqlite');
 const LEGACY_DATA_FILE = process.env.ARENA_LEGACY_DATA_PATH || path.join(__dirname, 'data.json');
 
 export const BATTLE_PASS_TIERS = [
-  { tier: 1, xpRequired: 0, name: "Room Cadet", rewardText: "10 ARENA Allowance + Room Commander Badge", voucher: null },
-  { tier: 2, xpRequired: 100, name: "Chore Apprentice", rewardText: "+3 Arena Energy + 15 ARENA Allowance", voucher: null },
-  { tier: 3, xpRequired: 200, name: "Screen Explorer", rewardText: "🎮 1 Hour Screen Time Pass + 20 ARENA", voucher: { type: 'screentime', title: "1 Hour Bonus Screen Time Pass" } },
-  { tier: 4, xpRequired: 300, name: "Homework Hero", rewardText: "+4 Arena Energy + 25 ARENA Allowance", voucher: null },
-  { tier: 5, xpRequired: 400, name: "Pizza Paladin", rewardText: "🍕 Pizza Night Choice Pass + 35 ARENA", voucher: { type: 'pizza', title: "Family Pizza Night Choice Pass" } },
-  { tier: 6, xpRequired: 500, name: "Bookworm Knight", rewardText: "+5 Arena Energy + 40 ARENA Allowance", voucher: null },
-  { tier: 7, xpRequired: 600, name: "Sundae Sovereign", rewardText: "🍦 Ice Cream Spree Pass + 50 ARENA", voucher: { type: 'icecream', title: "Ice Cream Spree Family Pass" } },
-  { tier: 8, xpRequired: 700, name: "Cleanliness Champion", rewardText: "+6 Arena Energy + 60 ARENA Allowance", voucher: null },
-  { tier: 9, xpRequired: 800, name: "Cinema Champion", rewardText: "🎟️ Movie Night Family Pick + 75 ARENA", voucher: { type: 'movie', title: "Movie Night Family Pick Pass" } },
-  { tier: 10, xpRequired: 900, name: "Legendary Chore Master", rewardText: "🎁 $25 Toy Store / Robux Voucher + 100 ARENA", voucher: { type: 'toy_store', title: "$25 Toy Store / Robux Gift Voucher" } },
+  {
+    tier: 1,
+    xpRequired: 0,
+    name: 'Room Cadet',
+    rewardText: '10 ARENA Allowance + Room Commander Badge',
+    voucher: null,
+  },
+  {
+    tier: 2,
+    xpRequired: 100,
+    name: 'Chore Apprentice',
+    rewardText: '+3 Arena Energy + 15 ARENA Allowance',
+    voucher: null,
+  },
+  {
+    tier: 3,
+    xpRequired: 200,
+    name: 'Screen Explorer',
+    rewardText: '🎮 1 Hour Screen Time Pass + 20 ARENA',
+    voucher: { type: 'screentime', title: '1 Hour Bonus Screen Time Pass' },
+  },
+  {
+    tier: 4,
+    xpRequired: 300,
+    name: 'Homework Hero',
+    rewardText: '+4 Arena Energy + 25 ARENA Allowance',
+    voucher: null,
+  },
+  {
+    tier: 5,
+    xpRequired: 400,
+    name: 'Pizza Paladin',
+    rewardText: '🍕 Pizza Night Choice Pass + 35 ARENA',
+    voucher: { type: 'pizza', title: 'Family Pizza Night Choice Pass' },
+  },
+  {
+    tier: 6,
+    xpRequired: 500,
+    name: 'Bookworm Knight',
+    rewardText: '+5 Arena Energy + 40 ARENA Allowance',
+    voucher: null,
+  },
+  {
+    tier: 7,
+    xpRequired: 600,
+    name: 'Sundae Sovereign',
+    rewardText: '🍦 Ice Cream Spree Pass + 50 ARENA',
+    voucher: { type: 'icecream', title: 'Ice Cream Spree Family Pass' },
+  },
+  {
+    tier: 8,
+    xpRequired: 700,
+    name: 'Cleanliness Champion',
+    rewardText: '+6 Arena Energy + 60 ARENA Allowance',
+    voucher: null,
+  },
+  {
+    tier: 9,
+    xpRequired: 800,
+    name: 'Cinema Champion',
+    rewardText: '🎟️ Movie Night Family Pick + 75 ARENA',
+    voucher: { type: 'movie', title: 'Movie Night Family Pick Pass' },
+  },
+  {
+    tier: 10,
+    xpRequired: 900,
+    name: 'Legendary Chore Master',
+    rewardText: '🎁 $25 Toy Store / Robux Voucher + 100 ARENA',
+    voucher: { type: 'toy_store', title: '$25 Toy Store / Robux Gift Voucher' },
+  },
 ];
 
 export const DEFAULT_CHORES = [
-  { id: 'chore_room', title: "Clean up bedroom & make bed", category: "room", energyReward: 3, xpReward: 50, allowanceReward: 5 },
-  { id: 'chore_homework', title: "Complete math & school homework", category: "homework", energyReward: 3, xpReward: 60, allowanceReward: 5 },
-  { id: 'chore_reading', title: "Read a book for 30 minutes", category: "reading", energyReward: 2, xpReward: 40, allowanceReward: 3 },
-  { id: 'chore_dishes', title: "Help empty or load the dishwasher", category: "dishes", energyReward: 2, xpReward: 35, allowanceReward: 3 },
-  { id: 'chore_pets', title: "Feed or walk family pet", category: "pets", energyReward: 2, xpReward: 35, allowanceReward: 3 },
-  { id: 'chore_quiz', title: "Pass 5-Question Daily Brain Quiz", category: "quiz", energyReward: 2, xpReward: 40, allowanceReward: 2 },
+  {
+    id: 'chore_room',
+    title: 'Clean up bedroom & make bed',
+    category: 'room',
+    energyReward: 3,
+    xpReward: 50,
+    allowanceReward: 5,
+  },
+  {
+    id: 'chore_homework',
+    title: 'Complete math & school homework',
+    category: 'homework',
+    energyReward: 3,
+    xpReward: 60,
+    allowanceReward: 5,
+  },
+  {
+    id: 'chore_reading',
+    title: 'Read a book for 30 minutes',
+    category: 'reading',
+    energyReward: 2,
+    xpReward: 40,
+    allowanceReward: 3,
+  },
+  {
+    id: 'chore_dishes',
+    title: 'Help empty or load the dishwasher',
+    category: 'dishes',
+    energyReward: 2,
+    xpReward: 35,
+    allowanceReward: 3,
+  },
+  {
+    id: 'chore_pets',
+    title: 'Feed or walk family pet',
+    category: 'pets',
+    energyReward: 2,
+    xpReward: 35,
+    allowanceReward: 3,
+  },
+  {
+    id: 'chore_quiz',
+    title: 'Pass 5-Question Daily Brain Quiz',
+    category: 'quiz',
+    energyReward: 2,
+    xpReward: 40,
+    allowanceReward: 2,
+  },
 ];
 
 export const SKINS = [
@@ -75,7 +178,8 @@ export const SKINS = [
     choreId: 'chore_homework',
     choreTitle: 'Complete math & school homework',
     choreCategory: 'homework',
-    choreDescription: 'Finish all daily school assignments, math problems, and prepare your school bag.',
+    choreDescription:
+      'Finish all daily school assignments, math problems, and prepare your school bag.',
     primaryColor: '#af52de',
     accentColor: '#5856d6',
     laserColor: '#bf5af2',
@@ -275,13 +379,18 @@ function open() {
   db.pragma('foreign_keys = ON');
   for (const stmt of SCHEMA) db.exec(stmt);
   // Migrate columns if players table was created prior
-  const cols = db.pragma('table_info(players)').map(c => c.name);
-  if (!cols.includes('energy')) db.exec('ALTER TABLE players ADD COLUMN energy INTEGER NOT NULL DEFAULT 5');
+  const cols = db.pragma('table_info(players)').map((c) => c.name);
+  if (!cols.includes('energy'))
+    db.exec('ALTER TABLE players ADD COLUMN energy INTEGER NOT NULL DEFAULT 5');
   if (!cols.includes('parentAddress')) db.exec('ALTER TABLE players ADD COLUMN parentAddress TEXT');
-  if (!cols.includes('battlePassXp')) db.exec('ALTER TABLE players ADD COLUMN battlePassXp INTEGER NOT NULL DEFAULT 0');
-  if (!cols.includes('battlePassTier')) db.exec('ALTER TABLE players ADD COLUMN battlePassTier INTEGER NOT NULL DEFAULT 1');
-  if (!cols.includes('allowanceBalance')) db.exec('ALTER TABLE players ADD COLUMN allowanceBalance INTEGER NOT NULL DEFAULT 0');
-  if (!cols.includes('equippedSkin')) db.exec("ALTER TABLE players ADD COLUMN equippedSkin TEXT NOT NULL DEFAULT 'neon-striker'");
+  if (!cols.includes('battlePassXp'))
+    db.exec('ALTER TABLE players ADD COLUMN battlePassXp INTEGER NOT NULL DEFAULT 0');
+  if (!cols.includes('battlePassTier'))
+    db.exec('ALTER TABLE players ADD COLUMN battlePassTier INTEGER NOT NULL DEFAULT 1');
+  if (!cols.includes('allowanceBalance'))
+    db.exec('ALTER TABLE players ADD COLUMN allowanceBalance INTEGER NOT NULL DEFAULT 0');
+  if (!cols.includes('equippedSkin'))
+    db.exec("ALTER TABLE players ADD COLUMN equippedSkin TEXT NOT NULL DEFAULT 'neon-striker'");
   prepare();
   migrateLegacyPlayers();
   return db;
@@ -291,7 +400,11 @@ function migrateLegacyPlayers() {
   if (prepared.count.get().c > 0 || !fs.existsSync(LEGACY_DATA_FILE)) return;
 
   const legacyData = JSON.parse(fs.readFileSync(LEGACY_DATA_FILE, 'utf8'));
-  if (!legacyData.players || typeof legacyData.players !== 'object' || Array.isArray(legacyData.players)) {
+  if (
+    !legacyData.players ||
+    typeof legacyData.players !== 'object' ||
+    Array.isArray(legacyData.players)
+  ) {
     throw new Error(`Cannot migrate legacy player data from ${LEGACY_DATA_FILE}`);
   }
 
@@ -357,7 +470,9 @@ function prepare() {
     `),
     getByAddress: db.prepare('SELECT * FROM players WHERE address = ?'),
     getByUsername: db.prepare('SELECT * FROM players WHERE lower(username) = lower(?)'),
-    usernameExists: db.prepare('SELECT 1 FROM players WHERE lower(username) = lower(?) AND address != ? LIMIT 1'),
+    usernameExists: db.prepare(
+      'SELECT 1 FROM players WHERE lower(username) = lower(?) AND address != ? LIMIT 1'
+    ),
     count: db.prepare('SELECT COUNT(*) AS c FROM players'),
     leaderboard: db.prepare(`
       SELECT * FROM players
@@ -387,7 +502,9 @@ function prepare() {
     `),
     weeklyGet: db.prepare('SELECT points, wins FROM weekly_points WHERE week = ? AND address = ?'),
     // Proof-of-Chore prepared statements
-    getChoresForKid: db.prepare('SELECT * FROM chores WHERE kidAddress = ? ORDER BY createdAt DESC'),
+    getChoresForKid: db.prepare(
+      'SELECT * FROM chores WHERE kidAddress = ? ORDER BY createdAt DESC'
+    ),
     getChoreById: db.prepare('SELECT * FROM chores WHERE id = ?'),
     insertChore: db.prepare(`
       INSERT OR IGNORE INTO chores (id, kidAddress, parentAddress, title, category, energyReward, xpReward, allowanceReward, status, submittedAt, verifiedAt, verificationProof, notes, createdAt)
@@ -399,19 +516,27 @@ function prepare() {
     updateKidParent: db.prepare('UPDATE players SET parentAddress = ? WHERE address = ?'),
     updateKidParentOnChores: db.prepare('UPDATE chores SET parentAddress = ? WHERE kidAddress = ?'),
     getKidsForParent: db.prepare('SELECT * FROM players WHERE parentAddress = ?'),
-    getPendingChoresForParent: db.prepare("SELECT * FROM chores WHERE (parentAddress = ? OR parentAddress IS NULL) AND status = 'pending_approval' ORDER BY submittedAt DESC"),
+    getPendingChoresForParent: db.prepare(
+      "SELECT * FROM chores WHERE (parentAddress = ? OR parentAddress IS NULL) AND status = 'pending_approval' ORDER BY submittedAt DESC"
+    ),
     getVouchersForKid: db.prepare('SELECT * FROM vouchers WHERE kidAddress = ? ORDER BY tier ASC'),
     getVoucherById: db.prepare('SELECT * FROM vouchers WHERE id = ?'),
     insertVoucher: db.prepare(`
       INSERT OR IGNORE INTO vouchers (id, kidAddress, parentAddress, tier, title, type, status, claimedAt, redeemedAt, createdAt)
       VALUES (@id, @kidAddress, @parentAddress, @tier, @title, @type, @status, @claimedAt, @redeemedAt, @createdAt)
     `),
-    updateVoucherStatus: db.prepare('UPDATE vouchers SET status = @status, claimedAt = @claimedAt, redeemedAt = @redeemedAt WHERE id = @id'),
+    updateVoucherStatus: db.prepare(
+      'UPDATE vouchers SET status = @status, claimedAt = @claimedAt, redeemedAt = @redeemedAt WHERE id = @id'
+    ),
     // Skins and Parent PIN prepared statements
     getUnlockedSkins: db.prepare('SELECT skinId, unlockedAt FROM player_skins WHERE address = ?'),
-    unlockSkin: db.prepare('INSERT OR IGNORE INTO player_skins (address, skinId, unlockedAt) VALUES (?, ?, ?)'),
+    unlockSkin: db.prepare(
+      'INSERT OR IGNORE INTO player_skins (address, skinId, unlockedAt) VALUES (?, ?, ?)'
+    ),
     getParentPin: db.prepare('SELECT pinHash FROM parent_pins WHERE address = ?'),
-    setParentPin: db.prepare('INSERT OR REPLACE INTO parent_pins (address, pinHash, updatedAt) VALUES (?, ?, ?)'),
+    setParentPin: db.prepare(
+      'INSERT OR REPLACE INTO parent_pins (address, pinHash, updatedAt) VALUES (?, ?, ?)'
+    ),
     // PIN brute-force attempt persistence
     getPinAttempt: db.prepare('SELECT count, lockedUntil FROM pin_attempts WHERE address = ?'),
     savePinAttempt: db.prepare(`
@@ -438,18 +563,22 @@ function prepare() {
     getActiveRoom: db.prepare('SELECT * FROM active_rooms WHERE roomId = ?'),
     listActiveRooms: db.prepare('SELECT * FROM active_rooms ORDER BY createdAt DESC'),
     cleanupStaleActiveRooms: db.prepare('DELETE FROM active_rooms WHERE updatedAt < ?'),
-    sessionInsert: db.prepare('INSERT INTO sessions (tokenHash, address, createdAt) VALUES (?, ?, ?)'),
+    sessionInsert: db.prepare(
+      'INSERT INTO sessions (tokenHash, address, createdAt) VALUES (?, ?, ?)'
+    ),
     sessionGet: db.prepare('SELECT address, createdAt FROM sessions WHERE tokenHash = ?'),
     sessionDelete: db.prepare('DELETE FROM sessions WHERE tokenHash = ?'),
     getQuizCooldown: db.prepare('SELECT lastCompletedAt FROM quiz_cooldowns WHERE address = ?'),
-    setQuizCooldown: db.prepare('INSERT OR REPLACE INTO quiz_cooldowns (address, lastCompletedAt) VALUES (?, ?)'),
+    setQuizCooldown: db.prepare(
+      'INSERT OR REPLACE INTO quiz_cooldowns (address, lastCompletedAt) VALUES (?, ?)'
+    ),
   };
 }
 
 // ---- Login sessions ----
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours (reduced from 30 days)
-const hashToken = token => crypto.createHash('sha256').update(String(token)).digest('hex');
+const hashToken = (token) => crypto.createHash('sha256').update(String(token)).digest('hex');
 
 /**
  * Creates an authenticated session for an Ethereum wallet address.
@@ -574,10 +703,27 @@ function createPlayer(address, name) {
   return {
     address,
     name: name || 'Player-' + address.slice(2, 8),
-    wins: 0, losses: 0, draws: 0, matches: 0, tokens: 0, xp: 0, level: 1,
-    streak: 0, bestStreak: 0, memoryWins: 0, deckStats: {}, badges: [],
-    registered: false, email: null, password: null, username: null,
-    energy: 5, parentAddress: null, battlePassXp: 0, battlePassTier: 1, allowanceBalance: 0,
+    wins: 0,
+    losses: 0,
+    draws: 0,
+    matches: 0,
+    tokens: 0,
+    xp: 0,
+    level: 1,
+    streak: 0,
+    bestStreak: 0,
+    memoryWins: 0,
+    deckStats: {},
+    badges: [],
+    registered: false,
+    email: null,
+    password: null,
+    username: null,
+    energy: 5,
+    parentAddress: null,
+    battlePassXp: 0,
+    battlePassTier: 1,
+    allowanceBalance: 0,
     equippedSkin: 'neon-striker',
   };
 }
@@ -600,9 +746,22 @@ export function upsertPlayer(address, name) {
     p = {
       address,
       name: name || 'Player-' + address.slice(2, 8),
-      wins: 0, losses: 0, draws: 0, matches: 0, tokens: 0, xp: 0, level: 1,
-      streak: 0, bestStreak: 0, memoryWins: 0, deckStats: {}, badges: [],
-      registered: false, email: null, password: null, username: null,
+      wins: 0,
+      losses: 0,
+      draws: 0,
+      matches: 0,
+      tokens: 0,
+      xp: 0,
+      level: 1,
+      streak: 0,
+      bestStreak: 0,
+      memoryWins: 0,
+      deckStats: {},
+      badges: [],
+      registered: false,
+      email: null,
+      password: null,
+      username: null,
     };
   }
   // Backfill fields for players created before this version
@@ -652,7 +811,8 @@ function usernameIndex() {
 export function validateUsername(username) {
   if (!username || !username.trim()) return 'Username is required';
   const n = username.trim();
-  if (!/^[a-zA-Z0-9_]{3,20}$/.test(n)) return 'Username must be 3–20 letters, numbers, or underscores.';
+  if (!/^[a-zA-Z0-9_]{3,20}$/.test(n))
+    return 'Username must be 3–20 letters, numbers, or underscores.';
   return null;
 }
 
@@ -783,7 +943,10 @@ export async function loginPlayerByCredentials({ username, password } = {}) {
  * @param {boolean} [params.signatureVerified=false] - True if EIP-191 signature was validated.
  * @returns {Promise<Object>} Authenticated player profile or error object `{ error }`.
  */
-export async function loginPlayer(address, { username, name, password, signatureVerified = false } = {}) {
+export async function loginPlayer(
+  address,
+  { username, name, password, signatureVerified = false } = {}
+) {
   open();
   const existingPlayer = getPlayer(address);
   if (existingPlayer) {
@@ -843,8 +1006,10 @@ export function safeProfile(address) {
  */
 export function usernames() {
   open();
-  return db.prepare('SELECT address, username, name FROM players WHERE username IS NOT NULL').all()
-    .map(p => ({ address: p.address, username: p.username, name: p.name }));
+  return db
+    .prepare('SELECT address, username, name FROM players WHERE username IS NOT NULL')
+    .all()
+    .map((p) => ({ address: p.address, username: p.username, name: p.name }));
 }
 
 /**
@@ -874,16 +1039,51 @@ export function publicProfile(p) {
 }
 
 const BADGE_DEFS = [
-  { id: 'first_blood', label: 'First Blood', desc: 'Win your first match',   check: p => p.wins >= 1 },
-  { id: 'hat_trick',   label: 'Hat Trick',   desc: 'Win 3 matches',          check: p => p.wins >= 3 },
-  { id: 'veteran',     label: 'Arena Veteran', desc: 'Play 10 matches',      check: p => p.matches >= 10 },
-  { id: 'whale',       label: 'Token Whale', desc: 'Hold 100 ARENA tokens',  check: p => p.tokens >= 100 },
-  { id: 'streak_3',    label: 'On Fire',     desc: 'Win 3 matches in a row', check: p => p.bestStreak >= 3 },
-  { id: 'level_5',     label: 'Rising Star', desc: 'Reach level 5',          check: p => p.level >= 5 },
-  { id: 'flag_master', label: 'Flag Master', desc: 'Win 3 Flag deck matches', check: p => (p.deckStats?.flags?.wins || 0) >= 3 },
-  { id: 'math_whiz',   label: 'Math Whiz',   desc: 'Win 3 Math deck matches', check: p => (p.deckStats?.math?.wins || 0) >= 3 },
-  { id: 'polyglot',    label: 'Polyglot',    desc: 'Win 3 Kiswahili deck matches', check: p => (p.deckStats?.swahili?.wins || 0) >= 3 },
-  { id: 'memory_king', label: 'Memory King', desc: 'Win 10 Memory matches', check: p => p.memoryWins >= 10 },
+  {
+    id: 'first_blood',
+    label: 'First Blood',
+    desc: 'Win your first match',
+    check: (p) => p.wins >= 1,
+  },
+  { id: 'hat_trick', label: 'Hat Trick', desc: 'Win 3 matches', check: (p) => p.wins >= 3 },
+  { id: 'veteran', label: 'Arena Veteran', desc: 'Play 10 matches', check: (p) => p.matches >= 10 },
+  {
+    id: 'whale',
+    label: 'Token Whale',
+    desc: 'Hold 100 ARENA tokens',
+    check: (p) => p.tokens >= 100,
+  },
+  {
+    id: 'streak_3',
+    label: 'On Fire',
+    desc: 'Win 3 matches in a row',
+    check: (p) => p.bestStreak >= 3,
+  },
+  { id: 'level_5', label: 'Rising Star', desc: 'Reach level 5', check: (p) => p.level >= 5 },
+  {
+    id: 'flag_master',
+    label: 'Flag Master',
+    desc: 'Win 3 Flag deck matches',
+    check: (p) => (p.deckStats?.flags?.wins || 0) >= 3,
+  },
+  {
+    id: 'math_whiz',
+    label: 'Math Whiz',
+    desc: 'Win 3 Math deck matches',
+    check: (p) => (p.deckStats?.math?.wins || 0) >= 3,
+  },
+  {
+    id: 'polyglot',
+    label: 'Polyglot',
+    desc: 'Win 3 Kiswahili deck matches',
+    check: (p) => (p.deckStats?.swahili?.wins || 0) >= 3,
+  },
+  {
+    id: 'memory_king',
+    label: 'Memory King',
+    desc: 'Win 10 Memory matches',
+    check: (p) => p.memoryWins >= 10,
+  },
 ];
 
 /**
@@ -911,25 +1111,71 @@ export function levelFor(xp) {
  */
 export function applyResult(address, result, ctx = {}) {
   open();
-  const p = getPlayer(address) || { address, name: 'Player-' + address.slice(2, 8), wins: 0, losses: 0, draws: 0, matches: 0, tokens: 0, xp: 0, level: 1, streak: 0, bestStreak: 0, memoryWins: 0, deckStats: {}, badges: [], registered: false };
+  const p = getPlayer(address) || {
+    address,
+    name: 'Player-' + address.slice(2, 8),
+    wins: 0,
+    losses: 0,
+    draws: 0,
+    matches: 0,
+    tokens: 0,
+    xp: 0,
+    level: 1,
+    streak: 0,
+    bestStreak: 0,
+    memoryWins: 0,
+    deckStats: {},
+    badges: [],
+    registered: false,
+  };
   if (!p.name) p.name = 'Player-' + address.slice(2, 8);
   p.matches += 1;
-  if (result === 'win')  { p.wins += 1;   p.tokens += 10; p.xp += 50; p.streak += 1; }
-  if (result === 'draw') { p.draws += 1;  p.tokens += 3;  p.xp += 20; p.streak = 0; }
-  if (result === 'loss') { p.losses += 1; p.tokens += 1;  p.xp += 10; p.streak = 0; }
+  if (result === 'win') {
+    p.wins += 1;
+    p.tokens += REWARD_CONFIG.WIN_TOKENS;
+    p.xp += REWARD_CONFIG.WIN_XP;
+    p.streak += 1;
+  }
+  if (result === 'draw') {
+    p.draws += 1;
+    p.tokens += REWARD_CONFIG.DRAW_TOKENS;
+    p.xp += REWARD_CONFIG.DRAW_XP;
+    p.streak = 0;
+  }
+  if (result === 'loss') {
+    p.losses += 1;
+    p.tokens += REWARD_CONFIG.LOSS_TOKENS;
+    p.xp += REWARD_CONFIG.LOSS_XP;
+    p.streak = 0;
+  }
   p.bestStreak = Math.max(p.bestStreak, p.streak);
-  if (ctx.daily) p.xp += 15;
+  if (ctx.daily) p.xp += REWARD_CONFIG.DAILY_BONUS_XP;
   p.level = levelFor(p.xp);
 
   // Weekly leaderboard points mirror the ARENA earned this match.
-  const earned = result === 'win' ? 10 : result === 'draw' ? 3 : result === 'loss' ? 1 : 0;
+  const earned =
+    result === 'win'
+      ? REWARD_CONFIG.WIN_TOKENS
+      : result === 'draw'
+        ? REWARD_CONFIG.DRAW_TOKENS
+        : result === 'loss'
+          ? REWARD_CONFIG.LOSS_TOKENS
+          : 0;
   if (earned > 0) {
-    prepared.weeklyUpsert.run({ week: weekStartFor(), address, points: earned, wins: result === 'win' ? 1 : 0 });
+    prepared.weeklyUpsert.run({
+      week: weekStartFor(),
+      address,
+      points: earned,
+      wins: result === 'win' ? 1 : 0,
+    });
   }
 
   // Battle pass progression: every finished match awards +25 Battle Pass XP
-  p.battlePassXp = (p.battlePassXp || 0) + 25;
-  p.battlePassTier = Math.min(10, Math.floor(p.battlePassXp / 100) + 1);
+  p.battlePassXp = (p.battlePassXp || 0) + REWARD_CONFIG.BATTLE_PASS_MATCH_XP;
+  p.battlePassTier = Math.min(
+    REWARD_CONFIG.MAX_BATTLE_PASS_TIER,
+    Math.floor(p.battlePassXp / REWARD_CONFIG.BATTLE_PASS_TIER_XP) + 1
+  );
   syncBattlePassVouchers(address, p.battlePassTier, p.parentAddress);
 
   if (ctx.gameType === 'memory' && ctx.deck) {
@@ -939,7 +1185,7 @@ export function applyResult(address, result, ctx = {}) {
     if (result === 'win') d.wins += 1;
   }
 
-  const owned = new Set(p.badges.map(b => b.id));
+  const owned = new Set(p.badges.map((b) => b.id));
   for (const def of BADGE_DEFS) {
     if (!owned.has(def.id) && def.check(p)) {
       p.badges.push({ id: def.id, label: def.label, desc: def.desc, awardedAt: Date.now() });
@@ -959,7 +1205,8 @@ export function applyResult(address, result, ctx = {}) {
  */
 export function leaderboard() {
   open();
-  return prepared.leaderboard.all()
+  return prepared.leaderboard
+    .all()
     .map((row, i) => publicProfile({ rank: i + 1, ...rowToPlayer(row) }));
 }
 
@@ -980,7 +1227,17 @@ export function leaderboard() {
  * @param {string} [params.winner] - Winner wallet address or 'draw'.
  * @param {Array<Object>} [params.moves] - Complete sequence of executed moves.
  */
-export function saveMatch({ matchId, gameType, deck, players, names, layout, result, winner, moves }) {
+export function saveMatch({
+  matchId,
+  gameType,
+  deck,
+  players,
+  names,
+  layout,
+  result,
+  winner,
+  moves,
+}) {
   open();
   prepared.saveMatch.run({
     matchId,
@@ -1084,7 +1341,7 @@ export function weeklyStats(address, now = new Date()) {
  * @returns {number | null} Numeric token ID or null if uncataloged.
  */
 export function badgeNumericId(badgeId) {
-  const idx = BADGE_DEFS.findIndex(d => d.id === badgeId);
+  const idx = BADGE_DEFS.findIndex((d) => d.id === badgeId);
   return idx === -1 ? null : idx + 1;
 }
 
@@ -1138,7 +1395,10 @@ export function getChores(kidAddress) {
     const p = getPlayer(kidAddress);
     const parent = p?.parentAddress || null;
     for (const d of DEFAULT_CHORES) {
-      const cId = `chore_${kidAddress.toLowerCase().replace(/[^a-z0-9]/g, '').slice(-12)}_${d.id}`;
+      const cId = `chore_${kidAddress
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '')
+        .slice(-12)}_${d.id}`;
       prepared.insertChore.run({
         id: cId,
         kidAddress,
@@ -1205,7 +1465,11 @@ export function verifyChore(choreId, parentAddress, proofHash = null) {
   const chore = prepared.getChoreById.get(choreId);
   if (!chore) return { error: 'Chore not found' };
   if (chore.status === 'verified') return { error: 'Chore already verified' };
-  if (chore.parentAddress && parentAddress && chore.parentAddress.toLowerCase() !== parentAddress.toLowerCase()) {
+  if (
+    chore.parentAddress &&
+    parentAddress &&
+    chore.parentAddress.toLowerCase() !== parentAddress.toLowerCase()
+  ) {
     return { error: 'Only the assigned parent can verify this chore' };
   }
 
@@ -1214,7 +1478,7 @@ export function verifyChore(choreId, parentAddress, proofHash = null) {
     status: 'verified',
     submittedAt: chore.submittedAt || new Date().toISOString(),
     verifiedAt: new Date().toISOString(),
-    verificationProof: proofHash || ('0x' + crypto.randomBytes(32).toString('hex')),
+    verificationProof: proofHash || '0x' + crypto.randomBytes(32).toString('hex'),
     notes: chore.notes || '',
   });
 
@@ -1229,7 +1493,9 @@ export function verifyChore(choreId, parentAddress, proofHash = null) {
     if (parentAddress && !p.parentAddress) p.parentAddress = parentAddress;
 
     // Check if this chore unlocks any skin!
-    const matchingSkin = SKINS.find(s => s.choreId === chore.id || (s.choreCategory && s.choreCategory === chore.category));
+    const matchingSkin = SKINS.find(
+      (s) => s.choreId === chore.id || (s.choreCategory && s.choreCategory === chore.category)
+    );
     if (matchingSkin) {
       unlockSkin(p.address, matchingSkin.id);
       unlockedSkin = matchingSkin;
@@ -1261,7 +1527,15 @@ export function verifyChore(choreId, parentAddress, proofHash = null) {
  * @param {number} [params.allowanceReward=5] - Token allowance units granted.
  * @returns {Object} Newly created chore record.
  */
-export function createCustomChore({ kidAddress, parentAddress, title, category, energyReward, xpReward, allowanceReward }) {
+export function createCustomChore({
+  kidAddress,
+  parentAddress,
+  title,
+  category,
+  energyReward,
+  xpReward,
+  allowanceReward,
+}) {
   open();
   const id = 'chore_' + crypto.randomBytes(8).toString('hex');
   prepared.insertChore.run({
@@ -1363,7 +1637,7 @@ export function redeemVoucher(voucherId, parentAddress) {
  * @param {number} [amount=1] - Amount of energy to consume.
  * @returns {{ok?: boolean, energy?: number, error?: string}} Outcome and remaining energy.
  */
-export function consumeEnergy(kidAddress, amount = 1) {
+export function consumeEnergy(kidAddress, amount = ENERGY_CONFIG.MATCH_COST) {
   open();
   const p = getPlayer(kidAddress);
   if (!p) return { error: 'Player not found' };
@@ -1383,7 +1657,7 @@ export function consumeEnergy(kidAddress, amount = 1) {
  * @param {number} [amount=2] - Amount of energy to add.
  * @returns {{ok?: boolean, energy?: number, error?: string}} Outcome and updated energy.
  */
-export function addEnergy(kidAddress, amount = 2) {
+export function addEnergy(kidAddress, amount = ENERGY_CONFIG.CHORE_REFILL_ENERGY) {
   open();
   const p = getPlayer(kidAddress);
   if (!p) return { error: 'Player not found' };
@@ -1408,7 +1682,9 @@ export function completeBrainQuiz(kidAddress) {
   const row = prepared.getQuizCooldown.get(normalized);
   if (row && Date.now() - row.lastCompletedAt < QUIZ_COOLDOWN_MS) {
     const waitSec = Math.ceil((QUIZ_COOLDOWN_MS - (Date.now() - row.lastCompletedAt)) / 1000);
-    return { error: `Brain Quiz already completed recently. Please wait ${waitSec}s before taking it again.` };
+    return {
+      error: `Brain Quiz already completed recently. Please wait ${waitSec}s before taking it again.`,
+    };
   }
   const p = getPlayer(kidAddress);
   if (!p) return { error: 'Player not found' };
@@ -1419,7 +1695,12 @@ export function completeBrainQuiz(kidAddress) {
   prepared.upsert.run(playerToRow(p));
   prepared.setQuizCooldown.run(normalized, Date.now());
   syncBattlePassVouchers(p.address, p.battlePassTier, p.parentAddress);
-  return { ok: true, energy: p.energy, battlePassXp: p.battlePassXp, battlePassTier: p.battlePassTier };
+  return {
+    ok: true,
+    energy: p.energy,
+    battlePassXp: p.battlePassXp,
+    battlePassTier: p.battlePassTier,
+  };
 }
 
 /**
@@ -1447,7 +1728,7 @@ export function getParentPin(address) {
  */
 export function unlockSkin(address, skinId) {
   open();
-  const skin = SKINS.find(s => s.id === skinId);
+  const skin = SKINS.find((s) => s.id === skinId);
   if (!skin) return { error: 'Unknown skin' };
   prepared.unlockSkin.run(address, skinId, new Date().toISOString());
   return { ok: true, skinId };
@@ -1466,7 +1747,7 @@ export function isSkinUnlocked(address, skinId) {
   if (skinId === 'neon-striker') return true;
   if (!address) return false;
   const rows = prepared.getUnlockedSkins.all(address);
-  return rows.some(r => r.skinId === skinId);
+  return rows.some((r) => r.skinId === skinId);
 }
 
 /**
@@ -1481,7 +1762,7 @@ export function getSkins(address) {
   open();
   const p = address ? getPlayer(address) : null;
   const unlockedRows = address ? prepared.getUnlockedSkins.all(address) : [];
-  const unlockedSet = new Set(unlockedRows.map(r => r.skinId));
+  const unlockedSet = new Set(unlockedRows.map((r) => r.skinId));
   unlockedSet.add('neon-striker'); // default is always unlocked
 
   const chores = address ? getChores(address) : [];
@@ -1493,14 +1774,18 @@ export function getSkins(address) {
 
   const equippedId = p?.equippedSkin || 'neon-striker';
 
-  return SKINS.map(skin => {
+  return SKINS.map((skin) => {
     const isUnlocked = unlockedSet.has(skin.id);
-    const chore = skin.choreId ? choreMap.get(skin.choreId) : (skin.choreCategory ? choreMap.get(skin.choreCategory) : null);
+    const chore = skin.choreId
+      ? choreMap.get(skin.choreId)
+      : skin.choreCategory
+        ? choreMap.get(skin.choreCategory)
+        : null;
     return {
       ...skin,
       unlocked: isUnlocked,
       equipped: equippedId === skin.id,
-      choreStatus: chore ? chore.status : (skin.isDefault ? 'verified' : 'available'),
+      choreStatus: chore ? chore.status : skin.isDefault ? 'verified' : 'available',
       choreNotes: chore?.notes || null,
       choreSubmittedAt: chore?.submittedAt || null,
       choreVerifiedAt: chore?.verifiedAt || null,
@@ -1520,7 +1805,7 @@ export function equipSkin(address, skinId) {
   open();
   const p = getPlayer(address);
   if (!p) return { error: 'Player not found' };
-  const skin = SKINS.find(s => s.id === skinId);
+  const skin = SKINS.find((s) => s.id === skinId);
   if (!skin) return { error: 'Unknown skin' };
   if (!isSkinUnlocked(address, skinId)) {
     return { error: 'Skin is locked. Complete the required chore first!' };
@@ -1541,7 +1826,7 @@ export function getEquippedSkin(address) {
   open();
   const p = address ? getPlayer(address) : null;
   const skinId = p?.equippedSkin || 'neon-striker';
-  return SKINS.find(s => s.id === skinId) || SKINS[0];
+  return SKINS.find((s) => s.id === skinId) || SKINS[0];
 }
 
 // Parent PIN Verification (Default PIN is '1234')
@@ -1617,9 +1902,10 @@ export function verifyParentPin(address, pin) {
   }
 
   // Failed attempt
-  const current = attempt && attempt.lockedUntil > 0 && attempt.lockedUntil <= now
-    ? { count: 0, lockedUntil: 0 }
-    : (attempt || { count: 0, lockedUntil: 0 });
+  const current =
+    attempt && attempt.lockedUntil > 0 && attempt.lockedUntil <= now
+      ? { count: 0, lockedUntil: 0 }
+      : attempt || { count: 0, lockedUntil: 0 };
 
   current.count += 1;
   if (current.count >= 5) {
@@ -1777,7 +2063,7 @@ export function getActiveRoom(roomId) {
 export function listActiveRooms() {
   open();
   const rows = prepared.listActiveRooms.all();
-  return rows.map(row => ({
+  return rows.map((row) => ({
     ...row,
     players: JSON.parse(row.players),
     names: JSON.parse(row.names),
